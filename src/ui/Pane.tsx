@@ -136,26 +136,36 @@ function TitleInput({ meta, ydoc, provider }: { meta: DocMeta; ydoc: Y.Doc | nul
   const [value, setValue] = useState(meta.title);
   useEffect(() => setValue(meta.title), [meta.title]);
   // The title also lives inside the doc, so a partner who opens a shared
-  // link sees the same name.
+  // link sees the same name. When the doc first opens, the doc's copy wins
+  // (a partner may have renamed it); after that, a rename made anywhere on
+  // this device (sidebar or title box) is written into the doc.
+  const seeded = useRef<Y.Doc | null>(null);
   useEffect(() => {
     if (!ydoc) return;
     const map = ydoc.getMap('settings');
-    const pull = () => {
+    const pull = (e?: Y.YMapEvent<unknown>) => {
+      if (e?.transaction.local) return;
       const t = map.get('title');
       if (typeof t === 'string' && t && t !== meta.title) void renameDoc(meta.id, t);
     };
-    // Only fill in a missing title once we've heard from the server, so a
-    // newly joined device doesn't overwrite the real one with a placeholder.
-    const seed = () => {
-      if (typeof map.get('title') !== 'string') map.set('title', meta.title);
-      else pull();
-    };
-    if (!provider || provider.synced) seed();
-    else provider.once('sync', seed);
+    let seed: (() => void) | null = null;
+    if (seeded.current === ydoc) {
+      if (map.get('title') !== meta.title) map.set('title', meta.title);
+    } else {
+      // Only fill in a missing title once we've heard from the server, so a
+      // newly joined device doesn't overwrite the real one with a placeholder.
+      seed = () => {
+        seeded.current = ydoc;
+        if (typeof map.get('title') !== 'string') map.set('title', meta.title);
+        else pull();
+      };
+      if (!provider || provider.synced) seed();
+      else provider.once('sync', seed);
+    }
     map.observe(pull);
     return () => {
       map.unobserve(pull);
-      provider?.off('sync', seed);
+      if (seed) provider?.off('sync', seed);
     };
   }, [ydoc, provider, meta.id, meta.title]);
   const commit = () => {
