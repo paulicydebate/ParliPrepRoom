@@ -1179,3 +1179,7 @@ del {
   padding: 0 8px;
   background: var(--surface);
 }
+
+.seg.wrap {
+  flex-wrap: wrap;
+}

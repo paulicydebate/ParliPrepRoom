@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { BLOCK_KINDS, type BlockKind } from '../model/blocks';
 import { createSignal } from '../store/emitter';
+import { defaultPreset, setStyleKeyPreset, type StyleKeyPreset } from '../editor/shortcuts';
 
 // Look-and-feel settings. They live in this browser only (like Google Docs'
 // view settings), never inside a document, so partners can each read prep
@@ -20,6 +21,7 @@ export interface StyleSetting {
 
 export interface Settings {
   theme: Theme;
+  styleKeys: StyleKeyPreset;
   styles: Record<BlockKind, StyleSetting>;
 }
 
@@ -44,6 +46,7 @@ export function fontStack(label: string): string {
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
+  styleKeys: defaultPreset(),
   styles: {
     position: { font: 'Inter', size: 26, color: null, bold: true, italic: false, underline: false },
     section: { font: 'Inter', size: 20, color: null, bold: true, italic: false, underline: false },
@@ -64,7 +67,7 @@ function load(): Settings {
     const parsed = JSON.parse(raw) as Partial<Settings>;
     const styles = { ...DEFAULT_SETTINGS.styles };
     for (const k of BLOCK_KINDS) styles[k] = { ...styles[k], ...(parsed.styles?.[k] ?? {}) };
-    return { theme: parsed.theme ?? DEFAULT_SETTINGS.theme, styles };
+    return { theme: parsed.theme ?? DEFAULT_SETTINGS.theme, styleKeys: parsed.styleKeys ?? DEFAULT_SETTINGS.styleKeys, styles };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -93,6 +96,7 @@ export function useSettings(): Settings {
 
 /** Push settings into CSS variables on <html>. */
 export function applySettings(s: Settings) {
+  setStyleKeyPreset(s.styleKeys);
   const root = document.documentElement;
   root.dataset.theme = s.theme === 'system' ? '' : s.theme;
   if (s.theme === 'system') delete root.dataset.theme;

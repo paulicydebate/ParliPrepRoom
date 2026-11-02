@@ -1,7 +1,8 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { ySyncPluginKey } from '@tiptap/y-tiptap';
-import { BLOCK_KINDS, KIND_INFO, asKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
+import { styleForKey } from './shortcuts';
+import { KIND_INFO, asKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -159,14 +160,24 @@ export const PrepBlock = Node.create({
         return true;
       },
     };
-    for (const kind of BLOCK_KINDS) {
-      shortcuts[`Mod-Alt-${KIND_INFO[kind].key}`] = () => this.editor.commands.setBlockKind(kind);
-    }
     return shortcuts;
   },
 
   addProseMirrorPlugins() {
+    const editor = this.editor;
     return [
+      new Plugin({
+        key: new PluginKey('pp-style-keys'),
+        props: {
+          handleKeyDown(_view, event) {
+            const kind = styleForKey(event);
+            if (!kind) return false;
+            event.preventDefault();
+            editor.commands.setBlockKind(kind);
+            return true;
+          },
+        },
+      }),
       new Plugin({
         key: idKey,
         appendTransaction(transactions, _old, state) {

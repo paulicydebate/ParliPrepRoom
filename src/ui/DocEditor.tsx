@@ -4,6 +4,8 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import { useEffect } from 'react';
 import type * as Y from 'yjs';
 import { Collapse } from '../editor/collapse';
+import { isMac, styleKeyLabel } from '../editor/shortcuts';
+import { useSettings } from '../settings/settings';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
 import { BLOCK_KINDS, KIND_INFO, asKind, isHeading, levelOf, type BlockKind } from '../model/blocks';
 import {
@@ -38,11 +40,10 @@ export function DocEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Edito
   return <EditorContent editor={editor} className="pp-doc-scroll" />;
 }
 
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 export const MOD = isMac ? '⌘' : 'Ctrl';
-export const ALT = isMac ? '⌥' : 'Alt';
 
 export function Toolbar({ editor }: { editor: Editor }) {
+  useSettings(); // re-render when the style keys change
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -81,7 +82,7 @@ export function Toolbar({ editor }: { editor: Editor }) {
         >
           {BLOCK_KINDS.map((k) => (
             <option key={k} value={k}>
-              {KIND_INFO[k].label}  ({MOD}+{ALT}+{KIND_INFO[k].key})
+              {KIND_INFO[k].label}  ({styleKeyLabel(k)})
             </option>
           ))}
         </select>

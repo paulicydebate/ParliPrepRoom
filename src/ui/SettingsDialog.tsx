@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { PRESET_LABELS, type StyleKeyPreset } from '../editor/shortcuts';
 import { BLOCK_KINDS, KIND_INFO, type BlockKind } from '../model/blocks';
 import { DEFAULT_SETTINGS, FONTS, fontStack, updateSettings, useSettings, type StyleSetting, type Theme } from '../settings/settings';
 import { IconClose } from './icons';
@@ -43,6 +44,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         {THEMES.map((t) => (
           <button key={t.id} type="button" className={settings.theme === t.id ? 'is-on' : ''} onClick={() => updateSettings({ ...settings, theme: t.id })}>
             {t.label}
+          </button>
+        ))}
+      </div>
+
+      <h3>Style keys</h3>
+      <div className="seg wrap" role="group" aria-label="Style keys">
+        {(Object.keys(PRESET_LABELS) as StyleKeyPreset[]).map((p) => (
+          <button key={p} type="button" className={settings.styleKeys === p ? 'is-on' : ''} onClick={() => updateSettings({ ...settings, styleKeys: p })}>
+            {PRESET_LABELS[p]}
           </button>
         ))}
       </div>
@@ -120,7 +130,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="settings-foot">
-        <button type="button" className="btn ghost" onClick={() => updateSettings({ ...DEFAULT_SETTINGS, theme: settings.theme })}>
+        <button type="button" className="btn ghost" onClick={() => updateSettings({ ...DEFAULT_SETTINGS, theme: settings.theme, styleKeys: settings.styleKeys })}>
           Reset styles
         </button>
         <button type="button" className="btn primary" onClick={onClose}>

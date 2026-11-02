@@ -2,6 +2,7 @@ import { Editor } from '@tiptap/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Collapse, collapseKey, computeHidden } from '../src/editor/collapse';
 import { contentExtensions } from '../src/editor/extensions';
+import { setStyleKeyPreset } from '../src/editor/shortcuts';
 import { linesToJSON, type Line } from '../src/store/seed';
 
 let editor: Editor | null = null;
@@ -27,6 +28,7 @@ function press(e: Editor, combo: string) {
   const key = parts[parts.length - 1];
   const event = new KeyboardEvent('keydown', {
     key,
+    code: /^\d$/.test(key) ? `Digit${key}` : key,
     ctrlKey: parts.includes('Mod') || parts.includes('Ctrl'),
     altKey: parts.includes('Alt'),
     shiftKey: parts.includes('Shift'),
@@ -74,12 +76,13 @@ describe('prep editor keys', () => {
     expect(kinds(e)).toEqual(['section']);
   });
 
-  it('Mod-Alt-digit applies a named style', () => {
+  it('the style keys apply a named style', () => {
+    setStyleKeyPreset('alt');
     const e = make([['warrant', 'x']]);
     caretAtEnd(e, 0);
-    press(e, 'Mod-Alt-1');
+    press(e, 'Alt-1');
     expect(kinds(e)).toEqual(['position']);
-    press(e, 'Mod-Alt-6');
+    press(e, 'Alt-6');
     expect(kinds(e)).toEqual(['note']);
   });
 
