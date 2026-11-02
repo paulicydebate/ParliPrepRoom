@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAccount } from '../store/account';
 import { moveDoc, renameDoc, setDocTeam, sortDocs, type DocKind, type DocMeta } from '../store/docs';
-import { IconBook, IconDoc, IconGrip, IconPlus } from './icons';
+import { IconBook, IconDoc, IconGrip, IconPlus, IconUpload } from './icons';
 
 const coarsePointer = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
@@ -140,6 +140,7 @@ export function Sidebar({
   onOpen,
   onCreate,
   onDelete,
+  onImport,
 }: {
   docs: DocMeta[];
   /** Team (or "My own docs") whose docs are listed, when signed in. */
@@ -150,7 +151,10 @@ export function Sidebar({
   onOpen: (id: string) => void;
   onCreate: (kind: DocKind) => void;
   onDelete: (doc: DocMeta) => void;
+  /** Import a file as a new reference doc (hidden when not allowed, e.g. Round Mode). */
+  onImport?: (file: File) => void;
 }) {
+  const fileInput = useRef<HTMLInputElement>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ kind: DocKind; before: string | null } | null>(null);
   const endDrag = () => {
@@ -206,9 +210,35 @@ export function Sidebar({
       <div className="side-section">
         <div className="side-head">
           <h2>{title}</h2>
-          <button type="button" className="icon-btn small" title={`New ${title.toLowerCase()} doc`} aria-label={`New ${title.toLowerCase()} doc`} onClick={() => onCreate(kind)}>
-            <IconPlus />
-          </button>
+          <span className="side-head-btns">
+            {kind === 'reference' && onImport && (
+              <>
+                <button
+                  type="button"
+                  className="icon-btn small"
+                  title="Import a file as a reference doc: Word, Excel/CSV, text or Markdown (Google Docs/Sheets: File → Download first)"
+                  aria-label="Import a file"
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <IconUpload />
+                </button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  hidden
+                  accept=".docx,.xlsx,.csv,.txt,.md,.markdown"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onImport(f);
+                    e.target.value = '';
+                  }}
+                />
+              </>
+            )}
+            <button type="button" className="icon-btn small" title={`New ${title.toLowerCase()} doc`} aria-label={`New ${title.toLowerCase()} doc`} onClick={() => onCreate(kind)}>
+              <IconPlus />
+            </button>
+          </span>
         </div>
         <p className="side-hint">{hint}</p>
         <ul

@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). In progress next (owner-approved list): import into reference docs. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -180,12 +180,19 @@ The owner approved the deploy. Each later deploy still needs their OK.
   - **Replay:** play/pause, slider over every edit, speed, the current edit's author, time and text.
 - Tests: `tests/timeline.test.ts`. Checked in Playwright: two people edit one doc; Ana's History lists Ben's and Ana's sessions; Ben's diff shows his backspaced word crossed out; Replay steps edit by edit with names.
 
+### Import into reference docs (2026-11-03; on `main`, not deployed yet)
+
+- Sidebar, Reference header: **Import** (upload icon). Accepts Word (.docx), Excel (.xlsx), CSV, plain text and Markdown. Makes a new reference doc and opens it. Hidden in Round Mode.
+- `src/import/importFile.ts`: `parseDocx` (Word heading levels and our own exported style names map to position/section/claim; other paragraphs become warrants or notes), `parseXlsx`/`parseCsv` + `sheetsToDoc` (each sheet becomes a position; columns become speeches, so a flow exported from this app comes back as a flow), `parseText` (Markdown `#`/`##`/`###` headings, bullets). Blocks get fresh ids. `seed.writeJSON` writes the result into the doc.
+- Not supported: Flower's own file format (export from Flower as a spreadsheet if it allows that), PDFs, old .doc files.
+- Tests: `tests/import.test.ts` (Word and Excel round trips through our exporters, CSV with quotes, Markdown).
+
 ## Next steps
 
 1. Owner tests Google sign-in, team creation and invites on the live site (OAuth client and secrets are done).
 2. Emailed-link sign-in fallback, if school Google accounts are blocked (would need an email-sending service).
 3. Further visual polish as the owner's testers report it (the design and tablet pass and colorways are done).
-4. Version history from the server (who changed what), now that edits carry verified names.
+4. Owner says "deploy" to put the 2026-11-03 batch live (invites reset, delete account, download all, timer, New round, tab room, flow marks, named history and replay, import).
 
 ### Google sign-in setup (owner steps)
 

@@ -14,7 +14,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Gov/Opp colorways (Teal & Orange, Purple & Gold, Green & Pink and more, or pick your own) from the Colors button on the flow or in Appearance.
 - Fold any heading; "collapse to claims" button; outline sidebar to jump around.
 - Split view: up to three documents side by side, resizable. The same doc can be open in two panes.
-- Prep docs and Reference docs (coach briefs). Drag docs in the sidebar to reorder them (or move them between sections); double-click a name to rename it.
+- Prep docs and Reference docs (coach briefs). **Import** a Word, Excel, CSV, text or Markdown file as a reference doc from the Reference header. Drag docs in the sidebar to reorder them (or move them between sections); double-click a name to rename it.
 - When the same doc is open in two panes, both panes say so (they are one document, not copies). Reference docs are editable for now; the prep lockout comes in Phase 4.
 - Revision history: auto-saves every 2 minutes while editing (and when the tab closes), named versions, "changes since" view, restore.
 - On the live site, **History** shows every edit by everyone from the server, grouped by person, with each person's changes highlighted in their color, plus **Replay** to watch the doc being written.

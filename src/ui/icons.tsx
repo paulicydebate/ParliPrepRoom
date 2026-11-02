@@ -159,3 +159,8 @@ export const IconGrip = () => (
     <circle cx="15" cy="18" r="1.6" />
   </svg>
 );
+export const IconUpload = () => (
+  <Svg>
+    <path d="M12 16V5M7 10l5-5 5 5M5 20h14" />
+  </Svg>
+);

@@ -14,7 +14,7 @@ import { activeSheet, flowKey } from '../editor/flowView';
 import { baseSpeech } from '../model/speeches';
 import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
-import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeLines, type Line } from '../store/seed';
+import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
 import { IconMenu, IconPin, IconSearch, IconSettings, IconSplit } from './icons';
@@ -313,6 +313,23 @@ export function App() {
     else setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === paneIndex ? { ...x, docId: meta.id } : x)) }));
   };
 
+  // Import a file into a new reference doc (never into a round doc).
+  const importReference = async (file: File) => {
+    try {
+      const { importFile } = await import('../import/importFile');
+      const { title, json } = await importFile(file);
+      const meta = await createDoc({ title, kind: 'reference' });
+      const { doc, ready } = acquireDoc(meta.id);
+      await ready;
+      writeJSON(doc, json);
+      releaseDoc(meta.id);
+      openInFocused(meta.id);
+      toast(`Imported “${title}” as a reference doc.`);
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+
   const remove = async (doc: DocMeta) => {
     try {
       await deleteDoc(doc.id);
@@ -526,7 +543,7 @@ export function App() {
         {showSidebar && docs && (
           <>
             {overlaySidebar && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
-            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} />
+            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} />
           </>
         )}
         <div className="panes" ref={panesRef}>

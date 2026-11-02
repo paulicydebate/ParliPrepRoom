@@ -3454,3 +3454,8 @@ del {
 .replay .history-doc {
   flex: 1;
 }
+
+.side-head-btns {
+  display: inline-flex;
+  gap: 2px;
+}

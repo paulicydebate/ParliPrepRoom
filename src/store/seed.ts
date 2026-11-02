@@ -55,3 +55,8 @@ export const SAMPLE_PREP: Line[] = [
   ['claim', 'CP: mandate accuracy audits and warrants instead of a ban'],
   ['claim', 'Perm: do both', { speech: 'MG' }],
 ];
+
+/** Write ProseMirror JSON (e.g. an imported file) into an empty document. */
+export function writeJSON(doc: Y.Doc, json: JSONContent) {
+  prosemirrorJSONToYXmlFragment(schema, json, doc.getXmlFragment(BODY_FIELD));
+}
