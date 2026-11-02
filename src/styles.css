@@ -2473,3 +2473,109 @@ del {
   border-color: var(--danger);
   color: #fff;
 }
+
+/* Pins column inside the flow */
+.flow-col-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.col-pin-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.45;
+  cursor: pointer;
+}
+.col-pin-btn:hover,
+.col-pin-btn.is-on {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.flow-col-head.pins-head {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.pp-flow > .fl-pins {
+  position: relative;
+  z-index: 2;
+  align-self: stretch;
+  margin-top: 6px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+  user-select: none;
+}
+.fl-pins-inner {
+  position: sticky;
+  top: 48px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fl-pins-inner p {
+  margin: 4px;
+}
+.fl-pin {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.fl-pin:hover {
+  border-color: var(--accent);
+}
+.fl-pin .pin-num {
+  margin-top: 2px;
+}
+.fl-pin-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+.fl-pin-body .pp-block {
+  display: block;
+  font-size: 13px;
+}
+.fl-pin-body .pp-block[data-kind='section'] {
+  font-family: var(--pp-section-font);
+  font-weight: 700;
+  color: var(--pp-section-color, var(--section-color));
+  font-size: 13.5px;
+}
+.fl-pin-body .pp-block[data-kind='claim'] {
+  font-family: var(--pp-claim-font);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.fl-pin-body .pp-block[data-kind='warrant'],
+.fl-pin-body .pp-block[data-kind='analytic'] {
+  font-family: var(--pp-warrant-font);
+  padding-left: 10px;
+  color: var(--text-2);
+}
+.fl-pin-body .pp-block[data-kind='warrant']::before,
+.fl-pin-body .pp-block[data-kind='analytic']::before {
+  display: none;
+}

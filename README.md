@@ -57,7 +57,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 
 - A **Round Mode** switch in the top bar. While it's on, only round docs can be open, the top bar turns purple with "ROUND MODE", and switching it on or off shows on the round docs' check pages.
 - **Find a block:** Ctrl+K (⌘K on Mac) searches your prep and jumps to the claim. Nothing is copied.
-- **Pinned blocks:** a side panel listing the claims you plan to read, in order. Tap one to jump to it. Pin a whole section (e.g. "A2 – T"), a claim with its warrants, or a single analytic; then pick which flow sheet each pin answers, and the panel shows the pins for the sheet you're on.
+- **Pinned blocks:** a side panel listing the claims you plan to read, in order. Tap one to jump to it. Pin a whole section (e.g. "A2 – T"), a claim with its warrants, or a single analytic; then pick which flow sheet each pin answers, and the panel shows the pins for the sheet you're on. In the flow, the pin button on a column header (e.g. LOC) opens a Pins column right next to it.
 - **Insert a block** (outside Round Mode only, and never into a round doc): pins and search results have an Insert button that puts a copy below the cursor, for coaches building docs in prep.
 
 ## Develop

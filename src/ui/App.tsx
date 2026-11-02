@@ -150,6 +150,16 @@ export function App() {
     }
   }, [pinsOpen]);
 
+  // The flow's pins column asks to open a block (it can't call jumpTo directly).
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { docId, blockId } = (e as CustomEvent<{ docId: string; blockId: string }>).detail;
+      jumpRef.current(docId, blockId, true);
+    };
+    window.addEventListener('pp-jump', on);
+    return () => window.removeEventListener('pp-jump', on);
+  }, []);
+
   // Ctrl/Cmd+K opens the block finder.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -351,12 +361,26 @@ export function App() {
     searchable.map((d) => d.id),
     findOpen || pinsOpen,
   );
-  const jumpTo = (docId: string, blockId: string) => {
+  /** Open a doc at a block. keepFocused: don't replace the pane you're in (e.g. the flow); use another pane or open one. */
+  const jumpTo = (docId: string, blockId: string, keepFocused = false) => {
     setLayout((l) => {
       const n = Date.now();
+      const focus = { blockId, n };
       const existing = l.panes.findIndex((p) => p.docId === docId);
-      const i = existing >= 0 ? existing : Math.min(l.focused, l.panes.length - 1);
-      return { ...l, focused: i, panes: l.panes.map((x, j) => (j === i ? { ...x, docId, focus: { blockId, n } } : x)) };
+      let i = existing >= 0 ? existing : Math.min(l.focused, l.panes.length - 1);
+      if (existing < 0 && keepFocused) {
+        const other = l.panes.findIndex((_, j) => j !== l.focused);
+        if (other >= 0) i = other;
+        else if (l.panes.length < MAX_PANES) {
+          return {
+            ...l,
+            panes: [...l.panes, { key: paneKey(), docId, outline: false, focus }],
+            weights: [...l.weights, 1],
+            focused: l.panes.length,
+          };
+        }
+      }
+      return { ...l, focused: i, panes: l.panes.map((x, j) => (j === i ? { ...x, docId, focus } : x)) };
     });
     setSidebarOverlay(false);
   };
@@ -402,6 +426,9 @@ export function App() {
     editor.chain().focus().insertContentAt(at, copies).run();
     toast(`Inserted into “${focusedMeta!.title}”.`);
   };
+
+  const jumpRef = useRef(jumpTo);
+  jumpRef.current = jumpTo;
 
   const toggleRoundMode = () => setRoundMode(!roundMode, (spaceDocs ?? []).filter((d) => d.round).map((d) => d.id));
   const openIds = new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x));

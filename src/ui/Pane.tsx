@@ -418,7 +418,7 @@ export function Pane({
           {!history && editor && <Toolbar editor={editor} view={view} extra={<PinButton editor={editor} docId={meta.id} space={space} />} />}
           <div className="pane-body" hidden={history}>
             {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} onEditor={onEditor} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} onClose={() => setHistory(false)} />}
         </>

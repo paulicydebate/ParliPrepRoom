@@ -3,7 +3,13 @@ import CollaborationCaret from '@tiptap/extension-collaboration-caret';
 import type { WebsocketProvider } from 'y-websocket';
 import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { blockWithChildren } from '../model/outline';
+import { useBoard } from '../store/pins';
+import { useLibrary } from './useLibrary';
+import { useDocs } from './hooks';
+import { useRoundMode } from '../store/roundMode';
 import { toast } from '../editor/roundGuard';
 import type * as Y from 'yjs';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
@@ -11,9 +17,24 @@ import { RoundGuard } from '../editor/roundGuard';
 import { activeSheet, flowKey, FlowView, sheetKey } from '../editor/flowView';
 import { KIND_INFO, asKind } from '../model/blocks';
 import { SPEECH_INFO } from '../model/speeches';
-import { IconPlus } from './icons';
+import { IconPin, IconPlus } from './icons';
 
-export function FlowEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; provider: WebsocketProvider | null; docId: string; onEditor: (e: Editor | null) => void }) {
+export function FlowEditor({
+  ydoc,
+  provider,
+  docId,
+  space,
+  onEditor,
+}: {
+  ydoc: Y.Doc;
+  provider: WebsocketProvider | null;
+  docId: string;
+  /** Current team (or 'personal'), for pins. */
+  space: string;
+  onEditor: (e: Editor | null) => void;
+}) {
+  // The pins column lives inside the grid; React fills this element.
+  const pinPanel = useMemo(() => document.createElement('div'), []);
   const editor = useEditor(
     {
       extensions: [
@@ -21,7 +42,7 @@ export function FlowEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; p
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
         RoundGuard.configure({ ydoc, docId }),
         ...(provider ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
-        FlowView,
+        FlowView.configure({ pinPanel }),
         Placeholder.configure({
           placeholder: ({ node }) => `${KIND_INFO[asKind(node.attrs.kind)].label}…`,
         }),
@@ -43,6 +64,7 @@ export function FlowEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; p
         {editor && <ColumnHeaders editor={editor} />}
         <EditorContent editor={editor} className="flow-grid-host" />
       </div>
+      {editor && createPortal(<PinColumn editor={editor} space={space} />, pinPanel)}
     </div>
   );
 }
@@ -58,6 +80,8 @@ function useSheets(editor: Editor) {
         active: active ? sheetKey(active) : null,
         columns: active?.columns ?? [],
         side: active?.side ?? 'gov',
+        title: active?.title ?? '',
+        pinCol: fs?.pinCol ?? null,
       };
     },
     equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b),
@@ -127,7 +151,7 @@ function SheetTabs({ editor }: { editor: Editor }) {
 }
 
 function ColumnHeaders({ editor }: { editor: Editor }) {
-  const { columns, sheets } = useSheets(editor);
+  const { columns, sheets, pinCol } = useSheets(editor);
   if (!sheets.length) {
     return (
       <div className="flow-empty">
@@ -139,11 +163,24 @@ function ColumnHeaders({ editor }: { editor: Editor }) {
     );
   }
   return (
-    <div className="flow-head" style={{ ['--fl-cols' as string]: columns.length }}>
-      {columns.map((c) => (
-        <div key={c} className={`flow-col-head fl-${SPEECH_INFO[c].side}`} title={SPEECH_INFO[c].name}>
-          {c}
-        </div>
+    <div className="flow-head" style={{ ['--fl-cols' as string]: columns.length + (pinCol ? 1 : 0) }}>
+      {columns.map((c, i) => (
+        <Fragment key={c}>
+          <div className={`flow-col-head fl-${SPEECH_INFO[c].side}`} title={SPEECH_INFO[c].name}>
+            <span>{c}</span>
+            <button
+              type="button"
+              className={'col-pin-btn' + (pinCol === i + 1 ? ' is-on' : '')}
+              aria-pressed={pinCol === i + 1}
+              title={pinCol === i + 1 ? 'Hide pins' : `Show your pins for this sheet next to the ${c}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => editor.commands.togglePinColumn(i + 1)}
+            >
+              <IconPin />
+            </button>
+          </div>
+          {pinCol === i + 1 && <div className="flow-col-head pins-head">Pins</div>}
+        </Fragment>
       ))}
     </div>
   );
@@ -179,5 +216,53 @@ function DeleteSheetButton({ editor, sheetKey: key, title }: { editor: Editor; s
     >
       {confirm ? `Delete “${title || 'Untitled'}” and everything on it?` : 'Delete sheet'}
     </button>
+  );
+}
+
+/** Pins for the sheet in view, shown as a column in the flow. Read-only; tap to open the block. */
+function PinColumn({ editor, space }: { editor: Editor; space: string }) {
+  const { title, pinCol } = useSheets(editor);
+  const board = useBoard(space);
+  const roundMode = useRoundMode();
+  const docs = useDocs();
+  const lower = (x: string) => x.trim().toLowerCase();
+  // In Round Mode, only pins from round docs (typed by hand during prep).
+  const pins = board.pins.filter(
+    (p) => p.group && lower(p.group) === lower(title) && (!roundMode || docs?.find((d) => d.id === p.docId)?.round),
+  );
+  const { index } = useLibrary([...new Set(pins.map((p) => p.docId))], pinCol !== null);
+  if (pinCol === null) return null;
+  return (
+    <div className="fl-pins-inner">
+      {pins.length === 0 && (
+        <p className="muted small">
+          No pins for “{title || 'this sheet'}” yet. Pin blocks in your prep doc, then choose “{title || 'this sheet'}” as their sheet in the pin panel.
+        </p>
+      )}
+      {pins.map((p, i) => {
+        const entries = index.get(p.docId);
+        const blocks = entries ? blockWithChildren(entries, p.blockId) : [];
+        return (
+          <button
+            key={`${p.docId}:${p.blockId}`}
+            type="button"
+            className="fl-pin"
+            title="Open this block in your prep"
+            onClick={() => window.dispatchEvent(new CustomEvent('pp-jump', { detail: { docId: p.docId, blockId: p.blockId } }))}
+          >
+            <span className="pin-num">{i + 1}</span>
+            <span className="fl-pin-body">
+              {!entries && <span className="muted small">Loading…</span>}
+              {entries && blocks.length === 0 && <span className="muted small">This block was deleted.</span>}
+              {blocks.map((b) => (
+                <span key={b.id} className="pp-block" data-kind={b.kind}>
+                  {b.text || '\u00a0'}
+                </span>
+              ))}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

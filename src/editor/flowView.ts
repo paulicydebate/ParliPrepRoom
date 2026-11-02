@@ -14,6 +14,8 @@ export interface FlowState {
   layout: FlowLayout;
   /** Key of the sheet shown (see sheetKey). */
   active: string | null;
+  /** Pins column: shown just after this (1-based) speech column, pushing later columns right. */
+  pinCol: number | null;
 }
 
 export const flowKey = new PluginKey<FlowState>('pp-flow');
@@ -36,6 +38,8 @@ declare module '@tiptap/core' {
       setSheetSide: (key: string, side: Side) => ReturnType;
       /** Delete a sheet and everything on it (undo brings it back). */
       deleteSheet: (key: string) => ReturnType;
+      /** Show the pins column after this speech column, or hide it if it's already there. */
+      togglePinColumn: (col: number) => ReturnType;
       /** Start typing in an empty cell. A number means an existing row (group index); null means the first empty row at the bottom. */
       createCell: (target: CellTarget | number | null, col: number) => ReturnType;
       /** Tab / Shift-Tab: go to the next or previous speech in this row. */
@@ -156,8 +160,12 @@ function copyColumn(view: EditorView, event: ClipboardEvent, cut: boolean): bool
   return true;
 }
 
-export const FlowView = Extension.create({
+export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
   name: 'flowView',
+  addOptions() {
+    // An element the app fills with the pins for this sheet; placed in the grid as a column.
+    return { pinPanel: null };
+  },
   // Our Tab beats the doc view's Tab (which changes level).
   priority: 1100,
 
@@ -212,6 +220,13 @@ export const FlowView = Extension.create({
           const node = sheet && tr.doc.nodeAt(sheet.pos);
           if (!sheet || !node) return false;
           if (dispatch) tr.setNodeMarkup(sheet.pos, undefined, { ...node.attrs, side });
+          return true;
+        },
+      togglePinColumn:
+        (col) =>
+        ({ state, tr, dispatch }) => {
+          const current = flowKey.getState(state)?.pinCol ?? null;
+          if (dispatch) tr.setMeta(flowKey, { pinCol: current === col ? null : col });
           return true;
         },
       deleteSheet:
@@ -292,13 +307,15 @@ export const FlowView = Extension.create({
           init: (_config, state) => {
             const layout = computeFlow(readBlocks(state.doc));
             const sheet = sheetAt(layout, state.selection.from) ?? layout.sheets[0];
-            return { layout, active: sheet ? sheetKey(sheet) : null };
+            return { layout, active: sheet ? sheetKey(sheet) : null, pinCol: null };
           },
           apply(tr, value, _old, newState) {
             const layout = tr.docChanged ? computeFlow(readBlocks(newState.doc)) : value.layout;
             let active = value.active;
-            const meta = tr.getMeta(flowKey) as { active: string } | undefined;
-            if (meta) active = meta.active;
+            let pinCol = value.pinCol;
+            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null } | undefined;
+            if (meta && 'pinCol' in meta) pinCol = meta.pinCol ?? null;
+            if (meta && meta.active !== undefined) active = meta.active;
             else if (tr.selectionSet || tr.docChanged) {
               // Follow the caret to its sheet (arrow keys, search, the doc view's outline).
               const here = sheetAt(layout, newState.selection.from);
@@ -307,7 +324,9 @@ export const FlowView = Extension.create({
             if (!layout.sheets.some((s) => sheetKey(s) === active)) {
               active = layout.sheets[0] ? sheetKey(layout.sheets[0]) : null;
             }
-            return { layout, active };
+            const sheetNow = layout.sheets.find((s) => sheetKey(s) === active);
+            if (pinCol !== null && sheetNow && pinCol > sheetNow.columns.length) pinCol = sheetNow.columns.length;
+            return { layout, active, pinCol };
           },
         },
         props: {
@@ -316,7 +335,7 @@ export const FlowView = Extension.create({
             return {
               ...(columnSelection(state) ? { 'data-colsel': 'true' } : {}),
               class: 'pp-flow',
-              style: `--fl-cols: ${sheet?.columns.length ?? 1}`,
+              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}`,
               'data-side': sheet?.side ?? 'gov',
             };
           },
@@ -340,6 +359,9 @@ export const FlowView = Extension.create({
             if (!sheet) return DecorationSet.create(state.doc, decos);
 
             const cols = sheet.columns.length;
+            // With the pins column open, columns after it move one to the right.
+            const pinCol = fs.pinCol;
+            const dc = (c: number) => (pinCol && c > pinCol ? c + 1 : c);
             for (const p of sheet.placements) {
               const n = state.doc.nodeAt(p.pos);
               if (!n) continue;
@@ -350,7 +372,7 @@ export const FlowView = Extension.create({
                 decos.push(
                   Decoration.node(p.pos, p.pos + n.nodeSize, {
                     class: `fl-item fl-${side}`,
-                    style: `grid-column: ${p.col}; grid-row: ${p.row} / span ${p.rowSpan}`,
+                    style: `grid-column: ${dc(p.col)}; grid-row: ${p.row} / span ${p.rowSpan}`,
                   }),
                 );
               }
@@ -369,14 +391,14 @@ export const FlowView = Extension.create({
                       const el = document.createElement('div');
                       el.className = `fl-cell fl-${sideOf(c)}` + (filled ? '' : ' is-empty');
                       el.contentEditable = 'false';
-                      el.style.gridColumn = String(c);
+                      el.style.gridColumn = String(dc(c));
                       el.style.gridRow = `${g.row} / span ${g.span}`;
                       el.dataset.col = String(c);
                       el.dataset.target = 'group';
                       el.dataset.group = String(g.index);
                       return el;
                     },
-                    { side: -1, key: `c-${g.index}-${c}-${g.row}-${g.span}-${filled ? 1 : 0}-${sideOf(c)}`, ignoreSelection: true },
+                    { side: -1, key: `c-${g.index}-${c}-${dc(c)}-${g.row}-${g.span}-${filled ? 1 : 0}-${sideOf(c)}`, ignoreSelection: true },
                   ),
                 );
               }
@@ -400,6 +422,8 @@ export const FlowView = Extension.create({
                       for (let c = 1; c <= cols; c++) {
                         const el = document.createElement('div');
                         el.className = `fl-cell fl-${sideOf(c)} is-empty`;
+                        el.style.gridColumn = String(dc(c));
+                        el.style.gridRow = String(i + 1);
                         el.dataset.col = String(c);
                         el.dataset.target = target;
                         el.dataset.index = String(i);
@@ -410,12 +434,31 @@ export const FlowView = Extension.create({
                     wrap.appendChild(frag);
                     return wrap;
                   },
-                  { side: -1, key: `r-${target}-${before}-${row}-${count}-${cols}-${sheet.side}`, ignoreSelection: true },
+                  { side: -1, key: `r-${target}-${before}-${row}-${count}-${cols}-${sheet.side}-${pinCol ?? 0}`, ignoreSelection: true },
                 ),
               );
             };
             for (const b of sheet.blanks) emptyRows(sheet.groups[b.before]?.from ?? sheet.end, b.row, b.count, 'blank', b.before);
             emptyRows(sheet.end, sheet.nextRow, sheet.ghostRows, 'ghost', -1);
+
+            // The pins column: the app's panel, placed after the chosen column, as tall as the sheet.
+            const panel = editor.extensionManager.extensions.find((x) => x.name === 'flowView')?.options.pinPanel as HTMLElement | null;
+            if (pinCol && panel) {
+              const rows = sheet.nextRow + sheet.ghostRows;
+              decos.push(
+                Decoration.widget(
+                  sheet.pos,
+                  () => {
+                    panel.contentEditable = 'false';
+                    panel.className = 'fl-pins';
+                    panel.style.gridColumn = String(pinCol + 1);
+                    panel.style.gridRow = `1 / span ${rows}`;
+                    return panel;
+                  },
+                  { side: -1, key: `pins-${pinCol}-${rows}`, ignoreSelection: true, stopEvent: () => true },
+                ),
+              );
+            }
 
             // Column selection: mark the lines that will be copied.
             const colSel = columnSelection(state);
