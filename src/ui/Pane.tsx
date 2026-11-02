@@ -8,6 +8,7 @@ import { setRound, useRound } from '../store/roundDoc';
 import { useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
 import { FlowEditor } from './FlowEditor';
+import { CheckLinkButton, PartnersButton } from './RoundTools';
 import { HistoryView } from './HistoryView';
 import { IconClose, IconDownload, IconHistory, IconLock, IconOutline, IconShare, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
@@ -111,13 +112,13 @@ function ShareButton({ docId }: { docId: string }) {
     <button
       type="button"
       className="icon-btn"
-      title="Copy a link your partner can open to edit this doc with you"
+      title="Copy a link to this doc for a teammate"
       aria-label="Share"
       onClick={async () => {
-        const link = `${location.origin}/#join=${encodeURIComponent(docId)}`;
+        const link = `${location.origin}/#doc=${encodeURIComponent(docId)}`;
         try {
           await navigator.clipboard.writeText(link);
-          toast('Link copied. Anyone with it can open and edit this doc.');
+          toast('Link copied. Teammates who can see this doc can open it with the link.');
         } catch {
           window.prompt('Copy this link', link);
         }
@@ -313,6 +314,16 @@ export function Pane({
           </button>
         )}
       </header>
+      {meta && round && (
+        <div className="round-strip">
+          <span>
+            <IconLock /> Round doc · paste is off · typing is recorded
+          </span>
+          <span className="tb-spacer" />
+          {provider && <PartnersButton meta={meta} />}
+          {provider && <CheckLinkButton meta={meta} />}
+        </div>
+      )}
 
       {!meta && (
         <div className="pane-picker">

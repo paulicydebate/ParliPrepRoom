@@ -52,6 +52,12 @@ export const logChanged = createSignal();
 const GENESIS = '0'.repeat(64);
 
 const pending = new Map<string, LogEvent[]>();
+
+/** Sends saved events on to the server's record (set by the app when signed in). */
+let uploader: ((docId: string, events: LogEvent[]) => Promise<void>) | null = null;
+export function setLogUploader(fn: typeof uploader) {
+  uploader = fn;
+}
 const writing = new Map<string, Promise<void>>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -86,7 +92,10 @@ export async function flushLog() {
     pending.delete(docId);
     if (!events.length) continue;
     const prev = writing.get(docId) ?? Promise.resolve();
-    const job = prev.then(() => writeBatch(docId, events));
+    const job = prev.then(async () => {
+      await writeBatch(docId, events);
+      if (uploader) void uploader(docId, events).catch(() => {});
+    });
     writing.set(docId, job.catch(() => {}));
     jobs.push(job);
   }

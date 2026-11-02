@@ -1,6 +1,9 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
-import { createDoc, deleteDoc, listDocs, type DocKind, type DocMeta } from '../store/docs';
+import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
+import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
+import { setLogUploader } from '../store/typingLog';
+import { AccountBar } from './Account';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
 import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
@@ -41,8 +44,8 @@ function loadLayout(): Layout {
   }
 }
 
-async function makeDoc(title: string, kind: DocKind, lines: Line[]): Promise<DocMeta> {
-  const meta = await createDoc({ title, kind });
+async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: string): Promise<DocMeta> {
+  const meta = await createDoc({ title, kind, space });
   const { doc, ready } = acquireDoc(meta.id);
   await ready;
   writeLines(doc, lines);
@@ -57,7 +60,7 @@ async function seedFirstRun(): Promise<Layout | null> {
       // Browsers that saw the first preview get the flow sample once.
       if (!localStorage.getItem('pp-seeded-flow')) {
         localStorage.setItem('pp-seeded-flow', '1');
-        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_PREP);
+        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_PREP, PERSONAL);
         return {
           panes: [
             { key: paneKey(), docId: flow.id, outline: false, view: 'doc' },
@@ -76,8 +79,8 @@ async function seedFirstRun(): Promise<Layout | null> {
     return null;
   }
   if ((await listDocs()).length) return null;
-  const ref = await makeDoc('Sample brief: facial recognition', 'reference', SAMPLE_REFERENCE);
-  const prep = await makeDoc('Sample prep: facial recognition', 'prep', SAMPLE_PREP);
+  const ref = await makeDoc('Sample brief: facial recognition', 'reference', SAMPLE_REFERENCE, PERSONAL);
+  const prep = await makeDoc('Sample prep: facial recognition', 'prep', SAMPLE_PREP, PERSONAL);
   return {
     panes: [
       { key: paneKey(), docId: ref.id, outline: false },
@@ -123,25 +126,46 @@ export function App() {
   const [sidebarOverlay, setSidebarOverlay] = useState(false);
   const panesRef = useRef<HTMLDivElement>(null);
 
-  // Shared links (#join=<docId>): add the doc to this device and open it.
+  const acct = useAccount();
+
+  // Links: #invite=<code> joins a team, #doc=<id> opens a doc (needs access).
   // Otherwise, on a first visit, add the sample docs.
   useEffect(() => {
-    const join = async (): Promise<boolean> => {
-      const m = /^#join=([A-Za-z0-9-]{8,64})$/.exec(location.hash);
-      if (!m) return false;
-      const id = decodeURIComponent(m[1]);
-      history.replaceState(null, '', location.pathname + location.search);
-      if (!(await listDocs()).some((d) => d.id === id)) {
-        // The real title arrives with the document from the server.
-        await createDoc({ id, title: 'Shared doc', kind: 'prep' });
+    const handleHash = async (): Promise<boolean> => {
+      const invite = /^#invite=([A-Za-z0-9_-]{6,40})$/.exec(location.hash);
+      const shared = /^#(?:doc|join)=([A-Za-z0-9-]{8,64})$/.exec(location.hash);
+      if (!invite && !shared) return false;
+      await loadAccount();
+      const a = getAccount();
+      if (!a.user) {
+        // Keep the link in the address; signing in comes back to it.
+        toast(a.server ? 'Sign in (top right) to open this link.' : 'This link only works on the ParliPrepRoom website.');
+        return true;
       }
-      openInFocused(id);
-      toast('Opened a shared doc. Edits sync live with everyone who has the link.');
+      history.replaceState(null, '', location.pathname + location.search);
+      if (invite) {
+        try {
+          const t = await joinTeam(invite[1]);
+          toast(`You're on ${t.name}.`);
+        } catch (e) {
+          toast((e as Error).message);
+        }
+        return true;
+      }
+      const meta = await addSharedDoc(decodeURIComponent(shared![1]));
+      if (!meta) {
+        toast("You don't have access to that doc. Ask its owner or your coach.");
+        return true;
+      }
+      setSpace(spaceOf(meta));
+      openInFocused(meta.id);
       return true;
     };
     void (async () => {
-      if (await join()) {
-        // Someone arriving by a shared link doesn't need the samples.
+      await loadAccount();
+      // First sign-in on this device: put its docs on the server (under My own docs).
+      if (getAccount().user) void uploadLocalDocs();
+      if (await handleHash()) {
         try {
           localStorage.setItem('pp-seeded', '1');
           localStorage.setItem('pp-seeded-flow', '1');
@@ -153,10 +177,33 @@ export function App() {
       const l = await seedFirstRun();
       if (l) setLayout(l);
     })();
-    const onHash = () => void join();
+    const onHash = () => void handleHash();
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the sidebar in step with the server (on switching teams, every 30 s, on returning to the tab).
+  useEffect(() => {
+    if (!acct.user) return;
+    const refresh = () => void syncDocList(acct.space).catch(() => {});
+    refresh();
+    const t = setInterval(refresh, 30_000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [acct.user, acct.space]);
+
+  // Report round-doc events (blocked pastes, round doc on/off, time away) to the server's record.
+  useEffect(() => {
+    setLogUploader(async (docId, events) => {
+      const meta = (await listDocs()).find((d) => d.id === docId);
+      if (!syncing() || !onServer(meta)) return;
+      const notable = events.filter((e) => e.k !== 'type' && e.k !== 'delete');
+      if (notable.length) await postDocEvents(docId, notable).catch(() => {});
+    });
   }, []);
 
   useEffect(() => {
@@ -213,8 +260,13 @@ export function App() {
   };
 
   const remove = async (doc: DocMeta) => {
+    try {
+      await deleteDoc(doc.id);
+    } catch (e) {
+      toast((e as Error).message);
+      return;
+    }
     setLayout((l) => ({ ...l, panes: l.panes.map((p) => (p.docId === doc.id ? { ...p, docId: null } : p)) }));
-    await deleteDoc(doc.id);
     await destroyDocData(doc.id);
     await deleteAllVersions(doc.id);
   };
@@ -255,6 +307,9 @@ export function App() {
   }, []);
 
   const showSidebar = narrow ? sidebarOverlay : layout.sidebar;
+  const signedIn = acct.server && !!acct.user;
+  const visibleDocs = docs ? (signedIn ? docs.filter((d) => spaceOf(d) === acct.space) : docs) : null;
+  const spaceName = signedIn ? (acct.teams.find((t) => t.id === acct.space)?.name ?? 'My own docs') : null;
   const openIds = new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x));
 
   return (
@@ -286,6 +341,7 @@ export function App() {
         <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= MAX_PANES} title="Add a pane to show another document side by side">
           <IconSplit /> <span className="hide-narrow">Split view</span>
         </button>
+        <AccountBar />
         <button type="button" className="icon-btn" aria-label="Appearance" title="Fonts and theme" onClick={() => setSettingsOpen(true)}>
           <IconSettings />
         </button>
@@ -295,7 +351,7 @@ export function App() {
         {showSidebar && docs && (
           <>
             {narrow && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
-            <Sidebar docs={docs} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} />
+            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} />
           </>
         )}
         <div className="panes" ref={panesRef}>
@@ -323,7 +379,7 @@ export function App() {
         </div>
       </div>
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
-      <NameDialog />
+      {acct.loaded && !acct.server && <NameDialog />}
       <div className="toast" role="status" aria-live="polite" hidden={!toastMsg}>
         {toastMsg}
       </div>

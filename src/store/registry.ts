@@ -1,7 +1,9 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
 import type { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
-import { connect, syncAvailable } from './sync';
+import { loadAccount, syncing } from './account';
+import { ensureOnServer } from './docs';
+import { connect } from './sync';
 import { saveVersion } from './versions';
 
 // Open documents, shared between panes. Two panes showing the same document
@@ -41,9 +43,8 @@ export function acquireDoc(docId: string): { doc: Y.Doc; ready: Promise<void>; p
     // Ready once the local copy is loaded and, if the server is there, the
     // connection is set up (the editor needs it for live cursors).
     const ready = persistence.whenSynced.then(async () => {
-      if (await syncAvailable()) {
-        if (!doc.isDestroyed) created.provider = connect(docId, doc);
-      }
+      await loadAccount();
+      if (syncing() && (await ensureOnServer(docId)) && !doc.isDestroyed) created.provider = connect(docId, doc);
     });
     const created: Entry = {
       doc,

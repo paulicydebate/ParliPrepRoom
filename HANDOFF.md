@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: live co-editing (Phase 3, step 2).
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: sign-in, teams, round-doc access and the public check page (Phase 3), built and tested locally, **not deployed yet** (the owner asked to finish these before deploying).
 
 ## Where the code is
 
@@ -42,14 +42,41 @@ Done and tested (40 unit tests, plus manual browser checks with Playwright):
 - **Test:** `npx wrangler dev`, then `node scripts/sync-smoke.mjs http://localhost:8787` (two clients, a late joiner, checks the server record). Also checked in a two-browser Playwright run: share link, live text both ways, partner cursor label, per-user server record.
 - **Security limits right now:** no sign-in. Anyone with a doc's id or link can edit it and read `/history`. Ids are random UUIDs. Names in the record are whatever each device entered. Accounts (next) fix this.
 
-## Next steps (Phase 3)
+### Sign-in, teams, access, check page (done locally, 2026-11-02; NOT deployed)
 
-1. Accounts: Google sign-in (free; the owner still has to create a Google Cloud OAuth client, steps not sent yet). Maybe an emailed-link fallback, since schools may block student Google accounts. Then the server uses the signed-in name for the record instead of the URL name, and requires sign-in for `/api/sync`.
-2. Teams: a coach creates a team and shares an invite link. Team docs are shared; round docs are visible to partners and coaches (default, not yet confirmed).
-3. Round-doc check page: public read-only page per round doc built from the server record (who typed what, when, flags, hash chain), with a QR code.
-4. Upload a device's local docs to the server at sign-in (docs already sync whenever they're opened on the live site).
+The live site still runs the older build (app only). Deploy needs the owner's OK.
 
-Questions still open with the owner: sign-in type (school vs personal Google accounts), round-doc visibility, custom domain, whether to open sign-up to other teams now, whether Doc and Flow should be separate document types.
+- **Directory** (`worker/directory.ts`): a second SQLite Durable Object, a single instance (`idFromName('directory')`), called over RPC. Tables: users, sessions (SHA-256 of the token), teams (student and coach invite codes), members (role coach/student), docs (team, owner, title, kind, round, order, check_token), doc_partners. Migration `v1` declares both classes (nothing with Durable Objects has been deployed yet, so v1 is still free to change; after the first deploy, add new migrations instead of editing v1).
+- **Access rules:** team docs are open to all team members; round docs to the owner, partners and the team's coaches; docs with no team to the owner only. `/api/sync/<id>` requires a session cookie and access, then passes the verified `{id, name}` to the DocRoom in an `x-pp-user` header. The DocRoom no longer trusts names from the URL.
+- **Auth** (`worker/index.ts`): Google OpenID Connect (`/api/auth/google` → `/api/auth/google/callback`, scope `openid email profile`). Needs Worker secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`; until they exist, `/api/health` reports `auth.google: false` and the app shows "Sign-in coming soon". The session cookie `pp_session` is HttpOnly, SameSite=Lax and lasts 60 days. Changes are refused if the Origin header is another site; WebSocket upgrades check Origin too.
+- **Test sign-in:** `npx wrangler dev --var DEV_LOGIN:1` enables `/api/auth/dev?name=…` (localhost only). Never set DEV_LOGIN in production.
+- **API:** `/api/me` (GET, PATCH name); `/api/teams` (POST); `/api/teams/<id>` (GET, PATCH name); `/api/teams/<id>/members/<uid>` (POST role or remove; coach only; a team keeps at least one coach); `/api/join` (POST code); `/api/docs?team=<id|personal>`; `/api/docs` (POST register, client-chosen UUID); `/api/docs/<id>` (GET, PATCH title/kind/round/order/partners/teamId, DELETE by owner or coach); `/api/docs/<id>/events` (POST client events: blocked pastes, round on/off, away/back); `/api/docs/<id>/record` (full record with text).
+- **DocRoom record:** `updates` rows now carry user_id, name and `via` (`live` = sync update while connected; `catchup` = sync step 2 after reconnecting or first upload, not flagged). An `events` table holds client-reported events. `record(withText)` checks the hash chain and pulls the inserted text out of each Yjs update (`measureUpdate`; new blocks count as line breaks).
+- **Check page** (`worker/checkPage.ts`, route `/check/<token>`): self-contained HTML, public, in the viewer's time zone (`request.cf.timezone`). Shows the seal and whether the record is intact, totals, typing per minute, per-person table, "worth a look" (large live edits over 40 characters, blocked pastes, round off, time away, catch-up syncs) and, only for signed-in people with access, the text in bursts. The token is created when a doc becomes a round doc.
+- **Client:**
+  - `src/store/account.ts`: health, me, teams, current "space" (a team or `personal`), API helpers.
+  - `src/store/docs.ts`: DocMeta has `teamId` (undefined = only on this device, null = my own docs on the server), `ownerId`, `partners`, `checkToken`. Creating a doc registers it on the server first. Renames, order, round and partners are pushed. `syncDocList(space)` runs on team switch, every 30 s and on focus. On first sign-in, local docs are uploaded as "My own docs".
+  - `src/store/registry.ts`: connects only when signed in and the doc is on the server.
+  - UI: `src/ui/Account.tsx` (top bar: sign in, team switcher, Team window with invite links and members, new team, sign out) and `src/ui/RoundTools.tsx` (Partners picker; Check link with QR via `qrcode-generator`). A purple strip under the header of round docs. Sidebar shows the current team's docs, plus a "Move to <team>" item for my own docs.
+  - Links: `#invite=<code>` joins a team (after sign-in; the link survives the Google redirect via `next`); `#doc=<id>` (or the old `#join=`) opens a doc if you have access. The name prompt only appears when there's no server (preview).
+  - The local typing log uploads non-typing events to the server's record.
+- **Tests:** `node scripts/sync-smoke.mjs http://localhost:8787` (needs `--var DEV_LOGIN:1`): two signed-in users co-edit, an anonymous connection gets 401, and the record is intact. Also a four-person Playwright run (coach, Ana, Ben, Cleo, anonymous) covering invites, round-doc visibility, partner picking, live edits, the blocked paste on the check page, and text visible only to members. 40 unit tests.
+
+## Next steps
+
+1. Owner approves the deploy. Then the owner creates the Google OAuth client and adds the two secrets in the Cloudflare dashboard (steps below), and we test sign-in on the live site.
+2. Emailed-link sign-in fallback, if school Google accounts are blocked (would need an email-sending service).
+3. Color palette / visual design pass (owner called the palette "weird"); iPad touch drag in the sidebar.
+4. Version history from the server (who changed what), now that edits carry verified names.
+
+### Google sign-in setup (owner steps)
+
+1. https://console.cloud.google.com → create a project ("ParliPrepRoom").
+2. Google Auth Platform (or APIs & Services → OAuth consent screen): app name, support email, audience **External**. While in Testing, add each tester's email under Test users (up to 100).
+3. Clients → Create client → **Web application**. Authorized JavaScript origin: `https://parlipreproom.paulicydebate.workers.dev`. Authorized redirect URI: `https://parlipreproom.paulicydebate.workers.dev/api/auth/google/callback`.
+4. Copy the Client ID and Client secret into the Cloudflare dashboard: Workers & Pages → parlipreproom → Settings → Variables and Secrets → add two **Secrets**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Secrets survive later deploys.
+
+Questions still open with the owner: sign-in type (school vs personal Google accounts), custom domain, whether Doc and Flow should be separate document types. Defaults in use: Google sign-in; round docs visible to owner, partners and coaches.
 
 ## How to work on it
 

@@ -3,28 +3,9 @@ import { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';
 import { getProfile } from '../settings/profile';
 
-// Live sync with the ParliPrepRoom server (Cloudflare). Only turns on when the
-// page is served by that server (it answers /api/health with sync: true), so
-// the claude.ai preview and plain `npm run dev` keep working offline-only.
-
-let probe: Promise<boolean> | null = null;
-
-export function syncAvailable(): Promise<boolean> {
-  if (!probe) {
-    probe = (async () => {
-      if (typeof window === 'undefined' || typeof fetch === 'undefined') return false;
-      try {
-        const r = await fetch('/api/health', { cache: 'no-store' });
-        if (!r.ok) return false;
-        const body = (await r.json()) as { sync?: boolean };
-        return body.sync === true;
-      } catch {
-        return false;
-      }
-    })();
-  }
-  return probe;
-}
+// Live sync with the ParliPrepRoom server (Cloudflare). Only used when the
+// page is served by that server and someone is signed in (see account.ts);
+// the server checks the sign-in cookie and who may open each doc.
 
 /** A stable color per person, for their cursor and name tag. */
 export function colorFor(seed: string): string {
@@ -36,9 +17,7 @@ export function colorFor(seed: string): string {
 export function connect(docId: string, doc: Y.Doc): WebsocketProvider {
   const who = getProfile();
   const base = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/sync`;
-  const provider = new WebsocketProvider(base, docId, doc, {
-    params: { name: who.name || 'Unnamed', device: who.deviceId },
-  });
+  const provider = new WebsocketProvider(base, docId, doc);
   provider.awareness.setLocalStateField('user', { name: who.name || 'Unnamed', color: colorFor(who.deviceId) });
   return provider;
 }

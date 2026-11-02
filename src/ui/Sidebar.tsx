@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { moveDoc, renameDoc, sortDocs, type DocKind, type DocMeta } from '../store/docs';
+import { useAccount } from '../store/account';
+import { moveDoc, renameDoc, setDocTeam, sortDocs, type DocKind, type DocMeta } from '../store/docs';
 import { IconBook, IconDoc, IconPlus } from './icons';
 
 interface RowDrag {
@@ -27,6 +28,7 @@ function DocRow({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(doc.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { teams } = useAccount();
 
   if (editing) {
     return (
@@ -85,6 +87,19 @@ function DocRow({
           >
             Rename
           </button>
+          {doc.teamId === null &&
+            teams.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={(e) => {
+                  (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+                  void setDocTeam(doc.id, t.id);
+                }}
+              >
+                Move to {t.name}
+              </button>
+            ))}
           {confirmDelete ? (
             <button
               type="button"
@@ -110,12 +125,18 @@ function DocRow({
 
 export function Sidebar({
   docs,
+  spaceName,
+  signedOutOnServer,
   openIds,
   onOpen,
   onCreate,
   onDelete,
 }: {
   docs: DocMeta[];
+  /** Team (or "My own docs") whose docs are listed, when signed in. */
+  spaceName: string | null;
+  /** On the live site but not signed in: docs stay on this device. */
+  signedOutOnServer: boolean;
   openIds: Set<string>;
   onOpen: (id: string) => void;
   onCreate: (kind: DocKind) => void;
@@ -188,6 +209,10 @@ export function Sidebar({
 
   return (
     <aside className="sidebar">
+      {spaceName && <div className="space-name">{spaceName}</div>}
+      {signedOutOnServer && (
+        <p className="side-banner">Sign in (top right) to save docs to the server, share them with your partner and join your team. Until then, docs stay on this device.</p>
+      )}
       {section('prep', 'Prep', 'What you type during prep.')}
       {section('reference', 'Reference', 'Coach briefs and notes to read from.')}
     </aside>

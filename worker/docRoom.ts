@@ -18,15 +18,57 @@ import * as Y from 'yjs';
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
 
-interface Who {
+/** Who is on a connection. Set by the worker from the signed-in session. */
+export interface Who {
+  id: string;
   name: string;
-  device: string;
+}
+
+/** One saved update, as shown on the check page. */
+export interface RecordUpdate {
+  seq: number;
+  at: number;
+  userId: string;
+  name: string;
+  /** 'live' = typed while connected; 'catchup' = sent after reconnecting (offline work, first upload). */
+  via: string;
+  inserted: number;
+  deleted: number;
+  /** Text inserted by this update (only returned to people with access to the doc). */
+  text?: string;
+}
+
+/** Events reported by the app (blocked pastes, round doc on/off, time away...). */
+export interface RecordEvent {
+  at: number;
+  clientAt: number;
+  userId: string;
+  name: string;
+  kind: string;
+  n: number | null;
+}
+
+/** Characters inserted (with the text) and items deleted by a Yjs update. */
+export function measureUpdate(update: Uint8Array): { text: string; deleted: number } {
+  const { structs, ds } = Y.decodeUpdate(update);
+  let text = '';
+  for (const s of structs) {
+    const content = (s as unknown as { content?: { str?: unknown; type?: unknown } }).content;
+    if (content && typeof content.str === 'string') text += content.str;
+    // A new line (block) in the doc shows as a line break.
+    else if (content && content.type instanceof Y.XmlElement) text += '\n';
+  }
+  let deleted = 0;
+  ds.clients.forEach((items) => items.forEach((d) => (deleted += d.len)));
+  return { text, deleted };
 }
 
 const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 
 export class DocRoom extends DurableObject {
   private doc: Y.Doc | null = null;
+  /** How the message being handled arrived (see RecordUpdate.via). */
+  private via = 'live';
   private lastHash = '0'.repeat(64);
   private writes: Promise<void> = Promise.resolve();
 
@@ -36,11 +78,21 @@ export class DocRoom extends DurableObject {
       this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS updates (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,
         at INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
         user TEXT NOT NULL,
-        device TEXT NOT NULL,
+        via TEXT NOT NULL,
         data BLOB NOT NULL,
         prev TEXT NOT NULL,
         hash TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER NOT NULL,
+        client_at INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        user TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        n INTEGER
       )`);
       const last = this.ctx.storage.sql.exec('SELECT hash FROM updates ORDER BY seq DESC LIMIT 1').toArray()[0];
       if (last) this.lastHash = String(last.hash);
@@ -60,20 +112,22 @@ export class DocRoom extends DurableObject {
 
   private onUpdate(update: Uint8Array, origin: unknown) {
     const ws = origin instanceof WebSocket ? origin : null;
-    const who: Who = (ws?.deserializeAttachment() as Who | null) ?? { name: 'server', device: '' };
+    const who: Who = (ws?.deserializeAttachment() as Who | null) ?? { id: 'server', name: 'server' };
     const at = Date.now();
+    const via = ws ? this.via : 'server';
     this.writes = this.writes.then(async () => {
       const prev = this.lastHash;
-      const head = new TextEncoder().encode(`${prev}|${at}|${who.name}|${who.device}|`);
+      const head = new TextEncoder().encode(`${prev}|${at}|${who.id}|${who.name}|${via}|`);
       const buf = new Uint8Array(head.length + update.length);
       buf.set(head);
       buf.set(update, head.length);
       const hash = hex(await crypto.subtle.digest('SHA-256', buf));
       this.ctx.storage.sql.exec(
-        'INSERT INTO updates (at, user, device, data, prev, hash) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO updates (at, user_id, user, via, data, prev, hash) VALUES (?, ?, ?, ?, ?, ?, ?)',
         at,
+        who.id,
         who.name,
-        who.device,
+        via,
         update,
         prev,
         hash,
@@ -90,16 +144,16 @@ export class DocRoom extends DurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.endsWith('/history')) return this.history();
+    void url;
     if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
+    // The worker only forwards signed-in people with access, and says who they are.
+    const header = request.headers.get('x-pp-user');
+    if (!header) return new Response('Not signed in', { status: 401 });
+    const who = JSON.parse(header) as Who;
 
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server);
-    const who: Who = {
-      name: (url.searchParams.get('name') ?? 'Unnamed').slice(0, 80),
-      device: (url.searchParams.get('device') ?? '').slice(0, 40),
-    };
     server.serializeAttachment(who);
 
     // Start the sync: send our state vector; the browser answers with what we lack.
@@ -118,9 +172,12 @@ export class DocRoom extends DurableObject {
     const dec = decoding.createDecoder(data);
     const type = decoding.readVarUint(dec);
     if (type === MSG_SYNC) {
+      // Sync step 2 = catching up after (re)connecting; update = typed live.
+      this.via = data[1] === syncProtocol.messageYjsSyncStep2 ? 'catchup' : 'live';
       const enc = encoding.createEncoder();
       encoding.writeVarUint(enc, MSG_SYNC);
       syncProtocol.readSyncMessage(dec, enc, doc, ws);
+      this.via = 'live';
       if (encoding.length(enc) > 1) ws.send(encoding.toUint8Array(enc));
     } else if (type === MSG_AWARENESS) {
       // Cursors and names: relay as-is to the others.
@@ -145,12 +202,52 @@ export class DocRoom extends DurableObject {
     }
   }
 
-  /** The saved edit record (no document contents): who, when, size, hash chain. */
-  private async history(): Promise<Response> {
+  /** Save events the app reports (blocked pastes, round doc on/off, time away). */
+  async addEvents(who: Who, events: { t: number; k: string; n?: number }[]): Promise<void> {
+    const now = Date.now();
+    for (const e of events.slice(0, 500)) {
+      if (typeof e.k !== 'string' || e.k === 'type' || e.k === 'delete') continue; // typing itself comes from the updates
+      this.ctx.storage.sql.exec(
+        'INSERT INTO events (at, client_at, user_id, user, kind, n) VALUES (?, ?, ?, ?, ?, ?)',
+        now, Number(e.t) || now, who.id, who.name, e.k.slice(0, 32), typeof e.n === 'number' ? e.n : null,
+      );
+    }
+  }
+
+  /**
+   * The full server record: every saved update (who, when, how much) and the
+   * reported events, plus whether the hash chain checks out.
+   */
+  async record(withText: boolean): Promise<{ updates: RecordUpdate[]; events: RecordEvent[]; intact: boolean; seal: string | null }> {
     await this.writes;
-    const rows = this.ctx.storage.sql
-      .exec('SELECT seq, at, user, device, length(data) AS bytes, prev, hash FROM updates ORDER BY seq')
-      .toArray();
-    return Response.json({ updates: rows });
+    const updates: RecordUpdate[] = [];
+    let prev = '0'.repeat(64);
+    let intact = true;
+    for (const row of this.ctx.storage.sql.exec('SELECT * FROM updates ORDER BY seq')) {
+      const data = new Uint8Array(row.data as ArrayBuffer);
+      const head = new TextEncoder().encode(`${row.prev}|${row.at}|${row.user_id}|${row.user}|${row.via}|`);
+      const buf = new Uint8Array(head.length + data.length);
+      buf.set(head);
+      buf.set(data, head.length);
+      if (row.prev !== prev || hex(await crypto.subtle.digest('SHA-256', buf)) !== row.hash) intact = false;
+      prev = String(row.hash);
+      const m = measureUpdate(data);
+      updates.push({
+        seq: Number(row.seq),
+        at: Number(row.at),
+        userId: String(row.user_id),
+        name: String(row.user),
+        via: String(row.via),
+        inserted: m.text.length,
+        deleted: m.deleted,
+        ...(withText ? { text: m.text.slice(0, 2000) } : {}),
+      });
+    }
+    const events = this.ctx.storage.sql
+      .exec('SELECT * FROM events ORDER BY id')
+      .toArray()
+      .map((r) => ({ at: Number(r.at), clientAt: Number(r.client_at), userId: String(r.user_id), name: String(r.user), kind: String(r.kind), n: r.n === null ? null : Number(r.n) }));
+    const seal = updates.length ? `${prev.slice(0, 4)}-${prev.slice(4, 8)}`.toUpperCase() : null;
+    return { updates, events, intact, seal };
   }
 }
