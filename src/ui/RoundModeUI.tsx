@@ -1,11 +1,11 @@
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { KIND_INFO, isHeading } from '../model/blocks';
+import { KIND_INFO, asKind, isHeading } from '../model/blocks';
 import { blockWithChildren, searchEntries, type OutlineEntry, type SearchHit } from '../model/outline';
 import type { DocMeta } from '../store/docs';
 import { useRoundMode } from '../store/roundMode';
-import { addGroup, clearPins, followSheet, isPinned, movePin, removeGroup, selectGroup, setFollowFlow, setPinGroup, togglePin, useBoard, usePins, visiblePins } from '../store/pins';
+import { clearPins, followSheet, isPinned, movePin, selectGroup, setFollowFlow, setPinGroup, togglePin, useBoard, usePins, visiblePins } from '../store/pins';
 import { activeSheet, flowKey } from '../editor/flowView';
 import { IconClose, IconPin } from './icons';
 
@@ -143,6 +143,7 @@ export function PinBoard({
   docs,
   index,
   followEditor,
+  allEditors,
   onJump,
   onInsert,
   insertBlocked,
@@ -153,6 +154,8 @@ export function PinBoard({
   index: Map<string, OutlineEntry[]>;
   /** Editor of the focused pane: when it's a flow, the tabs follow its sheet. */
   followEditor: Editor | null;
+  /** All open editors: sheet names come from the ones showing a flow. */
+  allEditors: Editor[];
   onJump: JumpTo;
   onInsert: JumpTo;
   /** Why inserting isn't allowed right now (null = allowed). */
@@ -161,10 +164,16 @@ export function PinBoard({
 }) {
   const roundMode = useRoundMode();
   const board = useBoard(space);
-  const [adding, setAdding] = useState(false);
   const pins = visiblePins(board);
-  const groups = [...board.groups];
-  for (const p of board.pins) if (p.group && !groups.some((g) => g.toLowerCase() === p.group!.toLowerCase())) groups.push(p.group);
+  const sheets = useFlowSheets(allEditors);
+  const lower = (x: string) => x.trim().toLowerCase();
+  // Tabs: sheets that have pins, plus any other sheet names pins were given.
+  const used = board.pins.map((p) => p.group).filter((g): g is string => !!g);
+  const groups: string[] = [];
+  for (const g of [...sheets, ...used]) if (used.some((u) => lower(u) === lower(g)) && !groups.some((x) => lower(x) === lower(g))) groups.push(g);
+  // Choices for a pin's sheet: the flow's sheets, then names already used.
+  const choices: string[] = [];
+  for (const g of [...sheets, ...used]) if (!choices.some((x) => lower(x) === lower(g))) choices.push(g);
   const count = (g: string) => board.pins.filter((p) => p.group?.toLowerCase() === g.toLowerCase()).length;
 
   // Follow the flow: switching to sheet "T" shows the "T" group.
@@ -216,43 +225,21 @@ export function PinBoard({
             {g} <span className="pin-count">{count(g)}</span>
           </button>
         ))}
-        {adding ? (
-          <input
-            className="pin-group-input"
-            autoFocus
-            placeholder="e.g. T"
-            aria-label="New group name"
-            onBlur={(e) => {
-              addGroup(space, e.target.value);
-              setAdding(false);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              if (e.key === 'Escape') setAdding(false);
-            }}
-          />
-        ) : (
-          <button type="button" className="pin-tab-add" onClick={() => setAdding(true)} title="New group (name it like a flow sheet, e.g. T or DA 1)">
-            + Group
-          </button>
-        )}
       </div>
       <div className="pin-options">
         <label className="check">
           <input type="checkbox" checked={board.followFlow} onChange={(e) => setFollowFlow(space, e.target.checked)} /> Follow flow sheets
         </label>
-        {board.selected && (
-          <button type="button" className="btn ghost small" onClick={() => removeGroup(space, board.selected)} title="Delete this group (its pins stay, ungrouped)">
-            Delete group
-          </button>
-        )}
       </div>
-      {board.selected && <p className="muted small pin-note">New pins go into “{board.selected}”.</p>}
+      {board.selected && <p className="muted small pin-note">Showing pins for the “{board.selected}” sheet. New pins go here too.</p>}
+      {sheets.length === 0 && board.pins.length > 0 && (
+        <p className="muted small pin-note">Open your flow (Flow view) to choose which sheet each pin answers.</p>
+      )}
       {pins.length === 0 && (
         <p className="muted small pin-empty">
           {board.selected
-            ? `Nothing pinned in “${board.selected}” yet. With this tab open, pin answers from the toolbar's Pin button or from search (Ctrl+K / ⌘K).`
-            : "Line up the blocks you'll read in your speech. Pin a claim from the toolbar's Pin button, or from search (Ctrl+K / ⌘K). Make groups named like your flow sheets (T, DA 1…) and the list follows the sheet you're on."}
+            ? `Nothing pinned for “${board.selected}” yet.`
+            : "Pin the blocks you might read: put the cursor in a section title, claim or analytic and press Pin in the toolbar (or pin from search, Ctrl+K / ⌘K). Then pick which flow sheet each pin answers, and the list follows the sheet you're on."}
         </p>
       )}
       <ol className="pin-list">
@@ -288,23 +275,14 @@ export function PinBoard({
               </div>
               <div className="pin-foot">
                 <label className="pin-group-select">
-                  <span className="sr-only">Group</span>
-                  <select
-                    value={p.group ?? ''}
-                    onChange={(e) => {
-                      if (e.target.value === '__new') {
-                        const name = window.prompt('New group name (e.g. T, DA 1)');
-                        if (name) setPinGroup(space, p, name);
-                      } else setPinGroup(space, p, e.target.value || undefined);
-                    }}
-                  >
-                    <option value="">No group</option>
-                    {groups.map((g) => (
+                  <span className="sr-only">Flow sheet this answers</span>
+                  <select value={choices.find((c) => lower(c) === lower(p.group ?? '')) ?? ''} onChange={(e) => setPinGroup(space, p, e.target.value || undefined)}>
+                    <option value="">{choices.length ? 'Which sheet?' : 'No sheet (open your flow)'}</option>
+                    {choices.map((g) => (
                       <option key={g} value={g}>
-                        {g}
+                        {sheets.some((x) => lower(x) === lower(g)) ? g : `${g} (not on flow)`}
                       </option>
                     ))}
-                    <option value="__new">New group…</option>
                   </select>
                 </label>
                 {!roundMode && (
@@ -330,31 +308,62 @@ export function PinBoard({
 /** Toolbar button: pin the claim (or heading) the caret is in. */
 export function PinButton({ editor, docId, space }: { editor: Editor; docId: string; space: string }) {
   usePins(space);
+  // Pin at the level the caret is on: a section title pins the whole
+  // section, a claim pins it with its warrants, an analytic pins just itself.
+  // A warrant or note pins the claim (or heading) it sits under.
   const target = useEditorState({
     editor,
     selector: ({ editor: e }) => {
       const { $from } = e.state.selection;
       if ($from.depth < 1) return null;
       const here = $from.index(0);
-      for (let i = here; i >= 0; i--) {
+      const own = e.state.doc.child(here);
+      if (own.type.name === 'block' && own.attrs.id && (isHeading(own.attrs.kind) || own.attrs.kind === 'analytic')) {
+        return { id: own.attrs.id as string, kind: asKind(own.attrs.kind) };
+      }
+      for (let i = here - 1; i >= 0; i--) {
         const n = e.state.doc.child(i);
-        if (n.type.name === 'block' && isHeading(n.attrs.kind) && n.attrs.id) return n.attrs.id as string;
+        if (n.type.name === 'block' && isHeading(n.attrs.kind) && n.attrs.id) return { id: n.attrs.id as string, kind: asKind(n.attrs.kind) };
       }
       return null;
     },
+    equalityFn: (a, b) => a?.id === b?.id && a?.kind === b?.kind,
   });
   if (!target) return null;
-  const pinned = isPinned(space, { docId, blockId: target });
+  const pinned = isPinned(space, { docId, blockId: target.id });
+  const what = target.kind === 'position' ? 'position' : target.kind === 'section' ? 'section' : target.kind === 'analytic' ? 'analytic' : 'claim';
   return (
     <button
       type="button"
       className={'tb-btn pin-btn' + (pinned ? ' is-on' : '')}
-      title={pinned ? 'Unpin this claim' : 'Pin this claim to your speech list'}
+      title={pinned ? `Unpin this ${what}` : `Pin this ${what}${what === 'section' ? ' (everything up to the next section)' : what === 'claim' ? ' with its warrants' : ''}`}
       aria-pressed={pinned}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => togglePin(space, { docId, blockId: target })}
+      onClick={() => togglePin(space, { docId, blockId: target.id })}
     >
-      <IconPin /> {pinned ? 'Pinned' : 'Pin'}
+      <IconPin /> {pinned ? `Pinned ${what}` : `Pin ${what}`}
     </button>
   );
+}
+
+/** Sheet names from every open flow (live as sheets are added or renamed). */
+function useFlowSheets(editors: Editor[]): string[] {
+  const [names, setNames] = useState<string[]>([]);
+  useEffect(() => {
+    const compute = () => {
+      const out: string[] = [];
+      for (const ed of editors) {
+        const st = flowKey.getState(ed.state);
+        if (!st) continue;
+        for (const sh of st.layout.sheets) if (sh.title.trim() && !out.includes(sh.title.trim())) out.push(sh.title.trim());
+      }
+      setNames((prev) => (prev.join('\u0000') === out.join('\u0000') ? prev : out));
+    };
+    compute();
+    for (const ed of editors) ed.on('transaction', compute);
+    return () => {
+      for (const ed of editors) ed.off('transaction', compute);
+    };
+  }, [editors]);
+  return names;
 }

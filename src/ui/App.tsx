@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
 import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
 import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
@@ -364,7 +364,9 @@ export function App() {
   // Mode and never into a round doc (that would be pasting into prep).
   const editors = useRef(new Map<string, Editor>());
   // Re-render when a pane's editor appears, so the pin board can follow it.
-  const [, setEditorTick] = useState(0);
+  const [editorTick, setEditorTick] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const allEditors = useMemo(() => [...editors.current.values()], [editorTick]);
   const focusedPane = layout.panes[Math.min(layout.focused, layout.panes.length - 1)];
   const focusedMeta = docs?.find((d) => d.id === focusedPane?.docId) ?? null;
   const focusedEditor = focusedPane ? editors.current.get(focusedPane.key) ?? null : null;
@@ -497,6 +499,7 @@ export function App() {
             docs={searchable}
             index={library}
             followEditor={focusedEditor}
+            allEditors={allEditors}
             onJump={jumpTo}
             onInsert={insertBlock}
             insertBlocked={insertBlocked}
