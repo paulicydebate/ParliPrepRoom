@@ -118,11 +118,11 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Settings are per browser (like fonts). Picker: **Colors** button in the flow's sheet bar (opens a window) and in Appearance.
 - Not yet: the Excel export and the check page still use fixed colors. Round-doc purple stays separate (purple colorways sit next to it, but the round doc border and label make it clear).
 
-### Privacy policy (2026-11-02)
+### Privacy policy (2026-11-02; deployed, version 4a3c6504)
 
 - Google requires a privacy policy URL to publish the OAuth app (so anyone can sign in without being a listed test user). `worker/legal.ts` serves `/privacy`: what's stored (Google name, email and picture; docs; the edit record and round-doc events; team membership; sign-in cookie), what stays in the browser, who can see what, Cloudflare and Google as processors, deletion by email, not for under-13s. Contact: parlipreproombot@mail.grokbot.com (chosen by the owner). Linked at the bottom of the sidebar.
 - **Keep it accurate:** if you change what the app stores or who can see it, update this page and its date.
-- Owner's next step: Google Auth Platform → set Privacy policy to `https://parlipreproom.paulicydebate.workers.dev/privacy` and the home page to the site, then Audience → Publish app.
+- Done: the owner set the privacy URL and **published the Google app** (2026-11-02). Anyone with a Google account can sign in; team access still needs an invite link.
 
 ## Next steps
 
