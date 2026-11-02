@@ -1,0 +1,16 @@
+{
+  // Cloudflare deploy settings. Cloudflare's GitHub integration runs
+  // `npx wrangler deploy`, which builds the app first (build.command).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "parlipreproom",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "build": { "command": "npm run build" },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
+}

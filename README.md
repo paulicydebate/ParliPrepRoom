@@ -48,6 +48,13 @@ npm test           # unit tests (Vitest + jsdom)
 npm run build      # typecheck + production build in dist/
 ```
 
+## Deploy (Cloudflare)
+
+The app runs on Cloudflare Workers (`wrangler.jsonc`, server code in `worker/`). Cloudflare's GitHub integration deploys it: on each push to the production branch it runs `npx wrangler deploy`, which builds the app (`npm run build`) and uploads `dist/` plus the worker. No API token is stored anywhere.
+
+- Local server: `npx wrangler dev` (http://localhost:8787, health check at `/api/health`).
+- Dry run: `npx wrangler deploy --dry-run`.
+
 ## Layout
 
 | Path | What |
