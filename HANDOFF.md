@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: design and tablet pass on `main`, not deployed. Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: design and tablet pass, deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -124,7 +124,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - **Keep it accurate:** if you change what the app stores or who can see it, update this page and its date.
 - Done: the owner set the privacy URL and **published the Google app** (2026-11-02). Anyone with a Google account can sign in; team access still needs an invite link.
 
-### Design and tablet pass (2026-11-02; on `main`, not deployed yet)
+### Design and tablet pass (2026-11-02; deployed)
 
 - **Window headers adapt to their own width** (CSS container queries on `.pane`, container `pane`):
   - ≤760px: outline, share, export and history fold into a **⋯** menu (`.pane-more`, which also has "Show a different doc"); the Prep/Reference badge and the same-doc chip are hidden.
