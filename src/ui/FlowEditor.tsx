@@ -3,7 +3,7 @@ import CollaborationCaret from '@tiptap/extension-collaboration-caret';
 import type { WebsocketProvider } from 'y-websocket';
 import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { blockWithChildren } from '../model/outline';
 import { useBoard } from '../store/pins';
@@ -17,7 +17,8 @@ import { RoundGuard } from '../editor/roundGuard';
 import { activeSheet, flowKey, FlowView, sheetKey } from '../editor/flowView';
 import { KIND_INFO, asKind } from '../model/blocks';
 import { SPEECH_INFO } from '../model/speeches';
-import { IconPin, IconPlus } from './icons';
+import { ColorwayPicker } from './ColorwayPicker';
+import { IconClose, IconPin, IconPlus } from './icons';
 
 export function FlowEditor({
   ydoc,
@@ -138,6 +139,7 @@ function SheetTabs({ editor }: { editor: Editor }) {
           </select>
         </label>
       )}
+      <ColorsButton />
       {active && <DeleteSheetButton editor={editor} sheetKey={active} title={sheets.find((s) => s.key === active)?.title ?? ''} />}
       <span className="tb-spacer" />
       <button type="button" className="btn ghost small" onClick={() => editor.chain().addSheet('gov').focus().run()}>
@@ -264,5 +266,56 @@ function PinColumn({ editor, space }: { editor: Editor; space: string }) {
         );
       })}
     </div>
+  );
+}
+
+/** "Colors" in the sheet bar: a quick window to switch Gov/Opp colors. */
+function ColorsButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="btn ghost small colors-btn" title="Change Gov and Opp colors" onClick={() => setOpen(true)}>
+        <span className="mini-swatch" aria-hidden="true">
+          <span style={{ background: 'var(--gov)' }} />
+          <span style={{ background: 'var(--opp)' }} />
+        </span>
+        Colors
+      </button>
+      {open && createPortal(<ColorsDialog onClose={() => setOpen(false)} />, document.body)}
+    </>
+  );
+}
+
+function ColorsDialog({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (d && !d.open) d.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      className="settings colors-dialog"
+      onClose={onClose}
+      onCancel={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="settings-head">
+        <h2>Gov &amp; Opp colors</h2>
+        <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
+          <IconClose />
+        </button>
+      </div>
+      <p className="muted">Saved in this browser. Your partner can pick different colors for the same flow.</p>
+      <ColorwayPicker />
+      <div className="settings-foot">
+        <span />
+        <button type="button" className="btn primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </dialog>
   );
 }

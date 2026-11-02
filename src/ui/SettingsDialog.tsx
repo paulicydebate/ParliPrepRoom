@@ -3,6 +3,7 @@ import { setProfileName, useProfile } from '../settings/profile';
 import { PRESET_LABELS, type StyleKeyPreset } from '../editor/shortcuts';
 import { BLOCK_KINDS, KIND_INFO, type BlockKind } from '../model/blocks';
 import { DEFAULT_SETTINGS, FONTS, fontStack, updateSettings, useSettings, type StyleSetting, type Theme } from '../settings/settings';
+import { ColorwayPicker } from './ColorwayPicker';
 import { IconClose } from './icons';
 
 const THEMES: { id: Theme; label: string }[] = [
@@ -57,6 +58,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
+
+      <h3>Gov &amp; Opp colors</h3>
+      <ColorwayPicker />
 
       <h3>Style keys</h3>
       <div className="seg wrap" role="group" aria-label="Style keys">
@@ -140,7 +144,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="settings-foot">
-        <button type="button" className="btn ghost" onClick={() => updateSettings({ ...DEFAULT_SETTINGS, theme: settings.theme, styleKeys: settings.styleKeys })}>
+        <button type="button" className="btn ghost" onClick={() => updateSettings({ ...DEFAULT_SETTINGS, theme: settings.theme, styleKeys: settings.styleKeys, colorway: settings.colorway, customColors: settings.customColors })}>
           Reset styles
         </button>
         <button type="button" className="btn primary" onClick={onClose}>

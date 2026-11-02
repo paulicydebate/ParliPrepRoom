@@ -12,8 +12,9 @@
   --accent: #1f6f5c;
   --accent-soft: #e2f1ec;
   --accent-text: #ffffff;
-  --gov: #2f6fd6;
-  --opp: #c2410c;
+  /* Gov/Opp colors come from the chosen colorway (settings.ts sets --gov-l/-d, --opp-l/-d). */
+  --gov: var(--gov-l, #1f5fc9);
+  --opp: var(--opp-l, #c62828);
   --danger: #b42318;
   --added-bg: #dcf5e6;
   --added-text: #135c33;
@@ -61,6 +62,8 @@
     --position-color: #d9f3ea;
     --section-color: #6fd3b5;
     --analytic-color: #aeb9ec;
+    --gov: var(--gov-d, #7aa7ff);
+    --opp: var(--opp-d, #ff7b72);
     --round: #a77bff;
     --round-soft: #2a1d47;
     --round-text: #170a33;
@@ -89,6 +92,8 @@
   --position-color: #d9f3ea;
   --section-color: #6fd3b5;
   --analytic-color: #aeb9ec;
+  --gov: var(--gov-d, #7aa7ff);
+  --opp: var(--opp-d, #ff7b72);
   --round: #a77bff;
   --round-soft: #2a1d47;
   --round-text: #170a33;
@@ -2613,4 +2618,127 @@ del {
 }
 .flow-head .flow-col-head {
   position: relative;
+}
+
+/* ---------- Colorways ---------- */
+.colorway-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+.colorway {
+  --sw-gov: var(--sw-gov-l);
+  --sw-opp: var(--sw-opp-l);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--text);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='sepia']) .colorway {
+    --sw-gov: var(--sw-gov-d);
+    --sw-opp: var(--sw-opp-d);
+  }
+}
+:root[data-theme='dark'] .colorway {
+  --sw-gov: var(--sw-gov-d);
+  --sw-opp: var(--sw-opp-d);
+}
+.colorway:hover {
+  border-color: var(--border-strong);
+}
+.colorway.is-on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  font-weight: 600;
+}
+.swatch {
+  flex: none;
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  transform: rotate(-45deg);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08);
+}
+.swatch span {
+  flex: 1;
+}
+.sw-gov {
+  background: var(--sw-gov);
+}
+.sw-opp {
+  background: var(--sw-opp);
+}
+.colorway-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.custom-colors {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+}
+.custom-colors label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.custom-colors input[type='color'] {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+}
+.colors-menu {
+  position: relative;
+  flex: none;
+}
+.colors-menu summary {
+  list-style: none;
+}
+.colors-menu summary::-webkit-details-marker {
+  display: none;
+}
+.colors-pop {
+  left: 0;
+  right: auto;
+  width: min(460px, 86vw);
+  padding: 10px;
+  z-index: 40;
+}
+.mini-swatch {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  overflow: hidden;
+  transform: rotate(-45deg);
+}
+.mini-swatch span {
+  flex: 1;
+}
+
+.colors-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+.colors-dialog .colorway-grid {
+  margin-top: 12px;
+}
+.colors-btn {
+  flex: none;
 }

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { BLOCK_KINDS, type BlockKind } from '../model/blocks';
 import { createSignal } from '../store/emitter';
+import { DEFAULT_COLORWAY, resolveColorway } from './colorways';
 import { defaultPreset, setStyleKeyPreset, type StyleKeyPreset } from '../editor/shortcuts';
 
 // Look-and-feel settings. They live in this browser only (like Google Docs'
@@ -22,6 +23,9 @@ export interface StyleSetting {
 export interface Settings {
   theme: Theme;
   styleKeys: StyleKeyPreset;
+  /** Gov/Opp colors: a colorway id, or 'custom'. */
+  colorway: string;
+  customColors: { gov: string; opp: string };
   styles: Record<BlockKind, StyleSetting>;
 }
 
@@ -47,6 +51,8 @@ export function fontStack(label: string): string {
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   styleKeys: defaultPreset(),
+  colorway: DEFAULT_COLORWAY,
+  customColors: { gov: '#1f5fc9', opp: '#c62828' },
   styles: {
     position: { font: 'Inter', size: 26, color: null, bold: true, italic: false, underline: false },
     section: { font: 'Inter', size: 20, color: null, bold: true, italic: false, underline: false },
@@ -67,7 +73,13 @@ function load(): Settings {
     const parsed = JSON.parse(raw) as Partial<Settings>;
     const styles = { ...DEFAULT_SETTINGS.styles };
     for (const k of BLOCK_KINDS) styles[k] = { ...styles[k], ...(parsed.styles?.[k] ?? {}) };
-    return { theme: parsed.theme ?? DEFAULT_SETTINGS.theme, styleKeys: parsed.styleKeys ?? DEFAULT_SETTINGS.styleKeys, styles };
+    return {
+      theme: parsed.theme ?? DEFAULT_SETTINGS.theme,
+      styleKeys: parsed.styleKeys ?? DEFAULT_SETTINGS.styleKeys,
+      colorway: parsed.colorway ?? DEFAULT_SETTINGS.colorway,
+      customColors: { ...DEFAULT_SETTINGS.customColors, ...(parsed.customColors ?? {}) },
+      styles,
+    };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -100,6 +112,11 @@ export function applySettings(s: Settings) {
   const root = document.documentElement;
   root.dataset.theme = s.theme === 'system' ? '' : s.theme;
   if (s.theme === 'system') delete root.dataset.theme;
+  const cw = resolveColorway(s.colorway, s.customColors);
+  root.style.setProperty('--gov-l', cw.gov.light);
+  root.style.setProperty('--gov-d', cw.gov.dark);
+  root.style.setProperty('--opp-l', cw.opp.light);
+  root.style.setProperty('--opp-d', cw.opp.dark);
   for (const k of BLOCK_KINDS) {
     const st = s.styles[k];
     root.style.setProperty(`--pp-${k}-font`, fontStack(st.font));
