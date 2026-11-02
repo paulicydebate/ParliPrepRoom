@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: pins column inside the flow and the delete-a-flow-sheet button, on `main`, not deployed. Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -93,13 +93,13 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Following: the App passes the focused pane's editor to `PinBoard`; when it's a flow and the active sheet's title matches a group name (case-insensitive), the tab switches. Doc-view panes don't change the tab.
 - Checked in Playwright: section pin includes both claims and warrants; analytic pin is just the line; the dropdown lists the flow's sheets (T, DA1); opening sheet T shows only the T pin, DA1 only the DA pin.
 
-### Delete a flow sheet (2026-11-02; on `main`, not deployed yet)
+### Delete a flow sheet (2026-11-02; deployed)
 
 - "Delete sheet" button in the flow's sheet bar (next to Gov/Opp). An empty sheet deletes right away; a sheet with text asks again ("Delete "T" and everything on it?"; the confirm resets after 4 s). Undo restores it.
 - `deleteSheet(key)` in `src/editor/flowView.ts` deletes from the sheet's position title to its end; if the doc would be empty, it leaves one empty position title.
 - Tests in `tests/flowEditor.test.ts`; checked in the browser (empty delete, confirm, undo).
 
-### Pins column inside the flow (2026-11-02; on `main`, not deployed yet)
+### Pins column inside the flow (2026-11-02; deployed)
 
 - The owner found the side pin panel too far from the columns. Each flow column header now has a pin button. Clicking it on, say, LOC opens a **Pins** column right after LOC and shifts later columns one to the right; clicking again closes it.
 - It shows the pins whose sheet matches the sheet in view (in Round Mode, only pins from round docs). Read-only; tapping a pin opens the block in another pane (or a new one) without replacing the flow (`pp-jump` window event → `jumpTo(..., keepFocused)`).
