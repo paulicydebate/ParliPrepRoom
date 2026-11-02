@@ -32,6 +32,8 @@ const EVENT_LABEL: Record<string, string> = {
   'round-on': 'Turned round doc on',
   'round-off': 'Turned round doc off',
   restore: 'Restored an earlier version',
+  'roundmode-on': 'Started Round Mode (only round docs open)',
+  'roundmode-off': 'Left Round Mode',
   away: 'Switched to another app or tab',
   back: 'Came back to the app',
   large: 'Large single edit (app report)',

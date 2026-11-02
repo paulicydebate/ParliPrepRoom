@@ -9,6 +9,7 @@ import { useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
 import { FlowEditor } from './FlowEditor';
 import { CheckLinkButton, PartnersButton } from './RoundTools';
+import { PinButton } from './RoundModeUI';
 import { HistoryView } from './HistoryView';
 import { IconClose, IconDownload, IconHistory, IconLock, IconOutline, IconShare, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
@@ -18,6 +19,8 @@ export interface PaneState {
   docId: string | null;
   outline: boolean;
   view?: 'doc' | 'flow';
+  /** Jump request from the block finder or pin board (n changes each time). */
+  focus?: { blockId: string; n: number };
 }
 
 function ExportMenu({ editor, title }: { editor: Editor | null; title: string }) {
@@ -186,6 +189,8 @@ export function Pane({
   focused,
   canClose,
   alsoOpen = false,
+  space,
+  roundMode = false,
   onFocus,
   onChange,
   onClose,
@@ -196,13 +201,17 @@ export function Pane({
   focused: boolean;
   canClose: boolean;
   alsoOpen?: boolean;
+  /** Current team (or 'personal'), for pins. */
+  space: string;
+  /** Round Mode: only round docs can be shown. */
+  roundMode?: boolean;
   onFocus: () => void;
   onChange: (p: PaneState) => void;
   onClose: () => void;
   onCreate: (kind: DocMeta['kind']) => void;
 }) {
   const meta = docs.find((d) => d.id === pane.docId) ?? null;
-  const opened = useYDoc(meta ? meta.id : null);
+  const opened = useYDoc(meta && !(roundMode && !meta.round) ? meta.id : null);
   const ydoc = opened?.doc ?? null;
   const provider = opened?.provider ?? null;
   const syncStatus = useSyncStatus(provider);
@@ -213,6 +222,26 @@ export function Pane({
   useEffect(() => setHistory(false), [pane.docId]);
   const view = pane.view ?? 'doc';
   const round = useRound(ydoc);
+
+  // Jump to a block (from search or the pin board) once the editor is ready.
+  useEffect(() => {
+    if (!editor || !pane.focus) return;
+    const { blockId } = pane.focus;
+    let pos = -1;
+    editor.state.doc.forEach((n, p) => {
+      if (pos < 0 && n.attrs.id === blockId) pos = p;
+    });
+    if (pos < 0) return;
+    const node = editor.state.doc.nodeAt(pos)!;
+    editor.chain().focus().setTextSelection(pos + 1 + node.content.size).run();
+    const dom = editor.view.nodeDOM(pos);
+    if (dom instanceof HTMLElement) {
+      dom.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      dom.classList.add('pp-flash');
+      setTimeout(() => dom.classList.remove('pp-flash'), 1600);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, pane.focus?.n]);
   // Keep the sidebar's round-doc dot right when a partner flips the switch.
   useEffect(() => {
     if (meta && ydoc && !!meta.round !== round) void setDocRound(meta.id, round);
@@ -352,11 +381,23 @@ export function Pane({
         </div>
       )}
 
-      {meta && !ydoc && <div className="pane-loading">Opening…</div>}
+      {meta && !ydoc && !(roundMode && !meta.round) && <div className="pane-loading">Opening…</div>}
 
-      {meta && ydoc && (
+      {meta && roundMode && !meta.round && (
+        <div className="pane-blocked">
+          <IconLock />
+          <p>
+            <strong>Round Mode is on.</strong> Only round docs (typed by hand during prep) can be open during the round.
+          </p>
+          <button type="button" className="btn" onClick={() => onChange({ ...pane, docId: null })}>
+            Pick a round doc
+          </button>
+        </div>
+      )}
+
+      {meta && ydoc && !(roundMode && !meta.round) && (
         <>
-          {!history && editor && <Toolbar editor={editor} view={view} />}
+          {!history && editor && <Toolbar editor={editor} view={view} extra={<PinButton editor={editor} docId={meta.id} space={space} />} />}
           <div className="pane-body" hidden={history}>
             {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
             {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} />}

@@ -4,11 +4,14 @@ import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, s
 import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
+import { BlockFinder, PinBoard } from './RoundModeUI';
+import { useLibrary } from './useLibrary';
+import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
 import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
-import { IconMenu, IconSettings, IconSplit } from './icons';
+import { IconMenu, IconPin, IconSearch, IconSettings, IconSplit } from './icons';
 import { Pane, type PaneState } from './Pane';
 import { NameDialog } from './NameDialog';
 import { SettingsDialog } from './SettingsDialog';
@@ -127,6 +130,34 @@ export function App() {
   const panesRef = useRef<HTMLDivElement>(null);
 
   const acct = useAccount();
+  const roundMode = useRoundMode();
+  const [findOpen, setFindOpen] = useState(false);
+  const [pinsOpen, setPinsOpen] = useState(() => {
+    try {
+      return localStorage.getItem('pp-pins-open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('pp-pins-open', pinsOpen ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }, [pinsOpen]);
+
+  // Ctrl/Cmd+K opens the block finder.
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setFindOpen(true);
+      }
+    };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
 
   // Links: #invite=<code> joins a team, #doc=<id> opens a doc (needs access).
   // Otherwise, on a first visit, add the sample docs.
@@ -308,12 +339,29 @@ export function App() {
 
   const showSidebar = narrow ? sidebarOverlay : layout.sidebar;
   const signedIn = acct.server && !!acct.user;
-  const visibleDocs = docs ? (signedIn ? docs.filter((d) => spaceOf(d) === acct.space) : docs) : null;
+  const spaceDocs = docs ? (signedIn ? docs.filter((d) => spaceOf(d) === acct.space) : docs) : null;
+  // In Round Mode only round docs are listed (and searchable).
+  const visibleDocs = spaceDocs ? (roundMode ? spaceDocs.filter((d) => d.round) : spaceDocs) : null;
   const spaceName = signedIn ? (acct.teams.find((t) => t.id === acct.space)?.name ?? 'My own docs') : null;
+  const searchable = visibleDocs ?? [];
+  const library = useLibrary(
+    searchable.map((d) => d.id),
+    findOpen || pinsOpen,
+  );
+  const jumpTo = (docId: string, blockId: string) => {
+    setLayout((l) => {
+      const n = Date.now();
+      const existing = l.panes.findIndex((p) => p.docId === docId);
+      const i = existing >= 0 ? existing : Math.min(l.focused, l.panes.length - 1);
+      return { ...l, focused: i, panes: l.panes.map((x, j) => (j === i ? { ...x, docId, focus: { blockId, n } } : x)) };
+    });
+    setSidebarOverlay(false);
+  };
+  const toggleRoundMode = () => setRoundMode(!roundMode, (spaceDocs ?? []).filter((d) => d.round).map((d) => d.id));
   const openIds = new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x));
 
   return (
-    <div className={'app' + (narrow ? ' is-narrow' : '')}>
+    <div className={'app' + (narrow ? ' is-narrow' : '') + (roundMode ? ' is-round-mode' : '')}>
       <header className="topbar">
         <button
           type="button"
@@ -340,6 +388,21 @@ export function App() {
         <span className="tb-spacer" />
         <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= MAX_PANES} title="Add a pane to show another document side by side">
           <IconSplit /> <span className="hide-narrow">Split view</span>
+        </button>
+        <button type="button" className="icon-btn" aria-label="Search blocks" title="Find a block (Ctrl+K / ⌘K)" onClick={() => setFindOpen(true)}>
+          <IconSearch />
+        </button>
+        <button type="button" className={'icon-btn' + (pinsOpen ? ' is-on' : '')} aria-label="Pinned blocks" aria-pressed={pinsOpen} title="Pinned blocks for your speech" onClick={() => setPinsOpen((o) => !o)}>
+          <IconPin />
+        </button>
+        <button
+          type="button"
+          className={'round-mode-btn' + (roundMode ? ' is-on' : '')}
+          aria-pressed={roundMode}
+          title={roundMode ? 'Leave Round Mode' : 'Round Mode: only round docs can be open during the round'}
+          onClick={toggleRoundMode}
+        >
+          <span className="switch" /> <span className="hide-narrow">Round Mode</span>
         </button>
         <AccountBar />
         <button type="button" className="icon-btn" aria-label="Appearance" title="Fonts and theme" onClick={() => setSettingsOpen(true)}>
@@ -368,6 +431,8 @@ export function App() {
                     focused={i === layout.focused && layout.panes.length > 1}
                     canClose={layout.panes.length > 1}
                     alsoOpen={!!p.docId && layout.panes.filter((x) => x.docId === p.docId).length > 1}
+                    space={acct.space}
+                    roundMode={roundMode}
                     onFocus={() => layout.focused !== i && setLayout((l) => ({ ...l, focused: i }))}
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
@@ -377,7 +442,11 @@ export function App() {
               </Fragment>
             ))}
         </div>
+        {pinsOpen && <PinBoard space={acct.space} docs={searchable} index={library} onJump={jumpTo} onClose={() => setPinsOpen(false)} />}
       </div>
+      {findOpen && (
+        <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onClose={() => setFindOpen(false)} />
+      )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {acct.loaded && !acct.server && <NameDialog />}
       <div className="toast" role="status" aria-live="polite" hidden={!toastMsg}>

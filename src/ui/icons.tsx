@@ -137,3 +137,15 @@ export const IconShare = () => (
     <path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" />
   </Svg>
 );
+export const IconPin = () => (
+  <Svg size={16}>
+    <path d="M9 3h6l-1 6 3 3H7l3-3z" />
+    <path d="M12 12v9" />
+  </Svg>
+);
+export const IconSearch = () => (
+  <Svg>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M20 20l-4.2-4.2" />
+  </Svg>
+);

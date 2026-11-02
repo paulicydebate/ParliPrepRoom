@@ -19,6 +19,8 @@ export type LogKind =
   | 'round-on'
   | 'round-off'
   | 'restore' // restored an earlier version (s = which)
+  | 'roundmode-on' // Round Mode switched on (only round docs open)
+  | 'roundmode-off'
   | 'away' // switched to another app or tab
   | 'back';
 

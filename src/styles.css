@@ -2079,3 +2079,311 @@ del {
   width: 100%;
   height: auto;
 }
+
+/* ---------- Round Mode ---------- */
+.round-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px 0 6px;
+  border-radius: 16px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  flex: none;
+}
+.round-mode-btn .switch {
+  position: relative;
+  width: 26px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--border-strong);
+}
+.round-mode-btn .switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.round-mode-btn.is-on {
+  background: var(--round-text);
+  color: var(--round);
+  border-color: var(--round-text);
+}
+.round-mode-btn.is-on .switch {
+  background: var(--round);
+}
+.round-mode-btn.is-on .switch::after {
+  transform: translateX(10px);
+}
+/* The whole top bar turns purple so opponents can see Round Mode from across the room. */
+.is-round-mode .topbar {
+  background: var(--round);
+  color: var(--round-text);
+  border-bottom-color: var(--round);
+}
+.is-round-mode .topbar .icon-btn {
+  color: var(--round-text);
+}
+.is-round-mode .topbar .icon-btn:hover,
+.is-round-mode .topbar .icon-btn.is-on {
+  background: color-mix(in srgb, var(--round-text) 18%, transparent);
+  color: var(--round-text);
+}
+.is-round-mode .topbar .btn.ghost {
+  color: var(--round-text);
+}
+.is-round-mode .topbar .brand::after {
+  content: 'ROUND MODE';
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  background: var(--round-text);
+  color: var(--round);
+}
+.pane-blocked {
+  margin: auto;
+  max-width: 340px;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Block finder */
+.finder {
+  width: min(680px, calc(100vw - 32px));
+  padding: 14px;
+  margin-top: 10vh;
+}
+.finder-input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 0 14px;
+  font-size: 16px;
+  background: var(--surface);
+}
+.finder-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+.finder-hint {
+  margin: 6px 4px 8px;
+}
+.finder-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.finder-results li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 2px 4px;
+}
+.finder-results li.is-sel {
+  background: var(--accent-soft);
+}
+.finder-empty {
+  padding: 10px !important;
+}
+.finder-hit {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 7px 6px;
+  cursor: pointer;
+}
+.finder-kind {
+  grid-row: span 3;
+  align-self: start;
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.finder-text {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.finder-match {
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.finder-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.finder-pin.is-on {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Pin board */
+.pinboard {
+  width: 320px;
+  flex: none;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.pinboard-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.pin-empty {
+  padding: 12px 14px;
+  margin: 0;
+}
+.pin-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+.pin {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.pin-top {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 6px;
+  background: var(--surface-2);
+}
+.pin-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 2px;
+}
+.pin-title .small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pin-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+.pin-body.pp-doc {
+  padding: 8px 12px 10px 10px;
+  max-width: none;
+  font-size: 0.9em;
+  cursor: pointer;
+  user-select: none;
+}
+.pin-body .pp-block[data-kind='position'] {
+  font-size: calc(var(--pp-position-size) * 0.6);
+  margin: 0 0 4px;
+}
+.pin-body .pp-block[data-kind='section'] {
+  font-size: calc(var(--pp-section-size) * 0.72);
+  margin: 0 0 4px;
+}
+.pin-body .pp-block[data-kind='claim'] {
+  font-size: calc(var(--pp-claim-size) * 0.85);
+  margin: 4px 0 2px;
+}
+.pin-body .pp-block[data-kind='warrant'],
+.pin-body .pp-block[data-kind='analytic'] {
+  font-size: calc(var(--pp-warrant-size) * 0.82);
+}
+.pin-btn {
+  display: inline-flex;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pp-flash {
+  animation: pp-flash 1.6s ease-out;
+}
+@keyframes pp-flash {
+  0%,
+  30% {
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-flash {
+    animation: none;
+  }
+}
+.is-narrow .pinboard {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(340px, 90vw);
+  box-shadow: var(--shadow);
+}
+.is-round-mode .topbar .space-select select,
+.is-round-mode .topbar .dev-signin input {
+  color: var(--text);
+}
+.is-round-mode .topbar .btn:not(.primary):not(.ghost) {
+  color: var(--text);
+}

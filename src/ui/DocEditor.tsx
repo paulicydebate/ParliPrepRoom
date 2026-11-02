@@ -62,7 +62,7 @@ function speechInfo(e: Editor) {
   return { explicit, effective: layout.speechAt.get(pos) ?? null, inSheet: !!sheetAt(layout, pos) };
 }
 
-export function Toolbar({ editor, view = 'doc' }: { editor: Editor; view?: 'doc' | 'flow' }) {
+export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?: 'doc' | 'flow'; extra?: React.ReactNode }) {
   useSettings(); // re-render when the style keys change
   const s = useEditorState({
     editor,
@@ -144,6 +144,7 @@ export function Toolbar({ editor, view = 'doc' }: { editor: Editor; view?: 'doc'
           <span className="tb-hint">Tab: next speech · {MOD}+Enter: new row</span>
         </>
       )}
+      {extra}
       <span className="tb-spacer" />
       <button type="button" className="tb-btn" title={`Undo (${MOD}+Z)`} aria-label="Undo" disabled={!s.canUndo} onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().undo().run()}>
         <IconUndo />

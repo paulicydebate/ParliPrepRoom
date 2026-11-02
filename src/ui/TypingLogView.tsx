@@ -18,12 +18,14 @@ const LABEL: Record<LogEvent['k'], string> = {
   'round-on': 'Round doc turned on',
   'round-off': 'Round doc turned off',
   restore: 'Restored a version',
+  'roundmode-on': 'Round Mode on',
+  'roundmode-off': 'Round Mode off',
   away: 'Left the app',
   back: 'Came back',
 };
 
 /** Events worth a reviewer's attention (typing itself is summarized, not listed). */
-const NOTABLE = new Set<LogEvent['k']>(['large', 'paste-blocked', 'drop-blocked', 'round-on', 'round-off', 'restore', 'away', 'back']);
+const NOTABLE = new Set<LogEvent['k']>(['large', 'paste-blocked', 'drop-blocked', 'round-on', 'round-off', 'roundmode-on', 'roundmode-off', 'restore', 'away', 'back']);
 
 export function TypingLogView({ docId }: { docId: string }) {
   const [report, setReport] = useState<LogReport | null>(null);
