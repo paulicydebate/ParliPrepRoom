@@ -3,6 +3,7 @@
 // sign-in, teams, docs, live sync and the public round-doc check page.
 
 import { renderCheckPage } from './checkPage';
+import { privacyPage } from './legal';
 import type { DocRecord, Role } from './directory';
 import { FILES } from './static.gen';
 
@@ -79,6 +80,10 @@ export default {
     const secure = url.protocol === 'https:';
     const googleOn = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
     const devOn = env.DEV_LOGIN === '1' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+
+    if (path === '/privacy') {
+      return new Response(privacyPage(), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });
+    }
 
     if (path === '/api/health') {
       return json({ ok: true, app: 'parlipreproom', sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString() });

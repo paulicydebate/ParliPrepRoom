@@ -215,6 +215,11 @@ export function Sidebar({
       )}
       {section('prep', 'Prep', 'What you type during prep.')}
       {section('reference', 'Reference', 'Coach briefs and notes to read from.')}
+      <p className="side-foot">
+        <a href="/privacy" target="_blank" rel="noreferrer">
+          Privacy
+        </a>
+      </p>
     </aside>
   );
 }
