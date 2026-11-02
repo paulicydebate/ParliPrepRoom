@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-03 by Claude (Claude Code cloud session). Latest: adjustable timer lengths, on `main`, not deployed. Before that: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, deployed 2026-11-03 (version a39bedb3) with the owner's approval. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-03 by Claude (Claude Code cloud session). Latest: adjustable timer lengths, deployed 2026-11-03 (version 9010a62b) with the owner's approval. Before that: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, deployed 2026-11-03 (version a39bedb3) with the owner's approval. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -187,7 +187,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Not supported: Flower's own file format (export from Flower as a spreadsheet if it allows that), PDFs, old .doc files.
 - Tests: `tests/import.test.ts` (Word and Excel round trips through our exporters, CSV with quotes, Markdown).
 
-### Adjustable timer lengths (2026-11-03; on `main`, not deployed yet)
+### Adjustable timer lengths (2026-11-03; deployed, version 9010a62b)
 
 - Owner asked for any length (prep is sometimes 25 or 30). In the timer menu: **Change times** edits each preset's name and length, adds or removes presets, or resets to defaults; saved per device (`localStorage` `pp-timer-presets-v1`). The custom row takes a name and a length. **−1:00 / +1:00** nudge the current timer, running or paused (shared on round docs like everything else).
 - Lengths can be typed as `25`, `2.5` or `2:30` (`parseMinutes` / `formatMinutes` in `src/store/timer.ts`; `adjust` adds or removes time).
