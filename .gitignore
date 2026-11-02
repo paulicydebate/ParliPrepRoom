@@ -4,3 +4,4 @@ dist
 .DS_Store
 test-results
 .wrangler
+worker/static.gen.ts

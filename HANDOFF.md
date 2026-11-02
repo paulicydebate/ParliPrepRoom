@@ -27,13 +27,14 @@ Done and tested (40 unit tests, plus manual browser checks with Playwright):
 
 **Phase 3 (in progress):** accounts, teams, server storage, live co-editing, server-stamped typing log with a public check link.
 
-- `worker/index.ts` + `wrangler.jsonc`: a Cloudflare Worker that serves the built app and `/api/health`. Tested locally with `npx wrangler dev`.
-- **Not deployed yet.** A Cloudflare API token is stored as a network secret in the Claude Code cloud environment; requests to `api.cloudflare.com` get it added automatically. Cloudflare account ID: `cc1fffd57d89d16d2e28ed38e9a58cc1`. The owner must explicitly approve a production deploy. Once approved: `CLOUDFLARE_API_TOKEN=injected-by-proxy CLOUDFLARE_ACCOUNT_ID=cc1fffd57d89d16d2e28ed38e9a58cc1 npx wrangler deploy` (the placeholder token gets replaced by the real one on its way out).
-- Alternative the owner was offered: connect the repo in the Cloudflare dashboard (Workers & Pages → Import a repository) so Cloudflare deploys on push.
+- **Live at https://parlipreproom.paulicydebate.workers.dev** (deployed 2026-11-02 from `phase-3-server`, with the owner's approval). Health check: `/api/health`. So far it's the same app as the preview (data still in the browser), served from Cloudflare.
+- `worker/index.ts` + `wrangler.jsonc`: the Worker. The built app is **embedded into the worker** by `scripts/embed-assets.mjs` (generates `worker/static.gen.ts`, gitignored) instead of using Workers static assets. Reason: in the Claude cloud sandbox the credential proxy replaces the one-time token Cloudflare uses for asset uploads, so asset uploads fail with 401. A single script upload works. Size: ~360 KB gzipped (free plan limit is 3 MB).
+- **Deploying:** the Cloudflare API token is a network secret in the Claude Code cloud environment (the proxy adds it to requests to `api.cloudflare.com`). Account ID `cc1fffd57d89d16d2e28ed38e9a58cc1`. Command: `CLOUDFLARE_API_TOKEN=injected-by-proxy CLOUDFLARE_ACCOUNT_ID=cc1fffd57d89d16d2e28ed38e9a58cc1 npx wrangler deploy`. The owner approves deploys; ask before deploying. Other environments need their own token (`CLOUDFLARE_API_TOKEN`) with Workers Scripts edit, D1 edit, Account Settings read, User Details read.
+- The sandbox can't open `*.workers.dev` (network policy), so live checks need the owner, or adding `*.workers.dev` to the environment's allowed domains.
 
 ## Next steps (Phase 3)
 
-1. Deploy (waiting on the owner's OK), then confirm `/api/health` on the `workers.dev` address.
+1. Owner to confirm the live site loads.
 2. Live co-editing: one Durable Object per document, speaking the Yjs sync protocol over WebSocket. Keep IndexedDB as the offline cache.
 3. Server-stamped log: the Durable Object records each update to a round doc with server time and user, so the student can't rewrite it. Public check page and QR per round doc.
 4. Accounts: Google sign-in (free; the owner still has to create a Google Cloud OAuth client, steps not sent yet). Maybe an emailed-link fallback, since schools may block student Google accounts.

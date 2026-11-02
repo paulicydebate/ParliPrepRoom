@@ -50,7 +50,9 @@ npm run build      # typecheck + production build in dist/
 
 ## Deploy (Cloudflare)
 
-The app runs on Cloudflare Workers (`wrangler.jsonc`, server code in `worker/`). Cloudflare's GitHub integration deploys it: on each push to the production branch it runs `npx wrangler deploy`, which builds the app (`npm run build`) and uploads `dist/` plus the worker. No API token is stored anywhere.
+Live: https://parlipreproom.paulicydebate.workers.dev
+
+The app runs on Cloudflare Workers (`wrangler.jsonc`, server code in `worker/`). `npx wrangler deploy` builds the app, embeds it into the worker (`scripts/embed-assets.mjs`) and uploads one script. It needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; see HANDOFF.md.
 
 - Local server: `npx wrangler dev` (http://localhost:8787, health check at `/api/health`).
 - Dry run: `npx wrangler deploy --dry-run`.
