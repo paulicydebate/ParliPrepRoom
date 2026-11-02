@@ -5,3 +5,9 @@ dist
 test-results
 .wrangler
 worker/static.gen.ts
+
+# Output of a stray `tsc -b` (use `npm run typecheck`, which emits nothing)
+*.tsbuildinfo
+src/**/*.js
+tests/**/*.js
+vite.config.js

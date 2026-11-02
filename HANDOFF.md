@@ -227,6 +227,8 @@ Preview link the owner tests on (published from Claude sessions): https://claude
 
 ## Things to know
 
+- Type-check with `npm run typecheck` (no output files). Don't run `tsc -b`: it writes `.js` copies next to the sources, and Vite picks a `.js` file before a `.ts` one, so a stale copy can end up in the build. That happened once (commit 7dafee6, removed in the next commit); the timer deployed as 9010a62b was missing its "Adjust" label and the instant redraw after starting. `.gitignore` now blocks those files.
+
 - Don't copy code from CardMirror / CardMirror-Green (noncommercial license). Re-implementing ideas is fine.
 - Don't commit real student prep or credentials.
 - The owner reads on a phone and isn't a programmer: plain-language updates, outcome first.
