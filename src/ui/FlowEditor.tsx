@@ -4,6 +4,7 @@ import type { WebsocketProvider } from 'y-websocket';
 import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { useEffect, useState } from 'react';
+import { toast } from '../editor/roundGuard';
 import type * as Y from 'yjs';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
 import { RoundGuard } from '../editor/roundGuard';
@@ -113,6 +114,7 @@ function SheetTabs({ editor }: { editor: Editor }) {
           </select>
         </label>
       )}
+      {active && <DeleteSheetButton editor={editor} sheetKey={active} title={sheets.find((s) => s.key === active)?.title ?? ''} />}
       <span className="tb-spacer" />
       <button type="button" className="btn ghost small" onClick={() => editor.chain().addSheet('gov').focus().run()}>
         <IconPlus /> Gov
@@ -144,5 +146,38 @@ function ColumnHeaders({ editor }: { editor: Editor }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Delete the sheet in view. Asks once more if the sheet has anything on it. */
+function DeleteSheetButton({ editor, sheetKey: key, title }: { editor: Editor; sheetKey: string; title: string }) {
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => setConfirm(false), [key]);
+  useEffect(() => {
+    if (!confirm) return;
+    const t = setTimeout(() => setConfirm(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirm]);
+  const isEmpty = () => {
+    const sheet = flowKey.getState(editor.state)?.layout.sheets.find((s) => sheetKey(s) === key);
+    return !sheet || sheet.placements.every((p) => !editor.state.doc.nodeAt(p.pos)?.textContent.trim());
+  };
+  return (
+    <button
+      type="button"
+      className={'btn ghost small sheet-delete' + (confirm ? ' confirm' : '')}
+      title="Delete this sheet and everything on it (Undo brings it back)"
+      onClick={() => {
+        if (!confirm && !isEmpty()) {
+          setConfirm(true);
+          return;
+        }
+        setConfirm(false);
+        editor.chain().focus().deleteSheet(key).run();
+        toast(`Deleted “${title || 'Untitled'}”. Press ${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Z to undo.`);
+      }}
+    >
+      {confirm ? `Delete “${title || 'Untitled'}” and everything on it?` : 'Delete sheet'}
+    </button>
   );
 }

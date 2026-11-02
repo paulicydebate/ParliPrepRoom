@@ -34,6 +34,8 @@ declare module '@tiptap/core' {
       addSheet: (side: Side) => ReturnType;
       renameSheet: (key: string, title: string) => ReturnType;
       setSheetSide: (key: string, side: Side) => ReturnType;
+      /** Delete a sheet and everything on it (undo brings it back). */
+      deleteSheet: (key: string) => ReturnType;
       /** Start typing in an empty cell. A number means an existing row (group index); null means the first empty row at the bottom. */
       createCell: (target: CellTarget | number | null, col: number) => ReturnType;
       /** Tab / Shift-Tab: go to the next or previous speech in this row. */
@@ -210,6 +212,19 @@ export const FlowView = Extension.create({
           const node = sheet && tr.doc.nodeAt(sheet.pos);
           if (!sheet || !node) return false;
           if (dispatch) tr.setNodeMarkup(sheet.pos, undefined, { ...node.attrs, side });
+          return true;
+        },
+      deleteSheet:
+        (key) =>
+        ({ state, tr, dispatch }) => {
+          const sheet = flowKey.getState(state)?.layout.sheets.find((s) => sheetKey(s) === key);
+          if (!sheet) return false;
+          if (dispatch) {
+            tr.delete(sheet.pos, sheet.end);
+            // A document always needs at least one line.
+            if (tr.doc.childCount === 0) tr.insert(0, blockNode(state, { kind: 'position' }));
+            tr.setMeta(flowKey, { active: '' });
+          }
           return true;
         },
       createCell:

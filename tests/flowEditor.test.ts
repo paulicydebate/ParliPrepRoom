@@ -73,3 +73,29 @@ describe('column selection', () => {
     expect(sel.positions.map((p) => e.state.doc.nodeAt(p)!.textContent)).toEqual(['C1', 'C2']);
   });
 });
+
+describe('deleting a sheet', () => {
+  it('removes the sheet and everything on it, keeps the others, and undo-able content stays consistent', () => {
+    const e = make([
+      ['position', 'Case', { side: 'gov' }],
+      ['claim', 'C1'],
+      ['position', 'T', { side: 'opp' }],
+      ['claim', 'Interp'],
+      ['warrant', 'Violation'],
+      ['position', 'DA', { side: 'opp' }],
+      ['claim', 'Link'],
+    ]);
+    const tSheet = flowKey.getState(e.state)!.layout.sheets.find((s) => s.title === 'T')!;
+    e.commands.deleteSheet(tSheet.id!);
+    const titles = flowKey.getState(e.state)!.layout.sheets.map((s) => s.title);
+    expect(titles).toEqual(['Case', 'DA']);
+    expect(e.state.doc.textContent).not.toContain('Interp');
+    expect(e.state.doc.textContent).toContain('Link');
+  });
+
+  it('deleting the only sheet leaves an empty document, not a broken one', () => {
+    const e = make([['position', 'Only'], ['claim', 'x']]);
+    e.commands.deleteSheet(flowKey.getState(e.state)!.layout.sheets[0].id!);
+    expect(e.state.doc.childCount).toBe(1);
+  });
+});
