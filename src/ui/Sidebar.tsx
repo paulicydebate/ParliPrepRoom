@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useAccount } from '../store/account';
 import { moveDoc, renameDoc, setDocTeam, sortDocs, type DocKind, type DocMeta } from '../store/docs';
-import { IconBook, IconDoc, IconPlus } from './icons';
+import { IconBook, IconDoc, IconGrip, IconPlus } from './icons';
+
+const coarsePointer = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
 interface RowDrag {
   dropBefore: boolean;
   dragging: boolean;
+  /** Finger- or mouse-friendly drag from the handle. */
+  onHandleDown: (e: React.PointerEvent) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
@@ -58,7 +62,9 @@ function DocRow({
   return (
     <li
       className={'doc-row' + (openHere ? ' is-open' : '') + (drag.dropBefore ? ' drop-before' : '') + (drag.dragging ? ' is-dragging' : '')}
-      draggable
+      data-doc-id={doc.id}
+      data-kind={doc.kind}
+      draggable={!coarsePointer}
       onDragStart={drag.onDragStart}
       onDragOver={drag.onDragOver}
       onDrop={drag.onDrop}
@@ -74,6 +80,9 @@ function DocRow({
         <span>{doc.title}</span>
         {doc.round && <span className="round-dot" title="Round doc" />}
       </button>
+      <span className="drag-handle" aria-hidden="true" title="Drag to reorder" onPointerDown={drag.onHandleDown}>
+        <IconGrip />
+      </span>
       <details className="doc-menu" onToggle={(e) => !(e.currentTarget as HTMLDetailsElement).open && setConfirmDelete(false)}>
         <summary aria-label={`More for ${doc.title}`}>⋯</summary>
         <div className="menu">
@@ -154,6 +163,43 @@ export function Sidebar({
     endDrag();
   };
 
+  // Drag from the handle with pointer events, so it works on iPads and phones
+  // (the browser's built-in drag and drop doesn't work with touch).
+  const startHandleDrag = (doc: DocMeta, e: React.PointerEvent) => {
+    e.preventDefault();
+    const pointerId = e.pointerId;
+    setDragId(doc.id);
+    let target: { kind: DocKind; before: string | null } | null = null;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const row = el?.closest('[data-doc-id]') as HTMLElement | null;
+      const list = el?.closest('[data-doc-list]') as HTMLElement | null;
+      if (row) {
+        const box = row.getBoundingClientRect();
+        const lower = ev.clientY > box.top + box.height / 2;
+        const next = (row.nextElementSibling as HTMLElement | null)?.dataset.docId ?? null;
+        target = { kind: row.dataset.kind as DocKind, before: lower ? next : row.dataset.docId! };
+      } else if (list) {
+        target = { kind: list.dataset.docList as DocKind, before: null };
+      }
+      setDrop(target);
+    };
+    const finish = (commitMove: boolean) => () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (commitMove && target) void moveDoc(doc.id, target.kind, target.before);
+      endDrag();
+    };
+    const onUp = finish(true);
+    const onCancel = finish(false);
+    // Follow the finger anywhere on the page, not just over the handle.
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  };
+
   const section = (kind: DocKind, title: string, hint: string) => {
     const list = sortDocs(docs.filter((d) => d.kind === kind));
     return (
@@ -167,6 +213,7 @@ export function Sidebar({
         <p className="side-hint">{hint}</p>
         <ul
           className={'doc-list' + (drop && drop.kind === kind && drop.before === null ? ' drop-end' : '')}
+          data-doc-list={kind}
           onDragOver={(e) => {
             if (!dragId) return;
             e.preventDefault();
@@ -182,6 +229,7 @@ export function Sidebar({
               onOpen={() => onOpen(d.id)}
               onDelete={() => onDelete(d)}
               drag={{
+                onHandleDown: (e) => startHandleDrag(d, e),
                 dragging: dragId === d.id,
                 dropBefore: !!dragId && drop?.kind === kind && drop.before === d.id,
                 onDragStart: (e) => {

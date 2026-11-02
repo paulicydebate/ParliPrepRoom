@@ -11,7 +11,7 @@ import { FlowEditor } from './FlowEditor';
 import { CheckLinkButton, PartnersButton } from './RoundTools';
 import { PinButton } from './RoundModeUI';
 import { HistoryView } from './HistoryView';
-import { IconClose, IconDownload, IconHistory, IconLock, IconOutline, IconShare, IconSwap } from './icons';
+import { IconClose, IconDownload, IconHistory, IconLock, IconMore, IconOutline, IconShare, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
 
 export interface PaneState {
@@ -23,22 +23,42 @@ export interface PaneState {
   focus?: { blockId: string; n: number };
 }
 
+/** Download the doc as Word, or its flow as Excel. */
+async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'xlsx') {
+  if (!editor) return;
+  const { download, safeFilename } = await import('../export/runs');
+  const name = safeFilename(title);
+  if (kind === 'docx') {
+    const { buildDocx } = await import('../export/docx');
+    download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  } else {
+    const { buildFlowXlsx } = await import('../export/xlsx');
+    download(new Uint8Array(buildFlowXlsx(editor.state.doc)), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  }
+}
+
+async function copyShareLink(docId: string) {
+  const link = `${location.origin}/#doc=${encodeURIComponent(docId)}`;
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Link copied. Teammates who can see this doc can open it with the link.');
+  } catch {
+    window.prompt('Copy this link', link);
+  }
+}
+
+const closeMenu = (e: React.MouseEvent) => {
+  const d = e.currentTarget.closest('details');
+  if (d) d.open = false;
+};
+
 function ExportMenu({ editor, title }: { editor: Editor | null; title: string }) {
   const [busy, setBusy] = useState(false);
   const run = async (e: React.MouseEvent, kind: 'docx' | 'xlsx') => {
-    (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
-    if (!editor) return;
+    closeMenu(e);
     setBusy(true);
     try {
-      const { download, safeFilename } = await import('../export/runs');
-      const name = safeFilename(title);
-      if (kind === 'docx') {
-        const { buildDocx } = await import('../export/docx');
-        download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      } else {
-        const { buildFlowXlsx } = await import('../export/xlsx');
-        download(new Uint8Array(buildFlowXlsx(editor.state.doc)), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      }
+      await exportDoc(editor, title, kind);
     } finally {
       setBusy(false);
     }
@@ -57,6 +77,32 @@ function ExportMenu({ editor, title }: { editor: Editor | null; title: string })
         </button>
       </div>
     </details>
+  );
+}
+
+/** Pick which doc this window shows. */
+function DocSwitcher({ docs, value, onPick }: { docs: DocMeta[]; value: string | null; onPick: (id: string | null) => void }) {
+  return (
+    <label className="icon-btn select-overlay doc-switch" title="Show a different document">
+      <IconSwap />
+      <select value={value ?? ''} aria-label="Show a different document" onChange={(e) => onPick(e.target.value || null)}>
+        <option value="">Choose a document…</option>
+        <optgroup label="Prep">
+          {docs.filter((d) => d.kind === 'prep').map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.title}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Reference">
+          {docs.filter((d) => d.kind === 'reference').map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.title}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+    </label>
   );
 }
 
@@ -80,7 +126,7 @@ function RoundToggle({ ydoc, docId, round }: { ydoc: Y.Doc; docId: string; round
           toast('Round doc on: paste is off and typing is logged.');
         }}
       >
-        <span className="switch" /> Round doc
+        <span className="switch" /> <IconLock /> <span className="round-toggle-label">Round doc</span>
       </button>
     );
   }
@@ -100,7 +146,7 @@ function RoundToggle({ ydoc, docId, round }: { ydoc: Y.Doc; docId: string; round
         toast('Round doc off. This is recorded in the typing log.');
       }}
     >
-      <span className="switch" /> {confirmOff ? 'Turn off? (logged)' : 'Round doc'}
+      <span className="switch" /> <IconLock /> <span className={confirmOff ? '' : 'round-toggle-label'}>{confirmOff ? 'Turn off? (logged)' : 'Round doc'}</span>
     </button>
   );
 }
@@ -117,15 +163,7 @@ function ShareButton({ docId }: { docId: string }) {
       className="icon-btn"
       title="Copy a link to this doc for a teammate"
       aria-label="Share"
-      onClick={async () => {
-        const link = `${location.origin}/#doc=${encodeURIComponent(docId)}`;
-        try {
-          await navigator.clipboard.writeText(link);
-          toast('Link copied. Teammates who can see this doc can open it with the link.');
-        } catch {
-          window.prompt('Copy this link', link);
-        }
-      }}
+      onClick={() => void copyShareLink(docId)}
     >
       <IconShare />
     </button>
@@ -304,54 +342,79 @@ export function Pane({
             </button>
           </div>
         )}
-        <label className="icon-btn select-overlay" title="Show a different document">
-          <IconSwap />
-          <select
-            value={pane.docId ?? ''}
-            aria-label="Show a different document"
-            onChange={(e) => onChange({ ...pane, docId: e.target.value || null })}
-          >
-            <option value="">Choose a document…</option>
-            <optgroup label="Prep">
-              {docs.filter((d) => d.kind === 'prep').map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="Reference">
-              {docs.filter((d) => d.kind === 'reference').map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </label>
+        <DocSwitcher docs={docs} value={pane.docId} onPick={(docId) => onChange({ ...pane, docId })} />
         {meta && (
           <>
-            {view === 'doc' && <button
-              type="button"
-              className={'icon-btn' + (pane.outline ? ' is-on' : '')}
-              title="Outline"
-              aria-label="Outline"
-              aria-pressed={pane.outline}
-              onClick={() => onChange({ ...pane, outline: !pane.outline })}
-            >
-              <IconOutline />
-            </button>}
-            {provider && <ShareButton docId={meta.id} />}
-            <ExportMenu editor={editor} title={meta.title} />
-            <button
-              type="button"
-              className={'icon-btn' + (history ? ' is-on' : '')}
-              title="Version history"
-              aria-label="Version history"
-              aria-pressed={history}
-              onClick={() => setHistory((h) => !h)}
-            >
-              <IconHistory />
-            </button>
+            {/* Wide windows show these as icons; narrow ones fold them into the ⋯ menu. */}
+            <div className="pane-tools">
+              {view === 'doc' && (
+                <button
+                  type="button"
+                  className={'icon-btn' + (pane.outline ? ' is-on' : '')}
+                  title="Outline"
+                  aria-label="Outline"
+                  aria-pressed={pane.outline}
+                  onClick={() => onChange({ ...pane, outline: !pane.outline })}
+                >
+                  <IconOutline />
+                </button>
+              )}
+              {provider && <ShareButton docId={meta.id} />}
+              <ExportMenu editor={editor} title={meta.title} />
+              <button
+                type="button"
+                className={'icon-btn' + (history ? ' is-on' : '')}
+                title="Version history"
+                aria-label="Version history"
+                aria-pressed={history}
+                onClick={() => setHistory((h) => !h)}
+              >
+                <IconHistory />
+              </button>
+            </div>
+            <details className="pane-more">
+              <summary className="icon-btn" aria-label="More" title="More">
+                <IconMore />
+              </summary>
+              <div className="menu">
+                <label className="menu-select">
+                  <span>Show a different doc</span>
+                  <select
+                    value={pane.docId ?? ''}
+                    onChange={(e) => {
+                      const d = e.currentTarget.closest('details');
+                      if (d) d.open = false;
+                      onChange({ ...pane, docId: e.target.value || null });
+                    }}
+                  >
+                    {docs.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {view === 'doc' && (
+                  <button type="button" onClick={(e) => (closeMenu(e), onChange({ ...pane, outline: !pane.outline }))}>
+                    {pane.outline ? 'Hide outline' : 'Show outline'}
+                  </button>
+                )}
+                <button type="button" onClick={(e) => (closeMenu(e), setHistory((h) => !h))}>
+                  {history ? 'Close history' : 'Version history'}
+                </button>
+                {provider && (
+                  <button type="button" onClick={(e) => (closeMenu(e), void copyShareLink(meta.id))}>
+                    Copy link to this doc
+                  </button>
+                )}
+                <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'docx'))}>
+                  Download Word (.docx)
+                </button>
+                <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx'))}>
+                  Download Excel flow (.xlsx)
+                </button>
+              </div>
+            </details>
           </>
         )}
         {meta && ydoc && <RoundToggle ydoc={ydoc} docId={meta.id} round={round} />}

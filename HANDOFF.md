@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: colorways, deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: design and tablet pass on `main`, not deployed. Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -124,11 +124,23 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - **Keep it accurate:** if you change what the app stores or who can see it, update this page and its date.
 - Done: the owner set the privacy URL and **published the Google app** (2026-11-02). Anyone with a Google account can sign in; team access still needs an invite link.
 
+### Design and tablet pass (2026-11-02; on `main`, not deployed yet)
+
+- **Window headers adapt to their own width** (CSS container queries on `.pane`, container `pane`):
+  - ≤760px: outline, share, export and history fold into a **⋯** menu (`.pane-more`, which also has "Show a different doc"); the Prep/Reference badge and the same-doc chip are hidden.
+  - ≤560px: the Round doc switch says "Round", headings and margins shrink, and the outline is hidden.
+  - ≤470px: the Round switch shows only a lock icon.
+  - ≤380px: the doc switcher moves into the ⋯ menu.
+  - `exportDoc` and `copyShareLink` in `Pane.tsx` are shared by the icons and the menu.
+- **Tablets and small laptops** (≤1180px, `is-compact`): the sidebar and pin board slide over the windows (opened with the menu button) instead of taking width. At most 2 windows (`maxPanes`). Phones (≤760px, `is-narrow`) still show one window at a time.
+- **Touch:** bigger targets under `(pointer: coarse)`. Sidebar reorder has a grip handle using pointer events tracked on `window` (works with a finger; HTML5 drag-and-drop is turned off on touch because iOS doesn't support it).
+- Checked with Playwright at 1440×860, 1280×800, 1024×768 (touch) and 820×1180 (touch): no header overflow, close button always visible, no sideways page scroll; finger-drag reorder works.
+
 ## Next steps
 
 1. Owner tests Google sign-in, team creation and invites on the live site (OAuth client and secrets are done).
 2. Emailed-link sign-in fallback, if school Google accounts are blocked (would need an email-sending service).
-3. Color palette / visual design pass (owner called the palette "weird"); iPad touch drag in the sidebar.
+3. Further visual polish as the owner's testers report it (the design and tablet pass and colorways are done).
 4. Version history from the server (who changed what), now that edits carry verified names.
 
 ### Google sign-in setup (owner steps)
@@ -160,4 +172,4 @@ Preview link the owner tests on (published from Claude sessions): https://claude
 - Don't copy code from CardMirror / CardMirror-Green (noncommercial license). Re-implementing ideas is fine.
 - Don't commit real student prep or credentials.
 - The owner reads on a phone and isn't a programmer: plain-language updates, outcome first.
-- Known small issues: pane header gets crowded with 3 panes; color palette needs a design pass (owner called it "weird"); sidebar drag doesn't work on iPad touch yet; `npm audit` reports a high-severity `undici` issue inside `wrangler` (local dev tool only, not shipped to users).
+- Known small issues: pane header gets crowded with 3 panes; color palette needs a design pass (owner called it "weird");  `npm audit` reports a high-severity `undici` issue inside `wrangler` (local dev tool only, not shipped to users).

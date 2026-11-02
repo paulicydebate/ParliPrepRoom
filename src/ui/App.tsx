@@ -98,17 +98,21 @@ async function seedFirstRun(): Promise<Layout | null> {
   };
 }
 
-function useNarrow() {
-  const query = '(max-width: 760px)';
+function useMedia(query: string) {
   const [narrow, setNarrow] = useState(() => typeof matchMedia !== 'undefined' && matchMedia(query).matches);
   useEffect(() => {
     const mq = matchMedia(query);
     const on = () => setNarrow(mq.matches);
     mq.addEventListener('change', on);
     return () => mq.removeEventListener('change', on);
-  }, []);
+  }, [query]);
   return narrow;
 }
+
+/** Phones: one window at a time. */
+const useNarrow = () => useMedia('(max-width: 760px)');
+/** Tablets and small laptops: windows side by side, but the doc list and pins slide over them. */
+const useCompact = () => useMedia('(max-width: 1180px)');
 
 export function App() {
   const docs = useDocs();
@@ -129,6 +133,9 @@ export function App() {
     };
   }, []);
   const narrow = useNarrow();
+  const compact = useCompact();
+  // Tablets and small laptops fit two windows; bigger screens three.
+  const maxPanes = compact ? 2 : MAX_PANES;
   const [sidebarOverlay, setSidebarOverlay] = useState(false);
   const panesRef = useRef<HTMLDivElement>(null);
 
@@ -280,7 +287,7 @@ export function App() {
 
   const addPane = () =>
     setLayout((l) => {
-      if (l.panes.length >= MAX_PANES) return l;
+      if (l.panes.length >= maxPanes) return l;
       return {
         ...l,
         panes: [...l.panes, { key: paneKey(), docId: null, outline: false }],
@@ -350,7 +357,8 @@ export function App() {
     target.addEventListener('pointercancel', up);
   }, []);
 
-  const showSidebar = narrow ? sidebarOverlay : layout.sidebar;
+  const overlaySidebar = narrow || compact;
+  const showSidebar = overlaySidebar ? sidebarOverlay : layout.sidebar;
   const signedIn = acct.server && !!acct.user;
   const spaceDocs = docs ? (signedIn ? docs.filter((d) => spaceOf(d) === acct.space) : docs) : null;
   // In Round Mode only round docs are listed (and searchable).
@@ -434,14 +442,14 @@ export function App() {
   const openIds = new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x));
 
   return (
-    <div className={'app' + (narrow ? ' is-narrow' : '') + (roundMode ? ' is-round-mode' : '')}>
+    <div className={'app' + (narrow ? ' is-narrow' : compact ? ' is-compact' : '') + (roundMode ? ' is-round-mode' : '')}>
       <header className="topbar">
         <button
           type="button"
           className="icon-btn"
           aria-label="Toggle document list"
           title="Documents"
-          onClick={() => (narrow ? setSidebarOverlay((s) => !s) : setLayout((l) => ({ ...l, sidebar: !l.sidebar })))}
+          onClick={() => (overlaySidebar ? setSidebarOverlay((s) => !s) : setLayout((l) => ({ ...l, sidebar: !l.sidebar })))}
         >
           <IconMenu />
         </button>
@@ -459,7 +467,7 @@ export function App() {
           </div>
         )}
         <span className="tb-spacer" />
-        <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= MAX_PANES} title="Add a pane to show another document side by side">
+        <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
           <IconSplit /> <span className="hide-narrow">Split view</span>
         </button>
         <button type="button" className="icon-btn" aria-label="Search blocks" title="Find a block (Ctrl+K / ⌘K)" onClick={() => setFindOpen(true)}>
@@ -486,7 +494,7 @@ export function App() {
       <div className="workspace">
         {showSidebar && docs && (
           <>
-            {narrow && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
+            {overlaySidebar && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
             <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} />
           </>
         )}
