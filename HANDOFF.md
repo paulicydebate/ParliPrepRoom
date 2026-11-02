@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, deployed 2026-11-03 (version a39bedb3) with the owner's approval. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -144,7 +144,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - What the server record can't do: per-keystroke timing for text typed offline (it arrives in one catch-up batch and is labeled so), or anything outside the app.
 - Checked in Playwright with test sign-in: coach creates a team, a student makes a round doc, types, backspaces "limit use" and retypes, tries a paste; the coach view shows "1 blocked paste"; the check page shows the deleted "limit use" crossed out.
 
-### Reset invite links, delete my account, download all (2026-11-02; on `main`, not deployed yet)
+### Reset invite links, delete my account, download all (2026-11-02; deployed, version a39bedb3)
 
 - **New invite link:** Team window → "New link" (asks once more) next to each invite. `POST /api/teams/<id>/invites {which}` (coach only, `Directory.resetInvite`); the old code stops working at once.
 - **Delete my account:** account menu → "Delete my account…" (type DELETE). `DELETE /api/me` → `Directory.deleteAccount`: removes sessions, memberships, partner spots, the user, their docs outside any team, and teams where they were the only member (with those teams' docs); `DocRoom.wipe()` erases those docs' contents and records. Refused while they're the only coach of a team with other members. Docs they made in a shared team stay with that team. The privacy page describes this.
@@ -152,7 +152,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Also added for upcoming named history and replay: `GET /api/docs/<id>/log` (every update with seq, time, user, via and base64 data; doc access required).
 - Checked: curl tests against `wrangler dev` (an old invite gives 404 after reset; a student can't reset; the only coach is refused deletion; a student's deletion removes them and their personal doc) and a browser download of the zip (Word file contains the typed text).
 
-### Timer, New round and Tab room (2026-11-03; on `main`, not deployed yet)
+### Timer, New round and Tab room (2026-11-03; deployed, version a39bedb3)
 
 - **Timer** (`src/store/timer.ts`, `src/ui/Timer.tsx`, top bar): presets Prep 20, PMC 7, LOC 8, MG 8, MO 8, LOR 4, PMR 5, Flex 2 and Flex 1 (the owner's flex periods), plus custom minutes; start/pause/reset; amber under 1 minute, flashes red at 0. When a round doc is on screen (the focused one, else any open one) the timer lives in that doc's Yjs map `timer` (`{label, durationMs, endsAt, remainingMs}`), so partners share it. Otherwise it's per device (localStorage). Times use the server clock (`serverNow()`, offset taken from `/api/health` time) so partners' timers agree.
 - **New round** (`NewRoundDialog` in `src/ui/Rounds.tsx`, top bar "New round", signed in): round label, side, resolution, partner (team students), optional tournament code (checked live, remembered per device), "start 20-minute prep timer". Creates a server round doc with partners, tournament and round label (`createRoundDoc` → `POST /api/docs` with `partners`, `tournamentCode`, `roundLabel`), writes starting content (resolution note, "Gov case"/"Opp case" position title with side, an empty claim), turns on the round-doc switch, starts the timer, and opens the doc on the left with the same doc as a flow on the right. The round strip shows "Round 2 · Fall Classic".
@@ -164,14 +164,14 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Starting content (catch-up within 15 s of a doc's first save) is labeled "Doc created with N characters of starting text" and not counted as offline typing (`isStarting` in `worker/summary.ts`).
 - Checked end to end in Playwright with test sign-in: a director creates "Fall Classic"; a coach's team; Ana starts Round 2 with Ben and the code; doc and flow open; both see Prep 19:5x; the director page lists the round with names; the full record shows Ana's text.
 
-### Flow marks (2026-11-03; on `main`, not deployed yet)
+### Flow marks (2026-11-03; deployed, version a39bedb3)
 
 - Block attribute `mark` (`src/model/marks.ts`): `extend`, `dropped`, `answered`, `key`; not carried over when a line is split. Command `toggleFlowMark(mark)` on the selected blocks (the same mark again clears it). Keys: Ctrl/Cmd+Shift+E (extend), D (dropped), A (answered), K (key). Toolbar buttons →, !, ✓, ★ in both views.
 - Look: position titles, sections and claims get a badge in front ("→ EXT", "! DROPPED", "✓", "★ KEY"); answered lines are crossed out and faded; body lines and flow cells get a colored left edge. Badges use `::before` so they don't clash with the speech tags (`::after`). Word export prefixes "[DROPPED]" etc.; the Excel flow prefixes →, [DROPPED], ✓, ★.
 - Search (Ctrl/Cmd+K) now ignores Shift, so Ctrl+Shift+K marks "key" instead of opening search.
 - Tests in `tests/editor.test.ts`. Note for Playwright: pressing a shortcut right after a click can hit the previous line, because the caret position syncs a moment later; wait ~300 ms after clicking.
 
-### Named version history and replay (2026-11-03; on `main`, not deployed yet)
+### Named version history and replay (2026-11-03; deployed, version a39bedb3)
 
 - History is built from the **server's record**, so it shows everyone's edits with names (the owner said this is mandatory). In a pane on a server doc, History has tabs **History**, **Replay**, **Saved here** (the old per-device versions) and **Typing log** (this device).
 - `src/history/timeline.ts`: `decodeLog` (from `GET /api/docs/<id>/log`; uses `worker/measure.ts` for inserted and deleted text), `sessionsOf` (runs of one person's edits with no pause over 2 minutes; offline catch-up kept separate), `DocReplayer` (rebuilds the doc as of any update, with a saved copy every 40 updates).
@@ -180,7 +180,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
   - **Replay:** play/pause, slider over every edit, speed, the current edit's author, time and text.
 - Tests: `tests/timeline.test.ts`. Checked in Playwright: two people edit one doc; Ana's History lists Ben's and Ana's sessions; Ben's diff shows his backspaced word crossed out; Replay steps edit by edit with names.
 
-### Import into reference docs (2026-11-03; on `main`, not deployed yet)
+### Import into reference docs (2026-11-03; deployed, version a39bedb3)
 
 - Sidebar, Reference header: **Import** (upload icon). Accepts Word (.docx), Excel (.xlsx), CSV, plain text and Markdown. Makes a new reference doc and opens it. Hidden in Round Mode.
 - `src/import/importFile.ts`: `parseDocx` (Word heading levels and our own exported style names map to position/section/claim; other paragraphs become warrants or notes), `parseXlsx`/`parseCsv` + `sheetsToDoc` (each sheet becomes a position; columns become speeches, so a flow exported from this app comes back as a flow), `parseText` (Markdown `#`/`##`/`###` headings, bullets). Blocks get fresh ids. `seed.writeJSON` writes the result into the doc.
@@ -192,7 +192,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
 1. Owner tests Google sign-in, team creation and invites on the live site (OAuth client and secrets are done).
 2. Emailed-link sign-in fallback, if school Google accounts are blocked (would need an email-sending service).
 3. Further visual polish as the owner's testers report it (the design and tablet pass and colorways are done).
-4. Owner says "deploy" to put the 2026-11-03 batch live (invites reset, delete account, download all, timer, New round, tab room, flow marks, named history and replay, import).
+4. Owner tests the 2026-11-03 batch on the live site (timer, New round, tab room, marks, history and replay, import, account tools).
 
 ### Google sign-in setup (owner steps)
 
