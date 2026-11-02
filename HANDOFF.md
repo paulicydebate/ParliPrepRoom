@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: colorways on `main`, not deployed. Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: colorways, deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -111,7 +111,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Owner request for visual clarity: each flow column sits on a full-height stripe, alternating two shades of the page background (`--band-a` / `--band-b` in `src/styles.css`, mixed from `--text` and `--surface`, so they work in light, dark and sepia).
 - One `fl-band` widget per speech column (`side: -2`, `pointer-events: none`, z-index 0) in the flow decorations; cells are z1, text z2, the pins column z3. Stripes follow the pins-column shift (`dc(col)`).
 
-### Colorways (2026-11-02; on `main`, not deployed yet)
+### Colorways (2026-11-02; deployed)
 
 - Owner wants fun, easy color choices (sports-team style pairs). `src/settings/colorways.ts`: 16 Gov/Opp pairs (Blue & Red default, Teal & Orange, Blue & Orange, Green & Pink, Purple & Gold, Purple & Yellow, Navy & Gold, Green & Gold, Maroon & Gold, Red & Gold, Crimson & Silver, Teal & Black, Sky & Navy, Orange & Navy, Purple & Teal, Lime & Magenta) plus "Pick your own" (two color inputs). Each color has a deeper shade for light backgrounds and a brighter one for dark mode.
 - `applySettings` sets `--gov-l/-d`, `--opp-l/-d`; `styles.css` maps `--gov`/`--opp` to the light values on `:root` and the dark values in the dark-theme blocks. Everything using `--gov`/`--opp` (flow headers, cells, speech tags, sheet dots) follows.
