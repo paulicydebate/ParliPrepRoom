@@ -2387,3 +2387,12 @@ del {
 .is-round-mode .topbar .btn:not(.primary):not(.ghost) {
   color: var(--text);
 }
+
+.btn.is-blocked {
+  opacity: 0.5;
+}
+.pin-insert {
+  height: 24px;
+  padding: 0 6px;
+  font-size: 12px;
+}

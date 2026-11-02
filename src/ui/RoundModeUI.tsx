@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { KIND_INFO, isHeading } from '../model/blocks';
 import { blockWithChildren, searchEntries, type OutlineEntry, type SearchHit } from '../model/outline';
 import type { DocMeta } from '../store/docs';
+import { useRoundMode } from '../store/roundMode';
 import { clearPins, isPinned, movePin, togglePin, usePins } from '../store/pins';
 import { IconClose, IconPin } from './icons';
 
@@ -16,6 +17,8 @@ export function BlockFinder({
   space,
   roundMode,
   onJump,
+  onInsert,
+  insertBlocked,
   onClose,
 }: {
   docs: DocMeta[];
@@ -23,6 +26,9 @@ export function BlockFinder({
   space: string;
   roundMode: boolean;
   onJump: JumpTo;
+  onInsert: JumpTo;
+  /** Why inserting isn't allowed right now (null = allowed). */
+  insertBlocked: string | null;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -101,6 +107,19 @@ export function BlockFinder({
                 {h.entry !== h.target && <span className="finder-match">…{h.entry.text.slice(0, 120)}</span>}
                 <span className="finder-path muted small">{[h.doc.title, ...h.target.path].join(' › ')}</span>
               </button>
+              {!roundMode && (
+                <button
+                  type="button"
+                  className={'btn ghost small' + (insertBlocked ? ' is-blocked' : '')}
+                  title={insertBlocked ?? 'Insert a copy below the caret in the doc you were in'}
+                  onClick={() => {
+                    onInsert(h.doc.id, h.target.id);
+                    if (!insertBlocked) onClose();
+                  }}
+                >
+                  Insert
+                </button>
+              )}
               <button
                 type="button"
                 className={'btn ghost small finder-pin' + (pinned ? ' is-on' : '')}
@@ -123,14 +142,20 @@ export function PinBoard({
   docs,
   index,
   onJump,
+  onInsert,
+  insertBlocked,
   onClose,
 }: {
   space: string;
   docs: DocMeta[];
   index: Map<string, OutlineEntry[]>;
   onJump: JumpTo;
+  onInsert: JumpTo;
+  /** Why inserting isn't allowed right now (null = allowed). */
+  insertBlocked: string | null;
   onClose: () => void;
 }) {
+  const roundMode = useRoundMode();
   const pins = usePins(space);
   return (
     <aside className="pinboard" aria-label="Pinned blocks">
@@ -163,6 +188,17 @@ export function PinBoard({
                   <span className="pin-num">{i + 1}</span>
                   <span className="muted small">{doc ? [doc.title, ...(blocks[0]?.path ?? [])].join(' › ') : 'Doc not available'}</span>
                 </button>
+                {!roundMode && (
+                  <button
+                    type="button"
+                    className={'btn ghost small pin-insert' + (insertBlocked ? ' is-blocked' : '')}
+                    title={insertBlocked ?? 'Insert a copy below the caret in the doc you were in'}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onInsert(p.docId, p.blockId)}
+                  >
+                    Insert
+                  </button>
+                )}
                 <button type="button" className="icon-btn small" aria-label="Move up" disabled={i === 0} onClick={() => movePin(space, i, -1)}>
                   ↑
                 </button>

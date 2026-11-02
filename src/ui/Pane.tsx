@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';
 import { toast } from '../editor/roundGuard';
@@ -191,6 +191,7 @@ export function Pane({
   alsoOpen = false,
   space,
   roundMode = false,
+  onEditorChange,
   onFocus,
   onChange,
   onClose,
@@ -205,6 +206,8 @@ export function Pane({
   space: string;
   /** Round Mode: only round docs can be shown. */
   roundMode?: boolean;
+  /** Tells the app which editor this pane shows (for inserting blocks). */
+  onEditorChange?: (e: Editor | null) => void;
   onFocus: () => void;
   onChange: (p: PaneState) => void;
   onClose: () => void;
@@ -217,7 +220,12 @@ export function Pane({
   const syncStatus = useSyncStatus(provider);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [history, setHistory] = useState(false);
-  const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
+  const reportRef = useRef(onEditorChange);
+  reportRef.current = onEditorChange;
+  const onEditor = useCallback((e: Editor | null) => {
+    setEditor(e);
+    reportRef.current?.(e);
+  }, []);
 
   useEffect(() => setHistory(false), [pane.docId]);
   const view = pane.view ?? 'doc';

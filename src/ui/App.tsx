@@ -6,6 +6,9 @@ import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
 import { BlockFinder, PinBoard } from './RoundModeUI';
 import { useLibrary } from './useLibrary';
+import type { Editor } from '@tiptap/react';
+import { activeSheet, flowKey } from '../editor/flowView';
+import { baseSpeech } from '../model/speeches';
 import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
 import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeLines, type Line } from '../store/seed';
@@ -344,7 +347,7 @@ export function App() {
   const visibleDocs = spaceDocs ? (roundMode ? spaceDocs.filter((d) => d.round) : spaceDocs) : null;
   const spaceName = signedIn ? (acct.teams.find((t) => t.id === acct.space)?.name ?? 'My own docs') : null;
   const searchable = visibleDocs ?? [];
-  const library = useLibrary(
+  const { index: library, blockContent } = useLibrary(
     searchable.map((d) => d.id),
     findOpen || pinsOpen,
   );
@@ -357,6 +360,44 @@ export function App() {
     });
     setSidebarOverlay(false);
   };
+  // Inserting a prepped block: a copy, so it's only allowed outside Round
+  // Mode and never into a round doc (that would be pasting into prep).
+  const editors = useRef(new Map<string, Editor>());
+  const focusedPane = layout.panes[Math.min(layout.focused, layout.panes.length - 1)];
+  const focusedMeta = docs?.find((d) => d.id === focusedPane?.docId) ?? null;
+  const insertBlocked: string | null = roundMode
+    ? 'Turn off Round Mode to insert blocks.'
+    : !focusedMeta
+      ? 'Click into the doc you want to insert into first.'
+      : focusedMeta.round
+        ? "Blocks can't be inserted into a round doc: that would be pasting into prep. Type it in."
+        : null;
+  const insertBlock = (docId: string, blockId: string) => {
+    if (insertBlocked) {
+      toast(insertBlocked);
+      return;
+    }
+    const editor = editors.current.get(focusedPane.key);
+    const nodes = blockContent(docId, blockId);
+    if (!editor || !nodes.length) {
+      toast(editor ? 'That block is still loading. Try again in a moment.' : 'Click into the doc you want to insert into first.');
+      return;
+    }
+    // In a flow, the copy goes in the column the caret is in.
+    let speech: string | null = null;
+    const flow = flowKey.getState(editor.state);
+    const sheet = flow ? activeSheet(flow) : null;
+    const { $from } = editor.state.selection;
+    if (sheet && $from.depth >= 1) {
+      const p = sheet.placements.find((x) => x.pos === $from.before(1));
+      if (p && p.speech && p.speech !== baseSpeech(sheet.side)) speech = p.speech;
+    }
+    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech } }));
+    const at = $from.depth >= 1 ? $from.after(1) : editor.state.doc.content.size;
+    editor.chain().focus().insertContentAt(at, copies).run();
+    toast(`Inserted into “${focusedMeta!.title}”.`);
+  };
+
   const toggleRoundMode = () => setRoundMode(!roundMode, (spaceDocs ?? []).filter((d) => d.round).map((d) => d.id));
   const openIds = new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x));
 
@@ -433,6 +474,10 @@ export function App() {
                     alsoOpen={!!p.docId && layout.panes.filter((x) => x.docId === p.docId).length > 1}
                     space={acct.space}
                     roundMode={roundMode}
+                    onEditorChange={(e) => {
+                      if (e) editors.current.set(p.key, e);
+                      else editors.current.delete(p.key);
+                    }}
                     onFocus={() => layout.focused !== i && setLayout((l) => ({ ...l, focused: i }))}
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
@@ -442,10 +487,12 @@ export function App() {
               </Fragment>
             ))}
         </div>
-        {pinsOpen && <PinBoard space={acct.space} docs={searchable} index={library} onJump={jumpTo} onClose={() => setPinsOpen(false)} />}
+        {pinsOpen && (
+          <PinBoard space={acct.space} docs={searchable} index={library} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setPinsOpen(false)} />
+        )}
       </div>
       {findOpen && (
-        <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onClose={() => setFindOpen(false)} />
+        <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       {acct.loaded && !acct.server && <NameDialog />}

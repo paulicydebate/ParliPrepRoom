@@ -53,11 +53,12 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Team docs are open to the whole team. Round docs are open to their owner, the partners they pick and the team's coaches.
 - Each round doc has a **Check link** with a QR code. Anyone can open it to see who typed, when, how much, blocked pastes, big single edits and whether the server's record is intact. Partners and coaches also see the typed text.
 
-**Round Mode (Phase 5): built, not deployed yet.**
+**Round Mode (Phase 5): live.**
 
 - A **Round Mode** switch in the top bar. While it's on, only round docs can be open, the top bar turns purple with "ROUND MODE", and switching it on or off shows on the round docs' check pages.
 - **Find a block:** Ctrl+K (⌘K on Mac) searches your prep and jumps to the claim. Nothing is copied.
 - **Pinned blocks:** a side panel listing the claims you plan to read, in order. Tap one to jump to it.
+- **Insert a block** (outside Round Mode only, and never into a round doc): pins and search results have an Insert button that puts a copy below the cursor, for coaches building docs in prep.
 
 ## Develop
 

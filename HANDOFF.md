@@ -2,13 +2,13 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: Round Mode (block finder, pin board, round-doc-only lockout), built and tested locally, not deployed. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: insert-a-block (outside Round Mode, never into round docs) on `main`, not deployed. Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
 - Repo: https://github.com/paulicydebate/ParliPrepRoom
 - **Latest work: branch `phase-5-round-mode`.** Branches are stacked: `main` (plan only) → `phase-1-editor` → `phase-2-flow` → `phase-3-server` → `phase-5-round-mode`. Each one contains everything before it. Nothing has been merged into `main` yet; the owner hasn't decided that. Ask before merging or pushing to `main`.
-- Start new work from `phase-5-round-mode` unless the owner says otherwise.
+- Start new work from `main`.
 
 ## What the app is
 
@@ -62,7 +62,7 @@ The owner approved the deploy. Each later deploy still needs their OK.
   - The local typing log uploads non-typing events to the server's record.
 - **Tests:** `node scripts/sync-smoke.mjs http://localhost:8787` (needs `--var DEV_LOGIN:1`): two signed-in users co-edit, an anonymous connection gets 401, and the record is intact. Also a four-person Playwright run (coach, Ana, Ben, Cleo, anonymous) covering invites, round-doc visibility, partner picking, live edits, the blocked paste on the check page, and text visible only to members. 40 unit tests.
 
-### Round Mode (Phase 5; built and tested locally 2026-11-02, NOT deployed yet)
+### Round Mode (Phase 5; deployed 2026-11-02)
 
 - The owner ruled out dropping prepped blocks onto the flow during the round: it's effectively pasting. Round Mode only helps people **find and read** what they typed; it never copies text.
 - `src/store/roundMode.ts`: per-device switch in the top bar. While on: the top bar turns purple with a "ROUND MODE" label; the sidebar and search list only round docs; panes showing a non-round doc show a blocked message (and don't load it). Switching on or off logs `roundmode-on` / `roundmode-off` to every round doc in the current space; these upload to the server record and show on the check page.
@@ -71,6 +71,13 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Jumping: `PaneState.focus = { blockId, n }`; the pane selects the block, scrolls to it and flashes it.
 - `src/ui/useLibrary.ts` keeps the searchable docs open (up to 40) and indexed while the finder or pin board is open.
 - Tests: `tests/outline.test.ts`; Playwright run with test sign-in: pin from toolbar, Round Mode lockout, search "rubber" → jump, two pins shown, check page lists Round Mode on/off.
+
+### Insert a prepped block (2026-11-02; on `main`, not deployed yet)
+
+- The owner's rule: inserting a copy of a prepped block is fine for coaches building docs in prep, but it must be impossible in Round Mode. I also block it into round docs, since that would be pasting into prep (the owner's no-paste rule for round docs).
+- **Insert** buttons on pins and search results (hidden entirely in Round Mode). The copy goes below the caret in the focused pane's doc, without ids, rows, gaps or sheet sides. In a flow it takes the speech of the column the caret is in.
+- `useLibrary` now also returns `blockContent(docId, blockId)` (full JSON with formatting). The pane reports its editor to the App via `onEditorChange`.
+- If someone inserts into a team doc and later turns it into a round doc, the server record still shows that text as a large live edit on the check page.
 
 ## Next steps
 
