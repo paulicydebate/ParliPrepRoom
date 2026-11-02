@@ -1183,3 +1183,275 @@ del {
 .seg.wrap {
   flex-wrap: wrap;
 }
+
+/* ---------- Speech tags in the doc view ---------- */
+.pp-doc .pp-block[data-flow-speech]::after {
+  content: attr(data-flow-speech);
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  line-height: 18px;
+  vertical-align: 2px;
+  color: var(--gov);
+  background: color-mix(in srgb, var(--gov) 12%, transparent);
+}
+.pp-doc .pp-block[data-flow-side='opp']::after {
+  color: var(--opp);
+  background: color-mix(in srgb, var(--opp) 12%, transparent);
+}
+.pp-doc .pp-block[data-kind='position'][data-side]::after {
+  content: attr(data-side);
+  display: inline-block;
+  margin-left: 10px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 20px;
+  vertical-align: 5px;
+  color: var(--gov);
+  background: color-mix(in srgb, var(--gov) 12%, transparent);
+}
+.pp-doc .pp-block[data-kind='position'][data-side='opp']::after {
+  color: var(--opp);
+  background: color-mix(in srgb, var(--opp) 12%, transparent);
+}
+.speech-select select {
+  height: 30px;
+  margin-left: 4px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  padding: 0 6px;
+  cursor: pointer;
+}
+.tb-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.view-toggle button {
+  padding: 3px 10px;
+}
+
+/* ---------- Flow view ---------- */
+:root {
+  --fl-min: 190px;
+}
+.flow-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sheet-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  flex: none;
+}
+.sheet-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-2);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.sheet-tab:hover {
+  background: var(--surface-2);
+}
+.sheet-tab.is-on {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+.sheet-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gov);
+}
+.sheet-tab.fl-opp .sheet-dot {
+  background: var(--opp);
+}
+.sheet-rename {
+  height: 30px;
+  width: 140px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--surface);
+}
+.sheet-side select {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  padding: 0 4px;
+  margin-left: 4px;
+  font-size: 12.5px;
+}
+.flow-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 40vh;
+}
+.flow-head,
+.pp-flow {
+  display: grid;
+  grid-template-columns: repeat(var(--fl-cols, 6), minmax(var(--fl-min), 1fr));
+  column-gap: 6px;
+  min-width: calc(var(--fl-cols, 6) * (var(--fl-min) + 6px));
+}
+.flow-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 10px 0 8px;
+  background: var(--surface);
+}
+.flow-col-head {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 5px 0;
+  border-radius: 7px;
+  color: var(--gov);
+  background: color-mix(in srgb, var(--gov) 12%, var(--surface));
+}
+.flow-col-head.fl-opp {
+  color: var(--opp);
+  background: color-mix(in srgb, var(--opp) 12%, var(--surface));
+}
+.flow-empty {
+  padding: 30px 8px;
+  color: var(--text-2);
+  max-width: 520px;
+}
+.flow-grid-host {
+  min-width: 0;
+}
+.pp-flow {
+  outline: none;
+  align-items: start;
+  caret-color: var(--accent);
+  line-height: 1.4;
+}
+
+/* Cell backgrounds sit under the text; each spans its row group. */
+.fl-cell {
+  position: relative;
+  z-index: 0;
+  align-self: stretch;
+  margin-top: 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--gov) 5%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gov) 16%, var(--border));
+  min-height: 34px;
+  user-select: none;
+}
+.fl-cell.fl-opp {
+  background: color-mix(in srgb, var(--opp) 5%, var(--surface));
+  border-color: color-mix(in srgb, var(--opp) 16%, var(--border));
+}
+.fl-cell.is-empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+  cursor: text;
+}
+.fl-cell.is-empty:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.fl-cell.is-empty:hover::after {
+  content: '+';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 18px;
+}
+.fl-cell.is-ghost {
+  opacity: 0.55;
+}
+.fl-cell.is-ghost:hover {
+  opacity: 1;
+}
+
+.pp-flow > .fl-item {
+  position: relative;
+  z-index: 1;
+  padding: 3px 10px;
+  margin: 0;
+  min-width: 0;
+}
+/* First line of a group gets the cell's top padding. */
+.pp-flow > .fl-item {
+  margin-top: 0;
+}
+.pp-flow > .pp-block[data-kind='claim'] {
+  font-size: calc(var(--pp-claim-size) * 0.86);
+  margin-top: 9px;
+}
+.pp-flow > .pp-block[data-kind='warrant'],
+.pp-flow > .pp-block[data-kind='analytic'] {
+  font-size: calc(var(--pp-warrant-size) * 0.84);
+  padding-left: 22px;
+}
+.pp-flow > .pp-block[data-kind='analytic'] {
+  font-size: calc(var(--pp-analytic-size) * 0.86);
+}
+.pp-flow > .pp-block[data-kind='warrant']::before,
+.pp-flow > .pp-block[data-kind='analytic']::before {
+  left: 12px;
+}
+.pp-flow > .pp-block[data-kind='note'] {
+  font-size: calc(var(--pp-note-size) * 0.9);
+  margin: 4px 6px;
+  padding: 3px 6px;
+}
+.pp-flow > .fl-section {
+  position: relative;
+  z-index: 1;
+  margin: 16px 0 2px;
+  padding: 4px 4px 4px 2px;
+  font-size: calc(var(--pp-section-size) * 0.8);
+  border-bottom: 1px solid var(--border);
+}
+.pp-flow > .fl-section .pp-toggle {
+  display: none;
+}
+.is-narrow .flow-scroll {
+  padding: 0 8px 40vh;
+}
+.is-narrow {
+  --fl-min: 70vw;
+}

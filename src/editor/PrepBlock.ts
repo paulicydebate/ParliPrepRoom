@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { ySyncPluginKey } from '@tiptap/y-tiptap';
+import { isSpeech, type Speech } from '../model/speeches';
 import { styleForKey } from './shortcuts';
 import { KIND_INFO, asKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
 
@@ -9,6 +10,8 @@ declare module '@tiptap/core' {
     prepBlock: {
       /** Apply a named style to every block in the selection. */
       setBlockKind: (kind: BlockKind) => ReturnType;
+      /** Tag every selected block with a speech (null = automatic). */
+      setBlockSpeech: (speech: Speech | null) => ReturnType;
       /** Tab / Shift-Tab: move every selected block one level down or up. */
       shiftBlockLevel: (direction: 'in' | 'out') => ReturnType;
     };
@@ -72,6 +75,30 @@ export const PrepBlock = Node.create({
         parseHTML: (el) => el.getAttribute('data-id'),
         renderHTML: (attrs) => (attrs.id ? { 'data-id': attrs.id } : {}),
       },
+      // Speech this line belongs to on the flow (PMC, LOC, ...). null = follow
+      // the line above / the sheet's own speech.
+      speech: {
+        default: null,
+        parseHTML: (el) => {
+          const v = el.getAttribute('data-speech');
+          return isSpeech(v) ? v : null;
+        },
+        renderHTML: (attrs) => (isSpeech(attrs.speech) ? { 'data-speech': attrs.speech } : {}),
+      },
+      // Position titles only: whose sheet this is.
+      side: {
+        default: null,
+        keepOnSplit: false,
+        parseHTML: (el) => el.getAttribute('data-side'),
+        renderHTML: (attrs) => (attrs.side ? { 'data-side': attrs.side } : {}),
+      },
+      // Claims only: always start a new flow row.
+      newRow: {
+        default: false,
+        keepOnSplit: false,
+        parseHTML: (el) => el.getAttribute('data-new-row') === 'true',
+        renderHTML: (attrs) => (attrs.newRow ? { 'data-new-row': 'true' } : {}),
+      },
     };
   },
 
@@ -102,6 +129,19 @@ export const PrepBlock = Node.create({
             for (const b of blocks) {
               const node = tr.doc.nodeAt(b.pos);
               if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, kind });
+            }
+          }
+          return true;
+        },
+      setBlockSpeech:
+        (speech) =>
+        ({ state, tr, dispatch }) => {
+          const blocks = selectedBlocks(state);
+          if (!blocks.length) return false;
+          if (dispatch) {
+            for (const b of blocks) {
+              const node = tr.doc.nodeAt(b.pos);
+              if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, speech });
             }
           }
           return true;
@@ -159,6 +199,8 @@ export const PrepBlock = Node.create({
         this.editor.commands.shiftBlockLevel('out');
         return true;
       },
+      'Mod-]': () => this.editor.commands.shiftBlockLevel('in'),
+      'Mod-[': () => this.editor.commands.shiftBlockLevel('out'),
     };
     return shortcuts;
   },

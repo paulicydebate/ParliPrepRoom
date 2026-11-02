@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/react';
 import { useCallback, useEffect, useState } from 'react';
 import { renameDoc, type DocMeta } from '../store/docs';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
+import { FlowEditor } from './FlowEditor';
 import { HistoryView } from './HistoryView';
 import { IconClose, IconHistory, IconOutline, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
@@ -10,6 +11,7 @@ export interface PaneState {
   key: string;
   docId: string | null;
   outline: boolean;
+  view?: 'doc' | 'flow';
 }
 
 function TitleInput({ meta }: { meta: DocMeta }) {
@@ -64,6 +66,7 @@ export function Pane({
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
 
   useEffect(() => setHistory(false), [pane.docId]);
+  const view = pane.view ?? 'doc';
 
   return (
     <section
@@ -82,6 +85,16 @@ export function Pane({
           <span className="pane-empty-title">Open a document</span>
         )}
         <span className="tb-spacer" />
+        {meta && (
+          <div className="seg view-toggle" role="group" aria-label="View">
+            <button type="button" className={view === 'doc' ? 'is-on' : ''} aria-pressed={view === 'doc'} onClick={() => onChange({ ...pane, view: 'doc' })}>
+              Doc
+            </button>
+            <button type="button" className={view === 'flow' ? 'is-on' : ''} aria-pressed={view === 'flow'} onClick={() => onChange({ ...pane, view: 'flow' })}>
+              Flow
+            </button>
+          </div>
+        )}
         <label className="icon-btn select-overlay" title="Show a different document">
           <IconSwap />
           <select
@@ -108,7 +121,7 @@ export function Pane({
         </label>
         {meta && (
           <>
-            <button
+            {view === 'doc' && <button
               type="button"
               className={'icon-btn' + (pane.outline ? ' is-on' : '')}
               title="Outline"
@@ -117,7 +130,7 @@ export function Pane({
               onClick={() => onChange({ ...pane, outline: !pane.outline })}
             >
               <IconOutline />
-            </button>
+            </button>}
             <button
               type="button"
               className={'icon-btn' + (history ? ' is-on' : '')}
@@ -168,10 +181,10 @@ export function Pane({
 
       {meta && ydoc && (
         <>
-          {!history && editor && <Toolbar editor={editor} />}
+          {!history && editor && <Toolbar editor={editor} view={view} />}
           <div className="pane-body" hidden={history}>
-            {pane.outline && editor && <Outline editor={editor} />}
-            <DocEditor ydoc={ydoc} onEditor={onEditor} />
+            {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} onEditor={onEditor} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} onClose={() => setHistory(false)} />}
         </>

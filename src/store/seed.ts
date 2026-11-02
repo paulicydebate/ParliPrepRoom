@@ -4,14 +4,14 @@ import type * as Y from 'yjs';
 import { BODY_FIELD, schema } from '../editor/extensions';
 import { newBlockId, type BlockKind } from '../model/blocks';
 
-export type Line = [BlockKind, string];
+export type Line = [BlockKind, string, Record<string, unknown>?];
 
 export function linesToJSON(lines: Line[]): JSONContent {
   return {
     type: 'doc',
-    content: lines.map(([kind, text]) => ({
+    content: lines.map(([kind, text, attrs]) => ({
       type: 'block',
-      attrs: { kind, id: newBlockId() },
+      attrs: { kind, id: newBlockId(), ...(attrs ?? {}) },
       ...(text ? { content: [{ type: 'text', text }] } : {}),
     })),
   };
@@ -40,9 +40,18 @@ export const SAMPLE_REFERENCE: Line[] = [
 ];
 
 export const SAMPLE_PREP: Line[] = [
-  ['note', 'Sample prep doc. Try: Enter for the next style, Tab / Shift+Tab to move a level. The style menu in the toolbar shows the key for each style.'],
-  ['position', 'Gov: Ban police facial recognition'],
+  ['note', 'Sample prep doc. Enter gives the next style, Tab / Shift+Tab move a level, and the style menu shows each style’s key. Switch this pane to Flow (top right) to see the same prep as a flow.'],
+  ['position', 'Gov: Ban police facial recognition', { side: 'gov' }],
   ['section', 'Advantage 1 — Wrongful arrests'],
   ['claim', 'The tech misidentifies people at very different rates'],
-  ['warrant', ''],
+  ['warrant', 'NIST 2019: false positives 10–100x higher for some groups.'],
+  ['claim', 'Accuracy is improving fast', { speech: 'LOC' }],
+  ['claim', 'Improvement is uneven; police buy cheap vendors', { speech: 'MG' }],
+  ['claim', 'A false match turns into an arrest'],
+  ['warrant', 'Matches get treated as leads without independent evidence.'],
+  ['claim', 'Human review catches errors', { speech: 'LOC' }],
+  ['claim', 'Review is rubber-stamping; documented wrongful arrests', { speech: 'MG' }],
+  ['position', 'Opp: Regulation CP', { side: 'opp' }],
+  ['claim', 'CP: mandate accuracy audits and warrants instead of a ban'],
+  ['claim', 'Perm: do both', { speech: 'MG' }],
 ];

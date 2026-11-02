@@ -4,6 +4,9 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import { useEffect } from 'react';
 import type * as Y from 'yjs';
 import { Collapse } from '../editor/collapse';
+import { SpeechTags } from '../editor/speechTags';
+import { computeFlow, readBlocks, sheetAt } from '../model/flow';
+import { SPEECHES, isSpeech, type Speech } from '../model/speeches';
 import { isMac, styleKeyLabel } from '../editor/shortcuts';
 import { useSettings } from '../settings/settings';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
@@ -23,6 +26,7 @@ export function DocEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Edito
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
         Collapse,
+        SpeechTags,
         Placeholder.configure({
           placeholder: ({ node }) => `${KIND_INFO[asKind(node.attrs.kind)].label}…`,
         }),
@@ -42,11 +46,23 @@ export function DocEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Edito
 
 export const MOD = isMac ? '⌘' : 'Ctrl';
 
-export function Toolbar({ editor }: { editor: Editor }) {
+/** The speech a line will show under on the flow, and whether it was chosen by hand. */
+function speechInfo(e: Editor) {
+  const { $from } = e.state.selection;
+  const node = $from.parent;
+  const explicit = isSpeech(node.attrs.speech) ? (node.attrs.speech as Speech) : null;
+  if ($from.depth < 1) return { explicit, effective: null as Speech | null, inSheet: false };
+  const layout = computeFlow(readBlocks(e.state.doc));
+  const pos = $from.before(1);
+  return { explicit, effective: layout.speechAt.get(pos) ?? null, inSheet: !!sheetAt(layout, pos) };
+}
+
+export function Toolbar({ editor, view = 'doc' }: { editor: Editor; view?: 'doc' | 'flow' }) {
   useSettings(); // re-render when the style keys change
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
+      ...speechInfo(e),
       kind: asKind(e.state.selection.$from.parent.attrs.kind),
       bold: e.isActive('bold'),
       italic: e.isActive('italic'),
@@ -87,15 +103,42 @@ export function Toolbar({ editor }: { editor: Editor }) {
           ))}
         </select>
       </label>
+      {s.kind !== 'position' && s.kind !== 'section' && (
+        <label className="speech-select" title="Which speech's column this line goes in on the flow">
+          <span className="sr-only">Speech</span>
+          <select
+            value={s.explicit ?? ''}
+            disabled={!s.inSheet}
+            onChange={(e) => editor.chain().focus().setBlockSpeech(e.target.value ? (e.target.value as Speech) : null).run()}
+          >
+            <option value="">{s.inSheet ? `Auto${s.effective && !s.explicit ? ` (${s.effective})` : ''}` : 'No sheet'}</option>
+            {SPEECHES.map((sp) => (
+              <option key={sp} value={sp}>
+                {sp}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <span className="tb-sep" />
       {btn(s.bold, 'B', `Bold (${MOD}+B)`, () => editor.chain().focus().toggleBold().run(), <b>B</b>)}
       {btn(s.italic, 'I', `Italic (${MOD}+I)`, () => editor.chain().focus().toggleItalic().run(), <i>I</i>)}
       {btn(s.underline, 'U', `Underline (${MOD}+U)`, () => editor.chain().focus().toggleUnderline().run(), <u>U</u>)}
       {btn(s.strike, 'S', 'Strikethrough', () => editor.chain().focus().toggleStrike().run(), <s>S</s>)}
       {btn(s.highlight, 'H', `Highlight (${MOD}+Shift+H)`, () => editor.chain().focus().toggleHighlight().run(), <IconHighlight />)}
-      <span className="tb-sep" />
-      {btn(false, '', 'Collapse to claims', () => editor.chain().collapseAll(3).run(), <IconFold />)}
-      {btn(false, '', 'Expand all', () => editor.chain().expandAll().run(), <IconUnfold />)}
+      {view === 'doc' && (
+        <>
+          <span className="tb-sep" />
+          {btn(false, '', 'Collapse to claims', () => editor.chain().collapseAll(3).run(), <IconFold />)}
+          {btn(false, '', 'Expand all', () => editor.chain().expandAll().run(), <IconUnfold />)}
+        </>
+      )}
+      {view === 'flow' && (
+        <>
+          <span className="tb-sep" />
+          <span className="tb-hint">Tab: next speech · {MOD}+Enter: new row</span>
+        </>
+      )}
       <span className="tb-spacer" />
       <button type="button" className="tb-btn" title={`Undo (${MOD}+Z)`} aria-label="Undo" disabled={!s.canUndo} onMouseDown={(e) => e.preventDefault()} onClick={() => editor.chain().focus().undo().run()}>
         <IconUndo />
