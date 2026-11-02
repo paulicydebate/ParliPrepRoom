@@ -224,3 +224,31 @@ export interface RoundRow {
 
 /** Coach view: every round doc on the team with a summary of its record. */
 export const teamRounds = (teamId: string) => api<{ rounds: RoundRow[] }>(`/api/teams/${teamId}/rounds`).then((r) => r.rounds);
+
+/** Coaches: replace an invite link (the old one stops working). */
+export const resetInvite = (teamId: string, which: 'student' | 'coach') => api<{ code: string }>(`/api/teams/${teamId}/invites`, { method: 'POST', json: { which } });
+
+/** Delete the signed-in account (see the privacy page for what goes). */
+export async function deleteAccount() {
+  await api<{ ok: true }>('/api/me', { method: 'DELETE' });
+}
+
+/** A doc's current contents (or as of update `seq`) as one Yjs update. */
+export async function docState(id: string, seq?: number): Promise<Uint8Array> {
+  const res = await fetch(`/api/docs/${id}/state${seq ? `?seq=${seq}` : ''}`, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error(`Couldn't load the doc (${res.status})`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+export interface LogUpdate {
+  seq: number;
+  at: number;
+  userId: string;
+  name: string;
+  via: string;
+  /** base64 Yjs update */
+  data: string;
+}
+
+/** Every saved edit to a doc, with who and when (for named history and replay). */
+export const docLog = (id: string) => api<{ updates: LogUpdate[] }>(`/api/docs/${id}/log`).then((r) => r.updates);

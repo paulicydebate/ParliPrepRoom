@@ -61,7 +61,7 @@ export function privacyPage(): string {
 <p>Data is stored with Cloudflare, which hosts the app. Sign-in is handled by Google. Both process data only to provide their service.</p>
 
 <h2>Keeping and deleting data</h2>
-<p>We keep your data while you use the app. You can delete docs you own from the app at any time. To delete your account and everything tied to it, email us (below) from the address you sign in with, and we'll remove it.</p>
+<p>We keep your data while you use the app. You can delete docs you own at any time, and download a backup of your team's docs (Team → Download all docs). To delete your account, open the account menu (your initials, top right) and choose <strong>Delete my account</strong>. That removes your sign-in, your docs under “My own docs” and teams where you're the only member. Docs you made inside a shared team stay with that team; its coach can delete them. You can also email us (below) from the address you sign in with.</p>
 
 <h2>Students</h2>
 <p>ParliPrepRoom is meant for high school and college debaters and their coaches. It is not meant for children under 13. If you use a school Google account, your school's rules for outside apps also apply.</p>

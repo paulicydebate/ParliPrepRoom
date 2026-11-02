@@ -3073,3 +3073,16 @@ del {
   margin: 0;
   flex: 1 1 260px;
 }
+
+.btn.danger-fill {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+.btn.danger-fill:disabled {
+  opacity: 0.45;
+}
+.invite-row {
+  flex-wrap: wrap;
+}

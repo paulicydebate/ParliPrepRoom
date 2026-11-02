@@ -196,6 +196,51 @@ export class Directory extends DurableObject {
     return { id: teamId, name: String(t.name), role: existing === 'coach' ? 'coach' : role };
   }
 
+  /** Coaches can replace an invite link; the old one stops working. */
+  resetInvite(teamId: string, userId: string, which: 'student' | 'coach'): string | null {
+    if (this.role(teamId, userId) !== 'coach') return null;
+    const code = randomToken(9);
+    this.sql.exec(`UPDATE teams SET ${which === 'coach' ? 'coach_code' : 'student_code'} = ? WHERE id = ?`, code, teamId);
+    return code;
+  }
+
+  /**
+   * Delete an account: sessions, memberships, partner spots and the user's own
+   * docs outside any team. Docs made inside a team stay with the team.
+   * Refused while the user is the only coach of a team that has other members.
+   * Returns the ids of deleted docs so their contents can be wiped too.
+   */
+  deleteAccount(userId: string): { ok: true; deletedDocs: string[] } | { ok: false; reason: string } {
+    for (const t of this.teamsFor(userId)) {
+      if (t.role !== 'coach') continue;
+      const coaches = Number(this.one("SELECT COUNT(*) AS n FROM members WHERE team_id = ? AND role = 'coach'", t.id)?.n ?? 0);
+      const members = Number(this.one('SELECT COUNT(*) AS n FROM members WHERE team_id = ?', t.id)?.n ?? 0);
+      if (coaches <= 1 && members > 1) return { ok: false, reason: `You're the only coach of ${t.name}. Make someone else a coach first (Team → Members).` };
+    }
+    const personal = this.all('SELECT id FROM docs WHERE team_id IS NULL AND owner_id = ?', userId).map((r) => String(r.id));
+    for (const id of personal) {
+      this.sql.exec('DELETE FROM docs WHERE id = ?', id);
+      this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', id);
+    }
+    // Teams where they were the only member go too.
+    for (const t of this.teamsFor(userId)) {
+      const members = Number(this.one('SELECT COUNT(*) AS n FROM members WHERE team_id = ?', t.id)?.n ?? 0);
+      if (members <= 1) {
+        for (const r of this.all('SELECT id FROM docs WHERE team_id = ?', t.id)) {
+          personal.push(String(r.id));
+          this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', String(r.id));
+        }
+        this.sql.exec('DELETE FROM docs WHERE team_id = ?', t.id);
+        this.sql.exec('DELETE FROM teams WHERE id = ?', t.id);
+      }
+    }
+    this.sql.exec('DELETE FROM doc_partners WHERE user_id = ?', userId);
+    this.sql.exec('DELETE FROM members WHERE user_id = ?', userId);
+    this.sql.exec('DELETE FROM sessions WHERE user_id = ?', userId);
+    this.sql.exec('DELETE FROM users WHERE id = ?', userId);
+    return { ok: true, deletedDocs: personal };
+  }
+
   /** Coaches can change roles and remove members (but not remove the last coach). */
   updateMember(teamId: string, byUserId: string, memberId: string, change: { role?: Role; remove?: boolean }): boolean {
     if (this.role(teamId, byUserId) !== 'coach') return false;

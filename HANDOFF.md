@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: coach view and deleted text in the record, deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: reset invite links, delete my account and download-all on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). In progress next (owner-approved list): timer (prep 20:00, speeches, flex 2:00/1:00), New round setup, Tabroom director link, flow marks, named server version history (mandatory) and replay, import into reference docs. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -143,6 +143,14 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - **Typing log tab:** on server round docs it now leads with "This tab only shows typing done on this device" and a link to the full server record (check page), so it no longer looks empty on a coach's device.
 - What the server record can't do: per-keystroke timing for text typed offline (it arrives in one catch-up batch and is labeled so), or anything outside the app.
 - Checked in Playwright with test sign-in: coach creates a team, a student makes a round doc, types, backspaces "limit use" and retypes, tries a paste; the coach view shows "1 blocked paste"; the check page shows the deleted "limit use" crossed out.
+
+### Reset invite links, delete my account, download all (2026-11-02; on `main`, not deployed yet)
+
+- **New invite link:** Team window → "New link" (asks once more) next to each invite. `POST /api/teams/<id>/invites {which}` (coach only, `Directory.resetInvite`); the old code stops working at once.
+- **Delete my account:** account menu → "Delete my account…" (type DELETE). `DELETE /api/me` → `Directory.deleteAccount`: removes sessions, memberships, partner spots, the user, their docs outside any team, and teams where they were the only member (with those teams' docs); `DocRoom.wipe()` erases those docs' contents and records. Refused while they're the only coach of a team with other members. Docs they made in a shared team stay with that team. The privacy page describes this.
+- **Download all docs:** Team window → "Download all docs (.zip)" → `src/export/teamZip.ts`: every doc the user can see in that team, as Word files in Prep/, Reference/ and Round docs/ folders, plus a README. New endpoint `GET /api/docs/<id>/state[?seq=N]` (doc as one Yjs update, now or as of update N).
+- Also added for upcoming named history and replay: `GET /api/docs/<id>/log` (every update with seq, time, user, via and base64 data; doc access required).
+- Checked: curl tests against `wrangler dev` (an old invite gives 404 after reset; a student can't reset; the only coach is refused deletion; a student's deletion removes them and their personal doc) and a browser download of the zip (Word file contains the typed text).
 
 ## Next steps
 

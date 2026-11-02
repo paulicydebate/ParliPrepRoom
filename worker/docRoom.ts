@@ -53,6 +53,12 @@ export interface RecordEvent {
   n: number | null;
 }
 
+function toBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
 const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 
 export class DocRoom extends DurableObject {
@@ -190,6 +196,47 @@ export class DocRoom extends DurableObject {
     } catch {
       // already closed
     }
+  }
+
+  /** The document as it is now, or as it was after update number `seq`, as one Yjs update. */
+  async state(seq?: number): Promise<Uint8Array> {
+    await this.writes;
+    if (seq === undefined) return Y.encodeStateAsUpdate(this.loadDoc());
+    const doc = new Y.Doc();
+    for (const row of this.ctx.storage.sql.exec('SELECT data FROM updates WHERE seq <= ? ORDER BY seq', seq)) {
+      Y.applyUpdate(doc, new Uint8Array(row.data as ArrayBuffer));
+    }
+    return Y.encodeStateAsUpdate(doc);
+  }
+
+  /** Every saved update with who and when, for version history and replay in the app. */
+  async log(): Promise<{ seq: number; at: number; userId: string; name: string; via: string; data: string }[]> {
+    await this.writes;
+    return this.ctx.storage.sql
+      .exec('SELECT seq, at, user_id, user, via, data FROM updates ORDER BY seq')
+      .toArray()
+      .map((r) => ({
+        seq: Number(r.seq),
+        at: Number(r.at),
+        userId: String(r.user_id),
+        name: String(r.user),
+        via: String(r.via),
+        data: toBase64(new Uint8Array(r.data as ArrayBuffer)),
+      }));
+  }
+
+  /** Erase this document's contents and record (account deletion). */
+  async wipe(): Promise<void> {
+    await this.writes;
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(1000, 'deleted');
+      } catch {
+        // ignore
+      }
+    }
+    this.doc = null;
+    await this.ctx.storage.deleteAll();
   }
 
   /** Save events the app reports (blocked pastes, round doc on/off, time away). */

@@ -176,6 +176,16 @@ export default {
       });
     }
 
+    if (path === '/api/me' && request.method === 'DELETE') {
+      if (!user) return fail('Sign in first', 401);
+      const result = await dir.deleteAccount(user.id);
+      if (!result.ok) return fail(result.reason, 409);
+      for (const id of result.deletedDocs) await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(id)).wipe();
+      return new Response(JSON.stringify({ ok: true, deletedDocs: result.deletedDocs.length }), {
+        headers: { 'content-type': 'application/json', 'set-cookie': setCookie(COOKIE, '', 0, secure) },
+      });
+    }
+
     if (path === '/api/me') {
       if (request.method === 'PATCH') {
         if (!user) return fail('Sign in first', 401);
@@ -218,6 +228,12 @@ export default {
       );
       return json({ rounds: rows });
     }
+    const inviteM = /^\/api\/teams\/([A-Za-z0-9-]{8,64})\/invites$/.exec(path);
+    if (inviteM && request.method === 'POST') {
+      const b = await body<{ which?: string }>(request);
+      const code = await dir.resetInvite(inviteM[1], user!.id, b?.which === 'coach' ? 'coach' : 'student');
+      return code ? json({ code }) : fail('Only coaches can make new invite links', 403);
+    }
     const memberM = /^\/api\/teams\/([A-Za-z0-9-]{8,64})\/members\/([A-Za-z0-9-]{8,64})$/.exec(path);
     if (memberM && request.method === 'POST') {
       const b = await body<{ role?: Role; remove?: boolean }>(request);
@@ -242,7 +258,7 @@ export default {
       const d = await dir.createDoc(user!.id, { id: b.id, teamId: b.teamId ?? null, title: b.title ?? 'Untitled', kind: b.kind ?? 'prep', round: b.round, order: b.order ?? null });
       return d ? json(publicDoc(d)) : fail('That doc belongs to someone else', 403);
     }
-    const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record)?$/.exec(path);
+    const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record|\/state|\/log)?$/.exec(path);
     if (docM) {
       const [, id, sub] = docM;
       if (!sub && request.method === 'PATCH') {
@@ -266,6 +282,12 @@ export default {
         return json({ ok: true });
       }
       if (sub === '/record') return json(await room.record(true));
+      if (sub === '/state') {
+        const seq = url.searchParams.get('seq');
+        const update = await room.state(seq ? Number(seq) : undefined);
+        return new Response(update, { headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' } });
+      }
+      if (sub === '/log') return json({ updates: await room.log() });
     }
 
     // ---------- Live sync ----------

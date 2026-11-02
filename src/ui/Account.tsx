@@ -3,6 +3,8 @@ import { toast } from '../editor/roundGuard';
 import {
   PERSONAL,
   createTeam,
+  deleteAccount,
+  resetInvite,
   devSignInUrl,
   renameTeam,
   setSpace,
@@ -23,6 +25,7 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
   const [teamOpen, setTeamOpen] = useState(false);
   const [newTeamOpen, setNewTeamOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [devName, setDevName] = useState('');
 
   if (!acct.loaded || !acct.server) return null;
@@ -105,10 +108,14 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
           <button type="button" onClick={() => void signOut()}>
             Sign out
           </button>
+          <button type="button" className="danger" onClick={() => setDeleteOpen(true)}>
+            Delete my account…
+          </button>
         </div>
       </details>
       {teamOpen && team && <TeamDialog teamId={team.id} onClose={() => setTeamOpen(false)} />}
       {newTeamOpen && <NewTeamDialog onClose={() => setNewTeamOpen(false)} />}
+      {deleteOpen && <DeleteAccountDialog onClose={() => setDeleteOpen(false)} />}
       {coachOpen && team && <CoachView teamId={team.id} teamName={team.name} onOpenDoc={onOpenDoc} onClose={() => setCoachOpen(false)} />}
     </div>
   );
@@ -174,8 +181,9 @@ function NewTeamDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function InviteRow({ label, hint, code }: { label: string; hint: string; code: string }) {
+function InviteRow({ label, hint, code, onReset }: { label: string; hint: string; code: string; onReset: () => Promise<void> }) {
   const link = `${location.origin}/#invite=${code}`;
+  const [confirm, setConfirm] = useState(false);
   return (
     <div className="invite-row">
       <div>
@@ -197,7 +205,103 @@ function InviteRow({ label, hint, code }: { label: string; hint: string; code: s
       >
         Copy
       </button>
+      <button
+        type="button"
+        className={'btn ghost small' + (confirm ? ' danger-text' : '')}
+        title="Make a new link and turn this one off (for when a link got passed around)"
+        onClick={async () => {
+          if (!confirm) {
+            setConfirm(true);
+            setTimeout(() => setConfirm(false), 4000);
+            return;
+          }
+          setConfirm(false);
+          await onReset();
+          toast(`New ${label.toLowerCase()} link made. The old one no longer works.`);
+        }}
+      >
+        {confirm ? 'Turn off old link?' : 'New link'}
+      </button>
     </div>
+  );
+}
+
+/** Download every doc you can see in a space as Word files in a .zip. */
+function DownloadAllButton({ space, name }: { space: string; name: string }) {
+  const [progress, setProgress] = useState<string | null>(null);
+  return (
+    <button
+      type="button"
+      className="btn"
+      disabled={progress !== null}
+      onClick={async () => {
+        setProgress('Starting…');
+        try {
+          const { buildTeamZip } = await import('../export/teamZip');
+          const { download, safeFilename } = await import('../export/runs');
+          const zip = await buildTeamZip(space, name, (d, t) => setProgress(`${d} of ${t}…`));
+          download(zip, `${safeFilename(name)} backup ${new Date().toISOString().slice(0, 10)}.zip`, 'application/zip');
+          toast('Backup downloaded.');
+        } catch (e) {
+          toast((e as Error).message);
+        } finally {
+          setProgress(null);
+        }
+      }}
+    >
+      {progress ?? 'Download all docs (.zip)'}
+    </button>
+  );
+}
+
+function DeleteAccountDialog({ onClose }: { onClose: () => void }) {
+  const modal = useModal(onClose);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <dialog {...modal} className="settings">
+      <div className="settings-head">
+        <h2>Delete my account</h2>
+        <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
+          <IconClose />
+        </button>
+      </div>
+      <p>This permanently deletes:</p>
+      <ul>
+        <li>your account and sign-in,</li>
+        <li>your docs under “My own docs”, with their records,</li>
+        <li>teams where you're the only member, with their docs.</li>
+      </ul>
+      <p className="muted">
+        Docs you made inside a team you share stay with that team (your coach can delete them). If you're the only coach of a team with other members, make someone else a coach first. Download a backup first if you want one.
+      </p>
+      <label className="row-inline">
+        Type DELETE to confirm
+        <input className="name-input" value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Type DELETE to confirm" />
+      </label>
+      <div className="settings-foot">
+        <button type="button" className="btn ghost" onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn danger-fill"
+          disabled={typed.trim() !== 'DELETE' || busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await deleteAccount();
+              location.href = '/';
+            } catch (e) {
+              toast((e as Error).message);
+              setBusy(false);
+            }
+          }}
+        >
+          Delete my account
+        </button>
+      </div>
+    </dialog>
   );
 }
 
@@ -246,8 +350,24 @@ export function TeamDialog({ teamId, onClose }: { teamId: string; onClose: () =>
                 }}
               />
               <h3>Invite links</h3>
-              <InviteRow label="Students" hint="For debaters. They see team docs, their own round docs and ones they're added to." code={team.invites!.student} />
-              <InviteRow label="Coaches" hint="Coaches see every doc on the team, including round docs, and manage members." code={team.invites!.coach} />
+              <InviteRow
+                label="Students"
+                hint="For debaters. They see team docs, their own round docs and ones they're added to."
+                code={team.invites!.student}
+                onReset={async () => {
+                  await resetInvite(teamId, 'student');
+                  await load();
+                }}
+              />
+              <InviteRow
+                label="Coaches"
+                hint="Coaches see every doc on the team, including round docs, and manage members."
+                code={team.invites!.coach}
+                onReset={async () => {
+                  await resetInvite(teamId, 'coach');
+                  await load();
+                }}
+              />
             </>
           )}
           <h3>Members ({team.members.length})</h3>
@@ -278,6 +398,9 @@ export function TeamDialog({ teamId, onClose }: { teamId: string; onClose: () =>
             ))}
           </ul>
           {!coach && <p className="muted small">Only coaches can invite people or change roles.</p>}
+          <h3>Backup</h3>
+          <p className="muted small">Every doc you can see on this team, as Word files in one .zip.</p>
+          <DownloadAllButton space={teamId} name={team.name} />
         </>
       )}
     </dialog>
