@@ -8,6 +8,7 @@ import { diffBlocks, flattenDoc, summarize, type DiffRow, type FlatBlock } from 
 import { loadVersionDoc, renameVersion, saveVersion, type VersionMeta } from '../store/versions';
 import { logEvent } from '../store/typingLog';
 import { useVersions } from './hooks';
+import { ServerHistory } from './ServerHistory';
 import { TypingLogView } from './TypingLogView';
 
 function formatTime(at: number) {
@@ -28,7 +29,7 @@ function versionLabel(v: VersionMeta) {
   return v.name ?? 'Auto-save';
 }
 
-function Line({ block, children, className }: { block: FlatBlock; children?: React.ReactNode; className?: string }) {
+export function Line({ block, children, className }: { block: FlatBlock; children?: React.ReactNode; className?: string }) {
   return (
     <div className={'pp-block ' + (className ?? '')} data-kind={block.kind}>
       {children ?? (block.text || ' ')}
@@ -36,7 +37,7 @@ function Line({ block, children, className }: { block: FlatBlock; children?: Rea
   );
 }
 
-function DiffLines({ rows, changesOnly }: { rows: DiffRow[]; changesOnly: boolean }) {
+export function DiffLines({ rows, changesOnly }: { rows: DiffRow[]; changesOnly: boolean }) {
   return (
     <>
       {rows.map((r, i) => {
@@ -63,12 +64,15 @@ function DiffLines({ rows, changesOnly }: { rows: DiffRow[]; changesOnly: boolea
   );
 }
 
+type Tab = 'history' | 'replay' | 'device' | 'log';
+
 export function HistoryView({
   docId,
   ydoc,
   editor,
   round = false,
   checkToken,
+  server = false,
   onClose,
 }: {
   docId: string;
@@ -76,15 +80,21 @@ export function HistoryView({
   editor: Editor | null;
   round?: boolean;
   checkToken?: string | null;
+  /** The doc is on the server: history and replay come from the server's record (everyone's edits, with names). */
+  server?: boolean;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'versions' | 'log'>(round ? 'log' : 'versions');
+  const [tab, setTab] = useState<Tab>(server ? 'history' : 'device');
+  const tabs = <HistoryTabs tab={tab} setTab={setTab} server={server} />;
+  if (tab === 'history' || tab === 'replay') {
+    return <ServerHistory key={tab} mode={tab} docId={docId} editor={editor} round={round} tabs={tabs} onClose={onClose} />;
+  }
   if (tab === 'log') {
     return (
       <div className="history">
         <div className="history-main">
           <div className="history-bar">
-            <HistoryTabs tab={tab} setTab={setTab} />
+            {tabs}
             <span className="tb-spacer" />
             <button type="button" className="btn ghost" onClick={onClose}>
               Done
@@ -95,18 +105,21 @@ export function HistoryView({
       </div>
     );
   }
-  return <VersionsView docId={docId} ydoc={ydoc} editor={editor} round={round} onClose={onClose} tabs={<HistoryTabs tab={tab} setTab={setTab} />} />;
+  return <VersionsView docId={docId} ydoc={ydoc} editor={editor} round={round} onClose={onClose} tabs={tabs} />;
 }
 
-function HistoryTabs({ tab, setTab }: { tab: 'versions' | 'log'; setTab: (t: 'versions' | 'log') => void }) {
+function HistoryTabs({ tab, setTab, server }: { tab: Tab; setTab: (t: Tab) => void; server: boolean }) {
+  const b = (t: Tab, label: string, title?: string) => (
+    <button type="button" className={tab === t ? 'is-on' : ''} onClick={() => setTab(t)} title={title}>
+      {label}
+    </button>
+  );
   return (
     <div className="seg" role="group" aria-label="History">
-      <button type="button" className={tab === 'versions' ? 'is-on' : ''} onClick={() => setTab('versions')}>
-        Versions
-      </button>
-      <button type="button" className={tab === 'log' ? 'is-on' : ''} onClick={() => setTab('log')}>
-        Typing log
-      </button>
+      {server && b('history', 'History', 'Every edit by everyone, from the server, with names')}
+      {server && b('replay', 'Replay', 'Watch the doc being written, edit by edit')}
+      {b('device', server ? 'Saved here' : 'Versions', 'Versions saved on this device')}
+      {b('log', 'Typing log', 'Typing done on this device')}
     </div>
   );
 }

@@ -3366,3 +3366,91 @@ del {
 .pp-flow > .pp-block[data-mark='extend'] {
   box-shadow: inset 3px 0 0 var(--accent);
 }
+
+/* ---------- Named history and replay ---------- */
+.history-pad {
+  padding: 16px;
+}
+.history-bar.sub {
+  background: var(--surface);
+}
+.who-dot {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.session {
+  align-items: center;
+}
+.session .v-name {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+.who-diff ins {
+  background: color-mix(in srgb, var(--who) 26%, transparent);
+  color: inherit;
+}
+.who-diff .diff-added {
+  background: color-mix(in srgb, var(--who) 16%, transparent);
+  box-shadow: -6px 0 0 color-mix(in srgb, var(--who) 16%, transparent);
+}
+.server-history .history-list p {
+  margin: 0 4px 8px;
+}
+.replay {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.replay-controls input[type='range'] {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+.replay-controls select {
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+.replay-now {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  min-height: 40px;
+}
+.replay-edit {
+  font-family: var(--pp-warrant-font);
+  white-space: pre-wrap;
+}
+.replay-people {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.replay-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.replay .history-doc {
+  flex: 1;
+}

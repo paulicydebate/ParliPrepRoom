@@ -17,6 +17,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Prep docs and Reference docs (coach briefs). Drag docs in the sidebar to reorder them (or move them between sections); double-click a name to rename it.
 - When the same doc is open in two panes, both panes say so (they are one document, not copies). Reference docs are editable for now; the prep lockout comes in Phase 4.
 - Revision history: auto-saves every 2 minutes while editing (and when the tab closes), named versions, "changes since" view, restore.
+- On the live site, **History** shows every edit by everyone from the server, grouped by person, with each person's changes highlighted in their color, plus **Replay** to watch the doc being written.
 - Everything is saved in the browser (IndexedDB). No accounts or server yet; that's Phase 3.
 
 **Phase 2 (flow view): done.**

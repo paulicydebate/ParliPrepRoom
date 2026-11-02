@@ -483,7 +483,7 @@ export function Pane({
             {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
             {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} onEditor={onEditor} />}
           </div>
-          {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} checkToken={meta.checkToken} onClose={() => setHistory(false)} />}
+          {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
         </>
       )}
     </section>

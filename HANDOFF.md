@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). In progress next (owner-approved list): named server version history (mandatory) and replay, import into reference docs. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). In progress next (owner-approved list): import into reference docs. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -170,6 +170,15 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Look: position titles, sections and claims get a badge in front ("→ EXT", "! DROPPED", "✓", "★ KEY"); answered lines are crossed out and faded; body lines and flow cells get a colored left edge. Badges use `::before` so they don't clash with the speech tags (`::after`). Word export prefixes "[DROPPED]" etc.; the Excel flow prefixes →, [DROPPED], ✓, ★.
 - Search (Ctrl/Cmd+K) now ignores Shift, so Ctrl+Shift+K marks "key" instead of opening search.
 - Tests in `tests/editor.test.ts`. Note for Playwright: pressing a shortcut right after a click can hit the previous line, because the caret position syncs a moment later; wait ~300 ms after clicking.
+
+### Named version history and replay (2026-11-03; on `main`, not deployed yet)
+
+- History is built from the **server's record**, so it shows everyone's edits with names (the owner said this is mandatory). In a pane on a server doc, History has tabs **History**, **Replay**, **Saved here** (the old per-device versions) and **Typing log** (this device).
+- `src/history/timeline.ts`: `decodeLog` (from `GET /api/docs/<id>/log`; uses `worker/measure.ts` for inserted and deleted text), `sessionsOf` (runs of one person's edits with no pause over 2 minutes; offline catch-up kept separate), `DocReplayer` (rebuilds the doc as of any update, with a saved copy every 40 updates).
+- `src/ui/ServerHistory.tsx`:
+  - **History:** list of sessions (person color dot, +inserted/−deleted, time). Views: "What changed" (that session's diff, highlighted in that person's color), "Doc then", "Since then". **Restore to this point** (logs a `restore` event on round docs; the restore is itself in the record).
+  - **Replay:** play/pause, slider over every edit, speed, the current edit's author, time and text.
+- Tests: `tests/timeline.test.ts`. Checked in Playwright: two people edit one doc; Ana's History lists Ben's and Ana's sessions; Ben's diff shows his backspaced word crossed out; Replay steps edit by edit with names.
 
 ## Next steps
 
