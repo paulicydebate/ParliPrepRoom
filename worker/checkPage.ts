@@ -110,7 +110,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
   const timeline = [
     ...large.map((u) => ({ at: u.at, who: u.name, what: `Put in ${u.inserted} characters in one edit`, warn: true, text: withText ? u.text ?? '' : '' })),
     ...record.events.map((e) => ({ at: e.at, who: e.name, what: EVENT_LABEL[e.kind] ?? e.kind, warn: e.kind.endsWith('-blocked') || e.kind === 'round-off' || e.kind === 'large', text: '' })),
-    ...catchup.filter((u) => u.inserted > 0).map((u) => ({ at: u.at, who: u.name, what: `Synced ${u.inserted} characters typed while offline or before sharing`, warn: false, text: '' })),
+    ...catchup.filter((u) => u.inserted >= 20).map((u) => ({ at: u.at, who: u.name, what: `Synced ${u.inserted} characters typed while offline or before sharing`, warn: false, text: '' })),
   ].sort((a, b) => a.at - b.at);
 
   const verdict = record.intact
@@ -122,31 +122,50 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
     .join('');
 
   // Group keystrokes into bursts: same person, same kind, no pause over 4 s.
+  // Each burst keeps typed and deleted text in order.
   interface Burst {
     start: number;
     end: number;
     name: string;
-    text: string;
     via: string;
     large: boolean;
+    parts: { kind: 'typed' | 'removed'; text: string }[];
   }
   const bursts: Burst[] = [];
   for (const u of record.updates) {
-    if (!u.text) continue;
+    const typed = u.text ?? '';
+    const removed = u.deletedText ?? '';
+    if (!typed && !removed) continue;
     const big = u.via === 'live' && u.inserted > LARGE;
-    const last = bursts[bursts.length - 1];
-    if (last && !big && !last.large && last.name === u.name && last.via === u.via && u.at - last.end < 4000) {
-      last.text += u.text;
-      last.end = u.at;
-    } else {
-      bursts.push({ start: u.at, end: u.at, name: u.name, text: u.text, via: u.via, large: big });
+    let last = bursts[bursts.length - 1];
+    if (!(last && !big && !last.large && last.name === u.name && last.via === u.via && u.at - last.end < 4000)) {
+      last = { start: u.at, end: u.at, name: u.name, via: u.via, large: big, parts: [] };
+      bursts.push(last);
     }
+    last.end = u.at;
+    const add = (kind: 'typed' | 'removed', text: string) => {
+      if (!text) return;
+      const tail = last.parts[last.parts.length - 1];
+      // Backspacing removes text right to left, so put it back in reading order.
+      if (tail && tail.kind === kind) tail.text = kind === 'removed' ? text + tail.text : tail.text + text;
+      else last.parts.push({ kind, text });
+    };
+    add('removed', removed);
+    add('typed', typed);
   }
   const textSection = withText
-    ? `<h2>Everything typed, in order</h2><p class="note">You see this because you're on this doc. People without access see the summary only. Grouped into bursts with no pause over 4 seconds; deletions aren't shown.</p>
+    ? `<h2>Everything typed and deleted, in order</h2><p class="note">You see this because you're on this doc. People without access see the summary only. Grouped into bursts with no pause over 4 seconds. <ins>Typed</ins> <del>deleted</del></p>
        <ol class="typed">${bursts
-         .filter((b) => b.text.trim())
-         .map((b) => `<li class="${b.via !== 'live' ? 'catchup' : b.large ? 'warn' : ''}"><span class="t">${esc(clock(b.start))}</span><span class="w">${esc(b.name)}</span><span class="x">${esc(b.text.replace(/^\n+/, ''))}</span></li>`)
+         .filter((b) => b.parts.some((p) => p.text.trim()))
+         .map(
+           (b) =>
+             `<li class="${b.via !== 'live' ? 'catchup' : b.large ? 'warn' : ''}"><span class="t">${esc(clock(b.start))}</span><span class="w">${esc(b.name)}</span><span class="x">${b.parts
+               .map((p, i) => {
+                 const t = i === 0 ? p.text.replace(/^\n+/, '') : p.text;
+                 return p.kind === 'removed' ? `<del>${esc(t)}</del>` : `<ins>${esc(t)}</ins>`;
+               })
+               .join('')}</span></li>`,
+         )
          .join('')}</ol>`
     : `<p class="note">The prep itself isn't shown here. Partners and coaches on this doc see the full text when signed in.</p>`;
 
@@ -196,6 +215,8 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
   .warn .x, li.warn .what { color:var(--warn); font-weight:600; }
   .x { flex:1 1 240px; min-width:0; white-space:pre-wrap; word-break:break-word; }
   li.catchup .x { color:var(--muted); }
+  ins { text-decoration:none; }
+  del { color:var(--bad); background:var(--bad-bg); border-radius:3px; }
   footer { color:var(--muted); font-size:12.5px; }
 </style>
 </head>

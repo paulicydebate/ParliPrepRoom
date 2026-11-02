@@ -197,3 +197,30 @@ export const patchServerDoc = (id: string, patch: Partial<Pick<ServerDoc, 'title
   api<ServerDoc>(`/api/docs/${id}`, { method: 'PATCH', json: patch });
 export const deleteServerDoc = (id: string) => api<{ ok: true }>(`/api/docs/${id}`, { method: 'DELETE' });
 export const postDocEvents = (id: string, events: unknown[]) => api<{ ok: true }>(`/api/docs/${id}/events`, { method: 'POST', json: { events } });
+
+export interface RoundRow {
+  id: string;
+  title: string;
+  owner: string;
+  partners: string[];
+  checkToken: string | null;
+  createdAt: number;
+  summary: {
+    firstAt: number | null;
+    lastAt: number | null;
+    typedLive: number;
+    catchup: number;
+    large: number;
+    blocked: number;
+    roundOff: number;
+    roundModeOff: number;
+    awayMs: number;
+    intact: boolean;
+    seal: string | null;
+    people: { name: string; typed: number }[];
+    flags: number;
+  };
+}
+
+/** Coach view: every round doc on the team with a summary of its record. */
+export const teamRounds = (teamId: string) => api<{ rounds: RoundRow[] }>(`/api/teams/${teamId}/rounds`).then((r) => r.rounds);

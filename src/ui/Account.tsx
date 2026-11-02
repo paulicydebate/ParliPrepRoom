@@ -14,13 +14,15 @@ import {
   type Role,
   type TeamDetails,
 } from '../store/account';
+import { CoachView } from './CoachView';
 import { IconClose } from './icons';
 
 /** Top bar: sign in, or switch team and open team settings. */
-export function AccountBar() {
+export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
   const acct = useAccount();
   const [teamOpen, setTeamOpen] = useState(false);
   const [newTeamOpen, setNewTeamOpen] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const [devName, setDevName] = useState('');
 
   if (!acct.loaded || !acct.server) return null;
@@ -78,6 +80,11 @@ export function AccountBar() {
           <option value="__new">+ New team…</option>
         </select>
       </label>
+      {team?.role === 'coach' && (
+        <button type="button" className="btn ghost small" onClick={() => setCoachOpen(true)} title="Every round doc on the team and anything flagged">
+          Coach view
+        </button>
+      )}
       {team && (
         <button type="button" className="btn ghost small" onClick={() => setTeamOpen(true)}>
           Team
@@ -102,6 +109,7 @@ export function AccountBar() {
       </details>
       {teamOpen && team && <TeamDialog teamId={team.id} onClose={() => setTeamOpen(false)} />}
       {newTeamOpen && <NewTeamDialog onClose={() => setNewTeamOpen(false)} />}
+      {coachOpen && team && <CoachView teamId={team.id} teamName={team.name} onOpenDoc={onOpenDoc} onClose={() => setCoachOpen(false)} />}
     </div>
   );
 }

@@ -27,7 +27,7 @@ const LABEL: Record<LogEvent['k'], string> = {
 /** Events worth a reviewer's attention (typing itself is summarized, not listed). */
 const NOTABLE = new Set<LogEvent['k']>(['large', 'paste-blocked', 'drop-blocked', 'round-on', 'round-off', 'roundmode-on', 'roundmode-off', 'restore', 'away', 'back']);
 
-export function TypingLogView({ docId }: { docId: string }) {
+export function TypingLogView({ docId, checkToken }: { docId: string; checkToken?: string | null }) {
   const [report, setReport] = useState<LogReport | null>(null);
 
   useEffect(() => {
@@ -41,10 +41,22 @@ export function TypingLogView({ docId }: { docId: string }) {
     };
   }, [docId]);
 
-  if (!report) return <div className="log-view muted">Loading the typing log…</div>;
+  const fullRecord = checkToken ? (
+    <div className="log-banner">
+      <p>
+        <strong>This tab only shows typing done on this device.</strong> The full record, with every character typed and deleted by everyone on this doc, is kept on the server.
+      </p>
+      <a className="btn primary small" href={`/check/${checkToken}`} target="_blank" rel="noreferrer">
+        Open the full record
+      </a>
+    </div>
+  ) : null;
+
+  if (!report) return <div className="log-view muted">{fullRecord}Loading the typing log…</div>;
   if (!report.events.length) {
     return (
       <div className="log-view">
+        {fullRecord}
         <p className="muted">Nothing logged yet. Typing is recorded while this is a round doc.</p>
       </div>
     );
@@ -54,6 +66,7 @@ export function TypingLogView({ docId }: { docId: string }) {
 
   return (
     <div className="log-view">
+      {fullRecord}
       <div className={'seal' + (report.intact ? ' ok' : ' bad')}>
         <div>
           <div className="seal-label">Seal code</div>

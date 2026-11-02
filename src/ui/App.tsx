@@ -485,7 +485,13 @@ export function App() {
         >
           <span className="switch" /> <span className="hide-narrow">Round Mode</span>
         </button>
-        <AccountBar />
+        <AccountBar
+          onOpenDoc={(id) =>
+            void addSharedDoc(id).then((m) => {
+              if (m) openInFocused(m.id);
+            })
+          }
+        />
         <button type="button" className="icon-btn" aria-label="Appearance" title="Fonts and theme" onClick={() => setSettingsOpen(true)}>
           <IconSettings />
         </button>

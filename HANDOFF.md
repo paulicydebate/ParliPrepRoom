@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: design and tablet pass, deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: coach view and deleted text in the record on `main`, not deployed. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -135,6 +135,14 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - **Tablets and small laptops** (≤1180px, `is-compact`): the sidebar and pin board slide over the windows (opened with the menu button) instead of taking width. At most 2 windows (`maxPanes`). Phones (≤760px, `is-narrow`) still show one window at a time.
 - **Touch:** bigger targets under `(pointer: coarse)`. Sidebar reorder has a grip handle using pointer events tracked on `window` (works with a finger; HTML5 drag-and-drop is turned off on touch because iOS doesn't support it).
 - Checked with Playwright at 1440×860, 1280×800, 1024×768 (touch) and 820×1180 (touch): no header overflow, close button always visible, no sideways page scroll; finger-drag reorder works.
+
+### Coach view and deleted text in the record (2026-11-02; on `main`, not deployed yet)
+
+- **Deleted text:** `worker/measure.ts` (moved out of `docRoom.ts` so it can be tested): `measureUpdate(update, chars)` keeps a map of every inserted character by Yjs item id across the record, so each later delete reports exactly which text it removed (`deletedText`), including a partner deleting someone else's text. `record(withText)` returns `deletedText`. The check page shows bursts with typed and deleted text, the deleted parts crossed out. Tests: `tests/measure.test.ts`.
+- **Coach view:** top-bar **Coach view** button (coaches of the current team only) → `src/ui/CoachView.tsx`: every round doc on the team, flagged first (`flags` = large live edits + blocked pastes + round doc turned off + broken record), with owner and partners, last edit, characters typed live and flag chips, plus **Open doc** and **Check page** buttons. Server: `GET /api/teams/<id>/rounds` (coach only; `Directory.roundDocsForCoach`, then `summarizeRecord` in `worker/summary.ts` over each DocRoom record without text). Offline catch-up under 20 characters isn't flagged (it's usually just the doc's empty first line being saved).
+- **Typing log tab:** on server round docs it now leads with "This tab only shows typing done on this device" and a link to the full server record (check page), so it no longer looks empty on a coach's device.
+- What the server record can't do: per-keystroke timing for text typed offline (it arrives in one catch-up batch and is labeled so), or anything outside the app.
+- Checked in Playwright with test sign-in: coach creates a team, a student makes a round doc, types, backspaces "limit use" and retypes, tries a paste; the coach view shows "1 blocked paste"; the check page shows the deleted "limit use" crossed out.
 
 ## Next steps
 

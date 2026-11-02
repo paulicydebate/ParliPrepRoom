@@ -2991,3 +2991,85 @@ del {
     width: 30px;
   }
 }
+
+/* ---------- Coach view ---------- */
+.coach-view {
+  width: min(860px, calc(100vw - 24px));
+  max-height: calc(100vh - 40px);
+}
+.coach-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 6px;
+  flex-wrap: wrap;
+}
+.coach-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.coach-list li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.coach-list li.has-flags {
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 4%, transparent);
+}
+.coach-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 360px;
+}
+.coach-title {
+  font-size: 15px;
+}
+.coach-flags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.coach-chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.coach-chip.bad {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-weight: 600;
+}
+.coach-chip.ok {
+  background: var(--added-bg);
+  color: var(--added-text);
+}
+.coach-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.log-banner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--round-soft);
+  border: 1px solid color-mix(in srgb, var(--round) 30%, var(--border));
+}
+.log-banner p {
+  margin: 0;
+  flex: 1 1 260px;
+}

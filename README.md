@@ -52,7 +52,8 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Sign in with Google (once the Google key is added on the server). A coach creates a team and shares invite links (one for students, one for coaches).
 - The sidebar shows the current team's docs; a switcher in the top bar changes team or shows "My own docs".
 - Team docs are open to the whole team. Round docs are open to their owner, the partners they pick and the team's coaches.
-- Each round doc has a **Check link** with a QR code. Anyone can open it to see who typed, when, how much, blocked pastes, big single edits and whether the server's record is intact. Partners and coaches also see the typed text.
+- Coaches get a **Coach view**: every round doc on the team, anything flagged first, with a link to each check page.
+- Each round doc has a **Check link** with a QR code. Anyone can open it to see who typed, when, how much, blocked pastes, big single edits and whether the server's record is intact. Partners and coaches also see every character typed and deleted, by whom and when.
 
 **Round Mode (Phase 5): live.**
 

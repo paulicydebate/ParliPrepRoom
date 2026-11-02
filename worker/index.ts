@@ -4,6 +4,7 @@
 
 import { renderCheckPage } from './checkPage';
 import { privacyPage } from './legal';
+import { summarizeRecord } from './summary';
 import type { DocRecord, Role } from './directory';
 import { FILES } from './static.gen';
 
@@ -203,6 +204,19 @@ export default {
       }
       const t = await dir.team(teamM[1], user!.id);
       return t ? json(t) : fail('Not on this team', 403);
+    }
+    // Coach view: every round doc on the team with a summary of its record.
+    const roundsM = /^\/api\/teams\/([A-Za-z0-9-]{8,64})\/rounds$/.exec(path);
+    if (roundsM && request.method === 'GET') {
+      const list = await dir.roundDocsForCoach(roundsM[1], user!.id);
+      if (!list) return fail('Only coaches can see this', 403);
+      const rows = await Promise.all(
+        list.map(async (d) => {
+          const record = await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).record(false);
+          return { id: d.id, title: d.title, owner: d.ownerName, partners: d.partnerNames, checkToken: d.checkToken, createdAt: d.createdAt, summary: summarizeRecord(record) };
+        }),
+      );
+      return json({ rounds: rows });
     }
     const memberM = /^\/api\/teams\/([A-Za-z0-9-]{8,64})\/members\/([A-Za-z0-9-]{8,64})$/.exec(path);
     if (memberM && request.method === 'POST') {

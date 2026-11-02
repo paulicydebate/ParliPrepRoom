@@ -68,12 +68,14 @@ export function HistoryView({
   ydoc,
   editor,
   round = false,
+  checkToken,
   onClose,
 }: {
   docId: string;
   ydoc: Y.Doc;
   editor: Editor | null;
   round?: boolean;
+  checkToken?: string | null;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<'versions' | 'log'>(round ? 'log' : 'versions');
@@ -88,7 +90,7 @@ export function HistoryView({
               Done
             </button>
           </div>
-          <TypingLogView docId={docId} />
+          <TypingLogView docId={docId} checkToken={checkToken} />
         </div>
       </div>
     );

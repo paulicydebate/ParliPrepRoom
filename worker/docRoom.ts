@@ -3,6 +3,9 @@ import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
+import { measureUpdate } from './measure';
+
+export { measureUpdate };
 
 // One live room per document (a Cloudflare Durable Object).
 //
@@ -36,6 +39,8 @@ export interface RecordUpdate {
   deleted: number;
   /** Text inserted by this update (only returned to people with access to the doc). */
   text?: string;
+  /** Text this update deleted (same access rule). */
+  deletedText?: string;
 }
 
 /** Events reported by the app (blocked pastes, round doc on/off, time away...). */
@@ -46,21 +51,6 @@ export interface RecordEvent {
   name: string;
   kind: string;
   n: number | null;
-}
-
-/** Characters inserted (with the text) and items deleted by a Yjs update. */
-export function measureUpdate(update: Uint8Array): { text: string; deleted: number } {
-  const { structs, ds } = Y.decodeUpdate(update);
-  let text = '';
-  for (const s of structs) {
-    const content = (s as unknown as { content?: { str?: unknown; type?: unknown } }).content;
-    if (content && typeof content.str === 'string') text += content.str;
-    // A new line (block) in the doc shows as a line break.
-    else if (content && content.type instanceof Y.XmlElement) text += '\n';
-  }
-  let deleted = 0;
-  ds.clients.forEach((items) => items.forEach((d) => (deleted += d.len)));
-  return { text, deleted };
 }
 
 const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -223,6 +213,7 @@ export class DocRoom extends DurableObject {
     const updates: RecordUpdate[] = [];
     let prev = '0'.repeat(64);
     let intact = true;
+    const chars = new Map<string, string>();
     for (const row of this.ctx.storage.sql.exec('SELECT * FROM updates ORDER BY seq')) {
       const data = new Uint8Array(row.data as ArrayBuffer);
       const head = new TextEncoder().encode(`${row.prev}|${row.at}|${row.user_id}|${row.user}|${row.via}|`);
@@ -231,7 +222,7 @@ export class DocRoom extends DurableObject {
       buf.set(data, head.length);
       if (row.prev !== prev || hex(await crypto.subtle.digest('SHA-256', buf)) !== row.hash) intact = false;
       prev = String(row.hash);
-      const m = measureUpdate(data);
+      const m = measureUpdate(data, chars);
       updates.push({
         seq: Number(row.seq),
         at: Number(row.at),
@@ -239,8 +230,8 @@ export class DocRoom extends DurableObject {
         name: String(row.user),
         via: String(row.via),
         inserted: m.text.length,
-        deleted: m.deleted,
-        ...(withText ? { text: m.text.slice(0, 2000) } : {}),
+        deleted: m.deletedText.length || m.deleted,
+        ...(withText ? { text: m.text.slice(0, 2000), deletedText: m.deletedText.slice(0, 2000) } : {}),
       });
     }
     const events = this.ctx.storage.sql

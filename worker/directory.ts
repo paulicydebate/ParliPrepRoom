@@ -319,6 +319,16 @@ export class Directory extends DurableObject {
     return true;
   }
 
+  /** Coach view: every round doc on a team (coaches only; null otherwise). */
+  roundDocsForCoach(teamId: string, userId: string): (DocRecord & { ownerName: string; partnerNames: string[] })[] | null {
+    if (this.role(teamId, userId) !== 'coach') return null;
+    return this.all('SELECT * FROM docs WHERE team_id = ? AND round = 1', teamId).map((r) => {
+      const d = this.doc(r);
+      const names = this.names([d.ownerId, ...d.partners]);
+      return { ...d, ownerName: names[d.ownerId] ?? '', partnerNames: d.partners.map((p) => names[p] ?? '').filter(Boolean) };
+    });
+  }
+
   /** The public check page looks a round doc up by its check token. */
   docByCheckToken(token: string): { doc: DocRecord; team: string | null; owner: string } | null {
     const row = this.one('SELECT * FROM docs WHERE check_token = ? AND round = 1', token);
