@@ -44,6 +44,16 @@ export interface ServerDoc {
   partners: string[];
   checkToken: string | null;
   createdAt: number;
+  tournamentName?: string | null;
+  roundLabel?: string | null;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  code: string;
+  directorSecret?: string;
+  createdAt?: number;
 }
 
 /** Which list the sidebar shows: a team id, or 'personal' (my docs outside any team). */
@@ -109,6 +119,10 @@ async function api<T>(path: string, init?: RequestInit & { json?: unknown }): Pr
 
 let loading: Promise<void> | null = null;
 
+/** Difference between the server's clock and this device's, so shared timers agree. */
+let serverOffset = 0;
+export const serverNow = () => Date.now() + serverOffset;
+
 /** Find out whether the server is there and who's signed in. */
 export function loadAccount(): Promise<void> {
   if (!loading) {
@@ -120,6 +134,8 @@ export function loadAccount(): Promise<void> {
           set({ loaded: true, server: false });
           return;
         }
+        const health2 = health as { time?: string };
+        if (health2.time) serverOffset = Date.parse(health2.time) - Date.now();
         const me = await api<{ user: User | null; teams: TeamSummary[] }>('/api/me');
         let space = state.space;
         if (space !== PERSONAL && !me.teams.some((t) => t.id === space)) space = me.teams[0]?.id ?? PERSONAL;
@@ -191,7 +207,17 @@ export const updateMember = (teamId: string, userId: string, change: { role?: Ro
 
 export const listServerDocs = (space: Space) => api<{ docs: ServerDoc[] }>(`/api/docs?team=${encodeURIComponent(space)}`).then((r) => r.docs);
 export const getServerDoc = (id: string) => api<ServerDoc>(`/api/docs/${id}`);
-export const createServerDoc = (doc: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null }) =>
+export const createServerDoc = (doc: {
+  id: string;
+  teamId: string | null;
+  title: string;
+  kind: string;
+  round?: boolean;
+  order?: number | null;
+  partners?: string[];
+  tournamentCode?: string | null;
+  roundLabel?: string | null;
+}) =>
   api<ServerDoc>('/api/docs', { method: 'POST', json: doc });
 export const patchServerDoc = (id: string, patch: Partial<Pick<ServerDoc, 'title' | 'kind' | 'round' | 'order' | 'partners' | 'teamId'>>) =>
   api<ServerDoc>(`/api/docs/${id}`, { method: 'PATCH', json: patch });
@@ -252,3 +278,7 @@ export interface LogUpdate {
 
 /** Every saved edit to a doc, with who and when (for named history and replay). */
 export const docLog = (id: string) => api<{ updates: LogUpdate[] }>(`/api/docs/${id}/log`).then((r) => r.updates);
+
+export const createTournament = (name: string) => api<Tournament>('/api/tournaments', { method: 'POST', json: { name } });
+export const myTournaments = () => api<{ tournaments: Tournament[] }>('/api/tournaments').then((r) => r.tournaments);
+export const lookupTournament = (code: string) => api<Tournament>(`/api/tournaments/lookup?code=${encodeURIComponent(code)}`);

@@ -36,6 +36,19 @@ export interface DocRecord {
   partners: string[];
   checkToken: string | null;
   createdAt: number;
+  tournamentId: string | null;
+  tournamentName: string | null;
+  roundLabel: string | null;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  /** Short code teams type in when they start a round. */
+  code: string;
+  /** Secret for the director's link (only returned to its creator). */
+  directorSecret?: string;
+  createdAt: number;
 }
 
 export interface Member {
@@ -83,7 +96,14 @@ export class Directory extends DurableObject {
           round INTEGER NOT NULL DEFAULT 0, ord REAL, check_token TEXT UNIQUE, created_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS doc_partners (
           doc_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (doc_id, user_id));
+        CREATE TABLE IF NOT EXISTS tournaments (
+          id TEXT PRIMARY KEY, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, director_secret TEXT NOT NULL UNIQUE,
+          created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
       `);
+      // Columns added after the first deploy.
+      const cols = this.ctx.storage.sql.exec('PRAGMA table_info(docs)').toArray().map((r) => String(r.name));
+      if (!cols.includes('tournament_id')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN tournament_id TEXT');
+      if (!cols.includes('round_label')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN round_label TEXT');
     });
   }
 
@@ -275,6 +295,9 @@ export class Directory extends DurableObject {
       partners: this.all('SELECT user_id FROM doc_partners WHERE doc_id = ?', id).map((r) => String(r.user_id)),
       checkToken: (row.check_token as string | null) ?? null,
       createdAt: Number(row.created_at),
+      tournamentId: (row.tournament_id as string | null) ?? null,
+      tournamentName: row.tournament_id ? String(this.one('SELECT name FROM tournaments WHERE id = ?', String(row.tournament_id))?.name ?? '') || null : null,
+      roundLabel: (row.round_label as string | null) ?? null,
     };
   }
 
@@ -309,7 +332,10 @@ export class Directory extends DurableObject {
    * Register a doc (new, or one uploaded from a device). The id is chosen by
    * the client, so refuse ids that already belong to someone else.
    */
-  createDoc(userId: string, input: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null }): DocRecord | null {
+  createDoc(
+    userId: string,
+    input: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null },
+  ): DocRecord | null {
     const existing = this.one('SELECT * FROM docs WHERE id = ?', input.id);
     if (existing) {
       const d = this.doc(existing);
@@ -321,19 +347,29 @@ export class Directory extends DurableObject {
       input.id, input.teamId, userId, input.title.slice(0, 200) || 'Untitled', input.kind === 'reference' ? 'reference' : 'prep',
       input.round ? 1 : 0, input.order ?? null, input.round ? randomToken(12) : null, Date.now(),
     );
+    const t = input.tournamentCode ? this.tournamentByCode(input.tournamentCode) : null;
+    if (t || input.roundLabel) {
+      this.sql.exec('UPDATE docs SET tournament_id = ?, round_label = ? WHERE id = ?', t?.id ?? null, input.roundLabel?.trim().slice(0, 60) || null, input.id);
+    }
+    if (input.partners?.length) this.updateDoc(userId, input.id, { partners: input.partners });
     return this.doc(this.one('SELECT * FROM docs WHERE id = ?', input.id)!);
   }
 
   updateDoc(
     userId: string,
     docId: string,
-    patch: { title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null },
+    patch: { title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null; tournamentCode?: string | null; roundLabel?: string | null },
   ): DocRecord | null {
     const { ok, doc } = this.access(docId, userId);
     if (!ok || !doc) return null;
     if (patch.title !== undefined && patch.title.trim()) this.sql.exec('UPDATE docs SET title = ? WHERE id = ?', patch.title.trim().slice(0, 200), docId);
     if (patch.kind !== undefined) this.sql.exec('UPDATE docs SET kind = ? WHERE id = ?', patch.kind === 'reference' ? 'reference' : 'prep', docId);
     if (patch.order !== undefined) this.sql.exec('UPDATE docs SET ord = ? WHERE id = ?', patch.order, docId);
+    if (patch.tournamentCode !== undefined) {
+      const t = patch.tournamentCode ? this.tournamentByCode(patch.tournamentCode) : null;
+      this.sql.exec('UPDATE docs SET tournament_id = ? WHERE id = ?', t?.id ?? null, docId);
+    }
+    if (patch.roundLabel !== undefined) this.sql.exec('UPDATE docs SET round_label = ? WHERE id = ?', patch.roundLabel?.trim().slice(0, 60) || null, docId);
     if (patch.round !== undefined) {
       this.sql.exec('UPDATE docs SET round = ? WHERE id = ?', patch.round ? 1 : 0, docId);
       if (patch.round && !doc.checkToken) this.sql.exec('UPDATE docs SET check_token = ? WHERE id = ?', randomToken(12), docId);
@@ -382,6 +418,53 @@ export class Directory extends DurableObject {
     const team = d.teamId ? String(this.one('SELECT name FROM teams WHERE id = ?', d.teamId)?.name ?? '') : null;
     const owner = String(this.one('SELECT name FROM users WHERE id = ?', d.ownerId)?.name ?? '');
     return { doc: d, team, owner };
+  }
+
+  // ---------- Tournaments (Tabroom) ----------
+
+  /** Anyone signed in can set up a tournament; they get its code and the director's link. */
+  createTournament(userId: string, name: string): Tournament {
+    const id = crypto.randomUUID();
+    const clean = name.trim().slice(0, 100) || 'Tournament';
+    // Short, readable code (no 0/O/1/I).
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    do {
+      const b = new Uint8Array(6);
+      crypto.getRandomValues(b);
+      code = Array.from(b, (x) => alphabet[x % alphabet.length]).join('');
+    } while (this.one('SELECT id FROM tournaments WHERE code = ?', code));
+    const secret = randomToken(18);
+    this.sql.exec('INSERT INTO tournaments (id, name, code, director_secret, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, clean, code, secret, userId, Date.now());
+    return { id, name: clean, code, directorSecret: secret, createdAt: Date.now() };
+  }
+
+  myTournaments(userId: string): Tournament[] {
+    return this.all('SELECT * FROM tournaments WHERE created_by = ? ORDER BY created_at DESC', userId).map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+      code: String(r.code),
+      directorSecret: String(r.director_secret),
+      createdAt: Number(r.created_at),
+    }));
+  }
+
+  tournamentByCode(code: string): Tournament | null {
+    const r = this.one('SELECT * FROM tournaments WHERE code = ?', code.trim().toUpperCase());
+    return r ? { id: String(r.id), name: String(r.name), code: String(r.code), createdAt: Number(r.created_at) } : null;
+  }
+
+  /** Director's view: every round doc tagged with the tournament, from every team. */
+  tournamentRounds(secret: string): { tournament: Tournament; docs: (DocRecord & { teamName: string; ownerName: string; partnerNames: string[] })[] } | null {
+    const t = this.one('SELECT * FROM tournaments WHERE director_secret = ?', secret);
+    if (!t) return null;
+    const docs = this.all('SELECT * FROM docs WHERE tournament_id = ? AND round = 1', String(t.id)).map((r) => {
+      const d = this.doc(r);
+      const names = this.names([d.ownerId, ...d.partners]);
+      const teamName = d.teamId ? String(this.one('SELECT name FROM teams WHERE id = ?', d.teamId)?.name ?? '') : '';
+      return { ...d, teamName, ownerName: names[d.ownerId] ?? '', partnerNames: d.partners.map((p) => names[p] ?? '').filter(Boolean) };
+    });
+    return { tournament: { id: String(t.id), name: String(t.name), code: String(t.code), createdAt: Number(t.created_at) }, docs };
   }
 
   /** Names for user ids (for the check page and partner lists). */

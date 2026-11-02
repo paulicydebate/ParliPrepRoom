@@ -23,6 +23,11 @@ export interface RecordSummary {
   flags: number;
 }
 
+/** Catch-up within this long of a doc's first save is its starting content (e.g. "New round"), not offline typing. */
+export const STARTING_MS = 15_000;
+
+export const isStarting = (u: RecordUpdate, firstAt: number | undefined) => u.via !== 'live' && firstAt !== undefined && u.at - firstAt < STARTING_MS;
+
 export function summarizeRecord(r: { updates: RecordUpdate[]; events: RecordEvent[]; intact: boolean; seal: string | null }): RecordSummary {
   const live = r.updates.filter((u) => u.via === 'live');
   const people = new Map<string, { name: string; typed: number }>();
@@ -47,7 +52,7 @@ export function summarizeRecord(r: { updates: RecordUpdate[]; events: RecordEven
     firstAt: r.updates[0]?.at ?? null,
     lastAt: r.updates[r.updates.length - 1]?.at ?? null,
     typedLive: live.reduce((n, u) => n + u.inserted, 0),
-    catchup: r.updates.filter((u) => u.via !== 'live').reduce((n, u) => n + u.inserted, 0),
+    catchup: r.updates.filter((u) => u.via !== 'live' && !isStarting(u, r.updates[0]?.at)).reduce((n, u) => n + u.inserted, 0),
     large,
     blocked,
     roundOff,

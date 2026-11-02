@@ -5,6 +5,9 @@ import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, spaceOf, syncDo
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
 import { BlockFinder, PinBoard } from './RoundModeUI';
+import { NewRoundDialog } from './Rounds';
+import { Timer } from './Timer';
+import { useYDoc } from './useYDoc';
 import { useLibrary } from './useLibrary';
 import type { Editor } from '@tiptap/react';
 import { activeSheet, flowKey } from '../editor/flowView';
@@ -438,6 +441,21 @@ export function App() {
   const jumpRef = useRef(jumpTo);
   jumpRef.current = jumpTo;
 
+  // The timer follows the round doc on screen (shared with the partner), else it's per device.
+  const roundIdOf = (id: string | null | undefined) => (id && docs?.find((d) => d.id === id)?.round ? id : null);
+  const timerDocId = roundIdOf(focusedPane?.docId) ?? layout.panes.map((p) => roundIdOf(p.docId)).find(Boolean) ?? null;
+  const [newRoundOpen, setNewRoundOpen] = useState(false);
+  /** After "New round": the doc on the left, the same doc as a flow on the right. */
+  const openNewRound = (docId: string) =>
+    setLayout((l) => {
+      const n = Date.now();
+      const left = { key: l.panes[0]?.key ?? paneKey(), docId, outline: false, view: 'doc' as const, focus: undefined };
+      const right = { key: l.panes[1]?.key ?? paneKey(), docId, outline: false, view: 'flow' as const, focus: undefined };
+      void n;
+      if (narrow || maxPanes < 2) return { ...l, panes: [left], weights: [1], focused: 0 };
+      return { ...l, panes: [left, right], weights: [1, 1.3], focused: 0 };
+    });
+
   const toggleRoundMode = () => setRoundMode(!roundMode, (spaceDocs ?? []).filter((d) => d.round).map((d) => d.id));
   const openIds = new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x));
 
@@ -470,6 +488,13 @@ export function App() {
         <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
           <IconSplit /> <span className="hide-narrow">Split view</span>
         </button>
+        <TimerHost docId={timerDocId} />
+        {acct.user && (
+          <button type="button" className="btn ghost new-round-btn" onClick={() => setNewRoundOpen(true)} title="Start a round: round doc for you and your partner, prep timer, tournament">
+            <span className="hide-narrow">New round</span>
+            <span className="show-narrow" aria-hidden="true">+ Round</span>
+          </button>
+        )}
         <button type="button" className="icon-btn" aria-label="Search blocks" title="Find a block (Ctrl+K / ⌘K)" onClick={() => setFindOpen(true)}>
           <IconSearch />
         </button>
@@ -548,6 +573,7 @@ export function App() {
           />
         )}
       </div>
+      {newRoundOpen && <NewRoundDialog onCreated={openNewRound} onClose={() => setNewRoundOpen(false)} />}
       {findOpen && (
         <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
       )}
@@ -558,4 +584,10 @@ export function App() {
       </div>
     </div>
   );
+}
+
+/** Opens the round doc (if any) so the timer can be shared through it. */
+function TimerHost({ docId }: { docId: string | null }) {
+  const opened = useYDoc(docId);
+  return <Timer key={docId ?? 'local'} doc={docId ? opened?.doc ?? null : null} />;
 }

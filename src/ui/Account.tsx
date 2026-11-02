@@ -17,6 +17,7 @@ import {
   type TeamDetails,
 } from '../store/account';
 import { CoachView } from './CoachView';
+import { TournamentsDialog } from './Rounds';
 import { IconClose } from './icons';
 
 /** Top bar: sign in, or switch team and open team settings. */
@@ -26,6 +27,7 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
   const [newTeamOpen, setNewTeamOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [devName, setDevName] = useState('');
 
   if (!acct.loaded || !acct.server) return null;
@@ -105,6 +107,9 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
           <button type="button" onClick={() => setNewTeamOpen(true)}>
             New team…
           </button>
+          <button type="button" onClick={() => setTournamentsOpen(true)}>
+            Tournaments (tab room)…
+          </button>
           <button type="button" onClick={() => void signOut()}>
             Sign out
           </button>
@@ -116,6 +121,7 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
       {teamOpen && team && <TeamDialog teamId={team.id} onClose={() => setTeamOpen(false)} />}
       {newTeamOpen && <NewTeamDialog onClose={() => setNewTeamOpen(false)} />}
       {deleteOpen && <DeleteAccountDialog onClose={() => setDeleteOpen(false)} />}
+      {tournamentsOpen && <TournamentsDialog onClose={() => setTournamentsOpen(false)} />}
       {coachOpen && team && <CoachView teamId={team.id} teamName={team.name} onOpenDoc={onOpenDoc} onClose={() => setCoachOpen(false)} />}
     </div>
   );

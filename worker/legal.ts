@@ -3,7 +3,7 @@
 // what the app stores changes.
 
 const CONTACT = 'parlipreproombot@mail.grokbot.com';
-const UPDATED = 'November 2, 2026';
+const UPDATED = 'November 3, 2026';
 
 const page = (title: string, body: string) => `<!doctype html>
 <html lang="en">
@@ -54,6 +54,7 @@ export function privacyPage(): string {
   <li><strong>Round docs</strong>: the person who made it, the partners they add, and the team's coaches.</li>
   <li><strong>Your own docs</strong> (not in a team): only you.</li>
   <li><strong>Check pages</strong>: anyone with a round doc's check link sees a summary: names of the people who typed in it, when, how much, and any flags. The prep itself is shown only to people who already have access to that doc.</li>
+  <li><strong>Tournaments</strong>: if you enter a tournament's code when you start a round, that tournament's director (through a private link) can see that round doc's full record, including what was typed and deleted, so they can rule on disputes.</li>
   <li>The people who run ParliPrepRoom can access stored data when needed to keep the service working or fix problems.</li>
 </ul>
 

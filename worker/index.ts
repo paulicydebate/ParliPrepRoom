@@ -5,6 +5,7 @@
 import { renderCheckPage } from './checkPage';
 import { privacyPage } from './legal';
 import { summarizeRecord } from './summary';
+import { renderTabroomPage } from './tabroomPage';
 import type { DocRecord, Role } from './directory';
 import { FILES } from './static.gen';
 
@@ -70,8 +71,23 @@ async function body<T>(request: Request): Promise<T | null> {
 
 /** The doc as the app sees it: names for partners, check link only for round docs. */
 function publicDoc(d: DocRecord) {
-  return { id: d.id, teamId: d.teamId, ownerId: d.ownerId, title: d.title, kind: d.kind, round: d.round, order: d.order, partners: d.partners, checkToken: d.round ? d.checkToken : null, createdAt: d.createdAt };
+  return {
+    id: d.id,
+    teamId: d.teamId,
+    ownerId: d.ownerId,
+    title: d.title,
+    kind: d.kind,
+    round: d.round,
+    order: d.order,
+    partners: d.partners,
+    checkToken: d.round ? d.checkToken : null,
+    createdAt: d.createdAt,
+    tournamentName: d.tournamentName,
+    roundLabel: d.roundLabel,
+  };
 }
+
+const html = (body: string) => new Response(body, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -160,6 +176,25 @@ export default {
     }
 
     const user = await dir.userForSession(cookie(request, COOKIE));
+    const tz = typeof request.cf?.timezone === 'string' ? request.cf.timezone : 'America/Los_Angeles';
+
+    // ---------- Tab room: the tournament director's link ----------
+    const td = /^\/td\/([A-Za-z0-9_-]{16,40})(?:\/doc\/([A-Za-z0-9-]{8,64}))?$/.exec(path);
+    if (td) {
+      const found = await dir.tournamentRounds(td[1]);
+      if (!found) return new Response('This tab room link is not valid.', { status: 404 });
+      if (td[2]) {
+        // One round doc's full record, including the text (the director may need it to rule on a dispute).
+        const d = found.docs.find((x) => x.id === td[2]);
+        if (!d) return new Response('That round doc is not part of this tournament.', { status: 404 });
+        const record = await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).record(true);
+        return html(renderCheckPage({ doc: d, team: d.teamName, owner: d.ownerName, partners: d.partnerNames, record, withText: true, url: url.toString(), tz, director: true }));
+      }
+      const rows = await Promise.all(
+        found.docs.map(async (d) => ({ doc: d, summary: summarizeRecord(await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).record(false)) })),
+      );
+      return html(renderTabroomPage(found.tournament, rows, td[1], tz));
+    }
 
     // ---------- Public check page for round docs ----------
     const check = /^\/check\/([A-Za-z0-9_-]{8,40})$/.exec(path);
@@ -171,7 +206,7 @@ export default {
       const withText = user ? (await dir.access(found.doc.id, user.id)).ok : false;
       const record = await room.record(withText);
       const partners = await dir.names(found.doc.partners);
-      return new Response(renderCheckPage({ doc: found.doc, team: found.team, owner: found.owner, partners: Object.values(partners), record, withText, url: url.toString(), tz: typeof request.cf?.timezone === 'string' ? request.cf.timezone : undefined }), {
+      return new Response(renderCheckPage({ doc: found.doc, team: found.team, owner: found.owner, partners: Object.values(partners), record, withText, url: url.toString(), tz }), {
         headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
       });
     }
@@ -198,7 +233,20 @@ export default {
     }
 
     if (path.startsWith('/api/') && !path.startsWith('/api/sync/') && !user) {
-      if (path.startsWith('/api/teams') || path.startsWith('/api/docs') || path === '/api/join') return fail('Sign in first', 401);
+      if (path.startsWith('/api/teams') || path.startsWith('/api/docs') || path.startsWith('/api/tournaments') || path === '/api/join') return fail('Sign in first', 401);
+    }
+
+    // ---------- Tournaments ----------
+    if (path === '/api/tournaments' && request.method === 'POST') {
+      const b = await body<{ name?: string }>(request);
+      return json(await dir.createTournament(user!.id, b?.name ?? ''));
+    }
+    if (path === '/api/tournaments' && request.method === 'GET') {
+      return json({ tournaments: await dir.myTournaments(user!.id) });
+    }
+    if (path === '/api/tournaments/lookup' && request.method === 'GET') {
+      const t = await dir.tournamentByCode(url.searchParams.get('code') ?? '');
+      return t ? json({ id: t.id, name: t.name, code: t.code }) : fail('No tournament with that code', 404);
     }
 
     // ---------- Teams ----------
@@ -253,16 +301,26 @@ export default {
       return json({ docs: (await dir.docsFor(user!.id, team && team !== 'personal' ? team : null)).map(publicDoc) });
     }
     if (path === '/api/docs' && request.method === 'POST') {
-      const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null }>(request);
+      const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null }>(request);
       if (!b?.id || !DOC_ID.test(b.id)) return fail('Bad document id', 400);
-      const d = await dir.createDoc(user!.id, { id: b.id, teamId: b.teamId ?? null, title: b.title ?? 'Untitled', kind: b.kind ?? 'prep', round: b.round, order: b.order ?? null });
+      const d = await dir.createDoc(user!.id, {
+        id: b.id,
+        teamId: b.teamId ?? null,
+        title: b.title ?? 'Untitled',
+        kind: b.kind ?? 'prep',
+        round: b.round,
+        order: b.order ?? null,
+        partners: Array.isArray(b.partners) ? b.partners : undefined,
+        tournamentCode: b.tournamentCode ?? null,
+        roundLabel: b.roundLabel ?? null,
+      });
       return d ? json(publicDoc(d)) : fail('That doc belongs to someone else', 403);
     }
     const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record|\/state|\/log)?$/.exec(path);
     if (docM) {
       const [, id, sub] = docM;
       if (!sub && request.method === 'PATCH') {
-        const b = await body<{ title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null }>(request);
+        const b = await body<{ title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null; tournamentCode?: string | null; roundLabel?: string | null }>(request);
         const d = b ? await dir.updateDoc(user!.id, id, b) : null;
         return d ? json(publicDoc(d)) : fail('No access to this doc', 403);
       }

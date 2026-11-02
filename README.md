@@ -62,6 +62,12 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - **Pinned blocks:** a side panel listing the claims you plan to read, in order. Tap one to jump to it. Pin a whole section (e.g. "A2 – T"), a claim with its warrants, or a single analytic; then pick which flow sheet each pin answers, and the panel shows the pins for the sheet you're on. In the flow, the pin button on a column header (e.g. LOC) opens a Pins column right next to it.
 - **Insert a block** (outside Round Mode only, and never into a round doc): pins and search results have an Insert button that puts a copy below the cursor, for coaches building docs in prep.
 
+**Rounds and tournaments: built, not deployed yet.**
+
+- **Timer** in the top bar: prep 20:00, PMC 7, LOC 8, MG 8, MO 8, LOR 4, PMR 5, flex 2:00 and 1:00, or custom. Shared with your partner when a round doc is open.
+- **New round:** round, side, resolution, partner and tournament code in one step; opens the round doc and its flow side by side with the prep timer running.
+- **Tab room:** set up a tournament (account menu → Tournaments), give teams its code, and give the tab room the director link: every round doc tagged with the tournament, flagged first, with full records.
+
 ## Develop
 
 ```sh

@@ -427,7 +427,7 @@ export function Pane({
       {meta && round && (
         <div className="round-strip">
           <span>
-            <IconLock /> Round doc · paste is off · typing is recorded
+            <IconLock /> {meta.roundLabel ? `${meta.roundLabel}${meta.tournamentName ? ` · ${meta.tournamentName}` : ''} · ` : ''}Round doc · paste is off · typing is recorded
           </span>
           <span className="tb-spacer" />
           {provider && <PartnersButton meta={meta} />}

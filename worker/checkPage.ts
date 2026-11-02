@@ -1,5 +1,6 @@
 import type { DocRecord } from './directory';
 import type { RecordEvent, RecordUpdate } from './docRoom';
+import { isStarting } from './summary';
 
 // The public check page for a round doc: a self-contained HTML page (no app
 // code) that an opponent, coach or tab room opens from a link or QR code.
@@ -49,9 +50,11 @@ interface Input {
   url: string;
   /** IANA time zone of the viewer. */
   tz?: string;
+  /** Opened from the tournament director's link. */
+  director?: boolean;
 }
 
-export function renderCheckPage({ doc, team, owner, partners, record, withText, url, tz }: Input): string {
+export function renderCheckPage({ doc, team, owner, partners, record, withText, url, tz, director }: Input): string {
   try {
     if (tz) new Intl.DateTimeFormat('en-US', { timeZone: tz });
     timeZone = tz || 'America/Los_Angeles';
@@ -59,7 +62,9 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
     timeZone = 'America/Los_Angeles';
   }
   const live = record.updates.filter((u) => u.via === 'live');
-  const catchup = record.updates.filter((u) => u.via !== 'live');
+  const firstSave = record.updates[0]?.at;
+  const starting = record.updates.filter((u) => isStarting(u, firstSave));
+  const catchup = record.updates.filter((u) => u.via !== 'live' && !isStarting(u, firstSave));
   const first = record.updates[0]?.at ?? null;
   const last = record.updates[record.updates.length - 1]?.at ?? null;
 
@@ -110,6 +115,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
   const timeline = [
     ...large.map((u) => ({ at: u.at, who: u.name, what: `Put in ${u.inserted} characters in one edit`, warn: true, text: withText ? u.text ?? '' : '' })),
     ...record.events.map((e) => ({ at: e.at, who: e.name, what: EVENT_LABEL[e.kind] ?? e.kind, warn: e.kind.endsWith('-blocked') || e.kind === 'round-off' || e.kind === 'large', text: '' })),
+    ...starting.filter((u) => u.inserted > 0).map((u) => ({ at: u.at, who: u.name, what: `Doc created with ${u.inserted} characters of starting text`, warn: false, text: '' })),
     ...catchup.filter((u) => u.inserted >= 20).map((u) => ({ at: u.at, who: u.name, what: `Synced ${u.inserted} characters typed while offline or before sharing`, warn: false, text: '' })),
   ].sort((a, b) => a.at - b.at);
 
@@ -154,7 +160,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
     add('typed', typed);
   }
   const textSection = withText
-    ? `<h2>Everything typed and deleted, in order</h2><p class="note">You see this because you're on this doc. People without access see the summary only. Grouped into bursts with no pause over 4 seconds. <ins>Typed</ins> <del>deleted</del></p>
+    ? `<h2>Everything typed and deleted, in order</h2><p class="note">${director ? 'Shown to the tab room through the tournament director link.' : "You see this because you're on this doc."} People without access see the summary only. Grouped into bursts with no pause over 4 seconds. <ins>Typed</ins> <del>deleted</del></p>
        <ol class="typed">${bursts
          .filter((b) => b.parts.some((p) => p.text.trim()))
          .map(

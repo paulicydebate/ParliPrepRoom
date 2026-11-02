@@ -34,6 +34,9 @@ export interface DocMeta {
   partners?: string[];
   /** Round docs on the server: token for the public check page. */
   checkToken?: string | null;
+  /** Round docs started with "New round": tournament and round, e.g. "Round 3". */
+  tournamentName?: string | null;
+  roundLabel?: string | null;
 }
 
 const store = createStore('pp-meta', 'meta');
@@ -94,6 +97,8 @@ function fromServer(s: ServerDoc): Partial<DocMeta> {
     ownerId: s.ownerId,
     partners: s.partners,
     checkToken: s.checkToken,
+    tournamentName: s.tournamentName ?? null,
+    roundLabel: s.roundLabel ?? null,
   };
 }
 
@@ -173,6 +178,34 @@ export async function deleteDoc(id: string) {
   if (syncing() && onServer(d)) await deleteServerDoc(id);
   await save((await listDocs()).filter((x) => x.id !== id));
   await del(`seeded:${id}`, store).catch(() => {});
+}
+
+/**
+ * "New round": a round doc made in one step, already shared with the partner
+ * and tagged with the tournament and round. Needs sign-in.
+ */
+export async function createRoundDoc(input: {
+  title: string;
+  space: Space;
+  partners: string[];
+  tournamentCode: string | null;
+  roundLabel: string;
+}): Promise<DocMeta> {
+  const docs = await listDocs();
+  const id = newDocId();
+  const s = await createServerDoc({
+    id,
+    teamId: input.space === PERSONAL ? null : input.space,
+    title: input.title,
+    kind: 'prep',
+    round: true,
+    partners: input.partners,
+    tournamentCode: input.tournamentCode,
+    roundLabel: input.roundLabel,
+  });
+  const meta = { id, createdAt: s.createdAt, ...fromServer(s) } as DocMeta;
+  await save([...docs, meta]);
+  return meta;
 }
 
 /** Make sure a doc that so far lived only on this device is on the server (as one of my own docs). */
