@@ -2,7 +2,7 @@
 // for public sign-in). Keep the wording plain and accurate; update it when
 // what the app stores changes.
 
-const CONTACT = 'CONTACT_EMAIL_PLACEHOLDER';
+const CONTACT = 'parlipreproombot@mail.grokbot.com';
 const UPDATED = 'November 2, 2026';
 
 const page = (title: string, body: string) => `<!doctype html>
