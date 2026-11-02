@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core';
-import type { Node as PMNode } from '@tiptap/pm/model';
+import { DOMSerializer, Fragment, Slice, type Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { newBlockId } from '../model/blocks';
 import { computeFlow, insertPosFor, readBlocks, sheetAt, type FlowLayout, type FlowSheet } from '../model/flow';
 import { baseSpeech, SPEECH_INFO, type Side } from '../model/speeches';
@@ -34,8 +34,8 @@ declare module '@tiptap/core' {
       addSheet: (side: Side) => ReturnType;
       renameSheet: (key: string, title: string) => ReturnType;
       setSheetSide: (key: string, side: Side) => ReturnType;
-      /** Start typing in an empty cell (group index, or null for a new row at the bottom). */
-      createCell: (group: number | null, col: number) => ReturnType;
+      /** Start typing in an empty cell. A number means an existing row (group index); null means the first empty row at the bottom. */
+      createCell: (target: CellTarget | number | null, col: number) => ReturnType;
       /** Tab / Shift-Tab: go to the next or previous speech in this row. */
       moveColumn: (dir: 1 | -1) => ReturnType;
       /** Start a new row below the current one, in the current column. */
@@ -65,31 +65,92 @@ function selectEnd(tr: Transaction, pos: number) {
   tr.setSelection(TextSelection.create(tr.doc, pos + 1 + node.content.size)).scrollIntoView();
 }
 
-function insertCell(state: EditorState, tr: Transaction, sheet: FlowSheet, group: number | null, col: number) {
+/** Where a click asks for a new cell: an existing row, a blank row kept above a row, or an empty row below the content. */
+export type CellTarget = { group: number } | { before: number; index: number } | { ghost: number };
+
+function insertCell(state: EditorState, tr: Transaction, sheet: FlowSheet, target: CellTarget, col: number) {
   const speech = sheet.columns[col - 1];
-  const base = baseSpeech(sheet.side);
-  const isBase = speech === base;
+  const isBase = speech === baseSpeech(sheet.side);
+  const fresh = { kind: 'claim', speech: isBase ? null : speech };
   let pos: number;
   let attrs: Record<string, unknown>;
-  if (group === null) {
+  if ('ghost' in target) {
+    // Keep the empty rows above it so the line lands in the row that was clicked.
     pos = sheet.end;
-    attrs = { kind: 'claim', speech: isBase ? null : speech, newRow: !isBase };
+    attrs = { ...fresh, newRow: !isBase, gap: target.ghost };
+  } else if ('before' in target) {
+    const g = sheet.groups[target.before];
+    const root = g && tr.doc.nodeAt(g.from);
+    if (!g || !root) return false;
+    const gap = Number(root.attrs.gap) || 0;
+    tr.setNodeMarkup(g.from, undefined, { ...root.attrs, gap: Math.max(0, gap - target.index - 1) });
+    pos = g.from;
+    attrs = { ...fresh, newRow: !isBase, gap: target.index };
   } else {
-    const g = sheet.groups[group];
+    const g = sheet.groups[target.group];
     if (!g) return false;
     if (col === 1 && !g.cells.has(1)) {
       // The row was started in a later speech; put the sheet's own claim first.
       const first = tr.doc.nodeAt(g.from);
-      if (first?.attrs.newRow) tr.setNodeMarkup(g.from, undefined, { ...first.attrs, newRow: false });
+      const gap = Number(first?.attrs.gap) || 0;
+      if (first) tr.setNodeMarkup(g.from, undefined, { ...first.attrs, newRow: false, gap: 0 });
       pos = g.from;
-      attrs = { kind: 'claim', speech: null };
+      attrs = { ...fresh, gap };
     } else {
       pos = insertPosFor(g, col);
-      attrs = { kind: 'claim', speech: isBase ? null : speech };
+      attrs = fresh;
     }
   }
   tr.insert(pos, blockNode(state, attrs));
   tr.setSelection(TextSelection.create(tr.doc, pos + 1)).scrollIntoView();
+  return true;
+}
+
+/**
+ * When a selection runs across several cells, it covers only the column it
+ * started in: every line in that column between the start row and end row.
+ */
+export function columnSelection(state: EditorState): { col: number; positions: number[] } | null {
+  const { selection } = state;
+  if (selection.empty) return null;
+  const sheet = activeSheet(flowKey.getState(state));
+  if (!sheet) return null;
+  const $a = selection.$anchor;
+  const $h = selection.$head;
+  if ($a.depth < 1 || $h.depth < 1) return null;
+  const aPos = $a.before(1);
+  const hPos = $h.before(1);
+  if (aPos === hPos) return null;
+  const pa = sheet.placements.find((p) => p.pos === aPos);
+  const ph = sheet.placements.find((p) => p.pos === hPos);
+  if (!pa || !ph || pa.col === 0) return null;
+  const lo = Math.min(pa.row, ph.row);
+  const hi = Math.max(pa.row + pa.rowSpan - 1, ph.row + ph.rowSpan - 1);
+  const positions = sheet.placements
+    .filter((p) => p.col === pa.col && p.row + p.rowSpan - 1 >= lo && p.row <= hi)
+    .map((p) => p.pos)
+    .sort((x, y) => x - y);
+  return { col: pa.col, positions };
+}
+
+/** Copy (or cut) only the selected column's lines. Returns false to let the browser handle normal selections. */
+function copyColumn(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
+  const sel = columnSelection(view.state);
+  if (!sel || !event.clipboardData) return false;
+  const nodes = sel.positions.map((p) => view.state.doc.nodeAt(p)).filter((n): n is PMNode => !!n);
+  const div = document.createElement('div');
+  div.appendChild(DOMSerializer.fromSchema(view.state.schema).serializeFragment(Fragment.fromArray(nodes)));
+  event.clipboardData.setData('text/html', div.innerHTML);
+  event.clipboardData.setData('text/plain', nodes.map((n) => n.textContent).join('\n'));
+  event.preventDefault();
+  if (cut) {
+    const tr = view.state.tr;
+    for (const p of [...sel.positions].sort((a, b) => b - a)) {
+      const n = tr.doc.nodeAt(p);
+      if (n) tr.delete(p, p + n.nodeSize);
+    }
+    view.dispatch(tr);
+  }
   return true;
 }
 
@@ -152,12 +213,13 @@ export const FlowView = Extension.create({
           return true;
         },
       createCell:
-        (group, col) =>
+        (target, col) =>
         ({ state, tr, dispatch }) => {
           const sheet = activeSheet(flowKey.getState(state));
           if (!sheet || col < 1 || col > sheet.columns.length) return false;
           if (!dispatch) return true;
-          return insertCell(state, tr, sheet, group, col);
+          const t: CellTarget = target === null ? { ghost: 0 } : typeof target === 'number' ? { group: target } : target;
+          return insertCell(state, tr, sheet, t, col);
         },
       moveColumn:
         (dir) =>
@@ -174,7 +236,7 @@ export const FlowView = Extension.create({
             selectEnd(tr, list[list.length - 1].pos);
             return true;
           }
-          return insertCell(state, tr, cur.sheet, cur.p.group, target);
+          return insertCell(state, tr, cur.sheet, { group: cur.p.group }, target);
         },
       newRow:
         () =>
@@ -183,10 +245,14 @@ export const FlowView = Extension.create({
           const sheet = cur?.sheet ?? activeSheet(flowKey.getState(state));
           if (!sheet) return false;
           if (!dispatch) return true;
-          if (!cur || cur.p.group < 0) return insertCell(state, tr, sheet, null, 1);
+          if (!cur || cur.p.group < 0) return insertCell(state, tr, sheet, { ghost: 0 }, 1);
           const g = sheet.groups[cur.p.group];
           const speech = sheet.columns[cur.p.col - 1];
           const isBase = speech === baseSpeech(sheet.side);
+          // Fill a blank row below instead of pushing everything down.
+          const next = tr.doc.nodeAt(g.to);
+          const nextGap = Number(next?.attrs.gap) || 0;
+          if (next && nextGap > 0) tr.setNodeMarkup(g.to, undefined, { ...next.attrs, gap: nextGap - 1 });
           tr.insert(g.to, blockNode(state, { kind: 'claim', speech: isBase ? null : speech, newRow: !isBase }));
           tr.setSelection(TextSelection.create(tr.doc, g.to + 1)).scrollIntoView();
           return true;
@@ -233,6 +299,7 @@ export const FlowView = Extension.create({
           attributes(state) {
             const sheet = activeSheet(flowKey.getState(state));
             return {
+              ...(columnSelection(state) ? { 'data-colsel': 'true' } : {}),
               class: 'pp-flow',
               style: `--fl-cols: ${sheet?.columns.length ?? 1}`,
               'data-side': sheet?.side ?? 'gov',
@@ -274,33 +341,75 @@ export const FlowView = Extension.create({
               }
             }
 
-            const cell = (pos: number, group: number | null, col: number, row: number, span: number, filled: boolean, last: boolean) => {
-              const speech = sheet.columns[col - 1];
-              const side = SPEECH_INFO[speech].side;
+            const sideOf = (col: number) => SPEECH_INFO[sheet.columns[col - 1]].side;
+
+            // Background for each cell of a row (and a click target if empty).
+            for (const g of sheet.groups) {
+              for (let c = 1; c <= cols; c++) {
+                const filled = g.cells.has(c);
+                decos.push(
+                  Decoration.widget(
+                    g.from,
+                    () => {
+                      const el = document.createElement('div');
+                      el.className = `fl-cell fl-${sideOf(c)}` + (filled ? '' : ' is-empty');
+                      el.contentEditable = 'false';
+                      el.style.gridColumn = String(c);
+                      el.style.gridRow = `${g.row} / span ${g.span}`;
+                      el.dataset.col = String(c);
+                      el.dataset.target = 'group';
+                      el.dataset.group = String(g.index);
+                      return el;
+                    },
+                    { side: -1, key: `c-${g.index}-${c}-${g.row}-${g.span}-${filled ? 1 : 0}-${sideOf(c)}`, ignoreSelection: true },
+                  ),
+                );
+              }
+            }
+
+            // Runs of empty rows (blank rows kept above a row, and the empty
+            // rows below the content), drawn as one block of cells each.
+            const emptyRows = (pos: number, row: number, count: number, target: 'blank' | 'ghost', before: number) => {
+              if (count <= 0) return;
               decos.push(
                 Decoration.widget(
                   pos,
                   () => {
-                    const el = document.createElement('div');
-                    el.className = `fl-cell fl-${side}` + (filled ? '' : ' is-empty') + (group === null ? ' is-ghost' : '') + (last ? ' is-last' : '');
-                    el.contentEditable = 'false';
-                    el.style.gridColumn = String(col);
-                    el.style.gridRow = `${row} / span ${span}`;
-                    el.dataset.col = String(col);
-                    el.dataset.group = group === null ? 'new' : String(group);
-                    if (!filled) el.setAttribute('aria-label', `Add to ${speech}`);
-                    return el;
+                    const wrap = document.createElement('div');
+                    wrap.className = 'fl-rows' + (target === 'ghost' ? ' is-ghost' : '');
+                    wrap.contentEditable = 'false';
+                    wrap.style.gridColumn = '1 / -1';
+                    wrap.style.gridRow = `${row} / span ${count}`;
+                    const frag = document.createDocumentFragment();
+                    for (let i = 0; i < count; i++) {
+                      for (let c = 1; c <= cols; c++) {
+                        const el = document.createElement('div');
+                        el.className = `fl-cell fl-${sideOf(c)} is-empty`;
+                        el.dataset.col = String(c);
+                        el.dataset.target = target;
+                        el.dataset.index = String(i);
+                        el.dataset.before = String(before);
+                        frag.appendChild(el);
+                      }
+                    }
+                    wrap.appendChild(frag);
+                    return wrap;
                   },
-                  { side: -1, key: `c-${group ?? 'new'}-${col}-${row}-${span}-${filled ? 1 : 0}`, ignoreSelection: true },
+                  { side: -1, key: `r-${target}-${before}-${row}-${count}-${cols}-${sheet.side}`, ignoreSelection: true },
                 ),
               );
             };
+            for (const b of sheet.blanks) emptyRows(sheet.groups[b.before]?.from ?? sheet.end, b.row, b.count, 'blank', b.before);
+            emptyRows(sheet.end, sheet.nextRow, sheet.ghostRows, 'ghost', -1);
 
-            for (const g of sheet.groups) {
-              for (let c = 1; c <= cols; c++) cell(g.from, g.index, c, g.row, g.span, g.cells.has(c), false);
+            // Column selection: mark the lines that will be copied.
+            const colSel = columnSelection(state);
+            if (colSel) {
+              for (const pos of colSel.positions) {
+                const n = state.doc.nodeAt(pos);
+                if (n) decos.push(Decoration.node(pos, pos + n.nodeSize, { class: 'fl-colsel' }));
+              }
             }
-            // A ghost row at the bottom: click any cell to start a new row.
-            for (let c = 1; c <= cols; c++) cell(sheet.end, null, c, sheet.nextRow, 1, false, true);
 
             return DecorationSet.create(state.doc, decos);
           },
@@ -309,7 +418,7 @@ export const FlowView = Extension.create({
           handleTextInput(view, _from, _to, text) {
             const parent = view.state.selection.$from.parent;
             if (parent.type.name !== 'block' || parent.attrs.kind !== 'position') return false;
-            editor.chain().createCell(null, 1).insertContent(text).run();
+            editor.chain().createCell({ ghost: 0 }, 1).insertContent(text).run();
             return true;
           },
           handleDOMEvents: {
@@ -318,10 +427,37 @@ export const FlowView = Extension.create({
               if (!el) return false;
               event.preventDefault();
               const col = Number(el.dataset.col);
-              const group = el.dataset.group === 'new' ? null : Number(el.dataset.group);
-              editor.chain().focus().createCell(group, col).run();
+              const target: CellTarget =
+                el.dataset.target === 'ghost'
+                  ? { ghost: Number(el.dataset.index) }
+                  : el.dataset.target === 'blank'
+                    ? { before: Number(el.dataset.before), index: Number(el.dataset.index) }
+                    : { group: Number(el.dataset.group) };
+              editor.chain().focus().createCell(target, col).run();
               return true;
             },
+            copy(view, event) {
+              return copyColumn(view, event as ClipboardEvent, false);
+            },
+            cut(view, event) {
+              return copyColumn(view, event as ClipboardEvent, true);
+            },
+          },
+          // Pasted lines take the column they're pasted into, as answers in this row.
+          transformPasted(slice, view) {
+            const cur = currentPlacement(view.state);
+            if (!cur || cur.p.col === 0) return slice;
+            const speech = cur.sheet.columns[cur.p.col - 1];
+            const isBase = speech === baseSpeech(cur.sheet.side);
+            const nodes: PMNode[] = [];
+            slice.content.forEach((n) => {
+              nodes.push(
+                n.type.name === 'block'
+                  ? n.type.create({ ...n.attrs, id: null, newRow: false, gap: 0, side: null, speech: isBase ? null : speech, kind: n.attrs.kind === 'position' || n.attrs.kind === 'section' ? 'claim' : n.attrs.kind }, n.content, n.marks)
+                  : n,
+              );
+            });
+            return new Slice(Fragment.fromArray(nodes), slice.openStart, slice.openEnd);
           },
         },
       }),

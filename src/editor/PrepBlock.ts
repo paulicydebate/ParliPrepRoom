@@ -92,6 +92,13 @@ export const PrepBlock = Node.create({
         parseHTML: (el) => el.getAttribute('data-side'),
         renderHTML: (attrs) => (attrs.side ? { 'data-side': attrs.side } : {}),
       },
+      // Blank flow rows kept above this row (clicking a row further down the flow).
+      gap: {
+        default: 0,
+        keepOnSplit: false,
+        parseHTML: (el) => Number(el.getAttribute('data-gap')) || 0,
+        renderHTML: (attrs) => (Number(attrs.gap) > 0 ? { 'data-gap': String(attrs.gap) } : {}),
+      },
       // Claims only: always start a new flow row.
       newRow: {
         default: false,

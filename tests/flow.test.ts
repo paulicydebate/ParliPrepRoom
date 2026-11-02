@@ -3,12 +3,12 @@ import { computeFlow, insertPosFor, type FlowInputBlock } from '../src/model/flo
 import type { BlockKind } from '../src/model/blocks';
 import type { Side, Speech } from '../src/model/speeches';
 
-type Row = [BlockKind, string, { speech?: Speech; side?: Side; newRow?: boolean }?];
+type Row = [BlockKind, string, { speech?: Speech; side?: Side; newRow?: boolean; gap?: number }?];
 
 function blocks(rows: Row[]): FlowInputBlock[] {
   let pos = 0;
   return rows.map(([kind, text, o]) => {
-    const b: FlowInputBlock = { pos, size: text.length + 2, id: `${pos}`, kind, text, speech: o?.speech ?? null, side: o?.side ?? 'gov', newRow: o?.newRow ?? false };
+    const b: FlowInputBlock = { pos, size: text.length + 2, id: `${pos}`, kind, text, speech: o?.speech ?? null, side: o?.side ?? 'gov', newRow: o?.newRow ?? false, gap: o?.gap ?? 0 };
     pos += b.size;
     return b;
   });
@@ -110,5 +110,20 @@ describe('row spans', () => {
       ]),
     );
     expect(l.sheets[0].placements.map((p) => p.rowSpan)).toEqual([1, 1, 1, 3]);
+  });
+});
+
+describe('blank rows', () => {
+  it('a gap keeps blank rows above a row and counts toward the sheet', () => {
+    const l = computeFlow(
+      blocks([
+        ['position', 'Case'],
+        ['claim', 'C1'],
+        ['claim', 'C2', { gap: 5 }],
+      ]),
+    );
+    expect(where(l)).toEqual(['1:1', '1:7']);
+    expect(l.sheets[0].blanks).toEqual([{ row: 2, count: 5, before: 1 }]);
+    expect(l.sheets[0].ghostRows).toBe(150 - 7);
   });
 });

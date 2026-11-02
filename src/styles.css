@@ -1400,11 +1400,29 @@ del {
   color: var(--accent);
   font-size: 18px;
 }
-.fl-cell.is-ghost {
-  opacity: 0.55;
+.fl-rows {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-auto-rows: auto;
+  column-gap: inherit;
+  user-select: none;
 }
-.fl-cell.is-ghost:hover {
-  opacity: 1;
+.fl-rows .fl-cell {
+  min-height: 30px;
+  margin-top: 4px;
+  border-color: color-mix(in srgb, var(--border) 75%, transparent);
+}
+.fl-rows.is-ghost .fl-cell {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--border) 55%, transparent);
+}
+/* Column selection: only the column you started in is highlighted and copied. */
+.pp-flow[data-colsel] ::selection {
+  background: transparent;
+}
+.pp-flow > .fl-colsel {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 4px;
 }
 
 .pp-flow > .fl-item {

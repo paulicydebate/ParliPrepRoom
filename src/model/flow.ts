@@ -19,6 +19,8 @@ export interface FlowInputBlock {
   speech: Speech | null;
   side: Side;
   newRow: boolean;
+  /** Blank flow rows kept above this row (set by clicking a row further down). */
+  gap: number;
   text: string;
 }
 
@@ -57,7 +59,16 @@ export interface FlowSheet {
   groups: FlowGroup[];
   /** First free grid row after the sheet's content. */
   nextRow: number;
+  /** Runs of blank rows kept above a group: grid row, how many, and which group follows. */
+  blanks: { row: number; count: number; before: number }[];
+  /** Empty rows drawn below the content so any row can be clicked. */
+  ghostRows: number;
 }
+
+/** Rows a sheet shows, like a pre-made spreadsheet flow. */
+export const SHEET_ROWS = 150;
+/** Always leave at least this many empty rows below the last one used. */
+export const MIN_GHOST_ROWS = 30;
 
 export interface FlowLayout {
   sheets: FlowSheet[];
@@ -82,6 +93,7 @@ export function readBlocks(doc: {
       speech: isSpeech(node.attrs.speech) ? node.attrs.speech : null,
       side: asSide(node.attrs.side),
       newRow: node.attrs.newRow === true,
+      gap: Math.max(0, Math.floor(Number(node.attrs.gap) || 0)),
       text: node.textContent,
     });
   });
@@ -117,6 +129,8 @@ export function computeFlow(blocks: FlowInputBlock[]): FlowLayout {
     closeGroup();
     if (sheet) {
       sheet.nextRow = row;
+      const used = sheet.groups.length + sheet.blanks.reduce((n, b) => n + b.count, 0);
+      sheet.ghostRows = Math.max(MIN_GHOST_ROWS, SHEET_ROWS - used);
       sheets.push(sheet);
     }
   };
@@ -134,6 +148,8 @@ export function computeFlow(blocks: FlowInputBlock[]): FlowLayout {
         placements: [],
         groups: [],
         nextRow: 1,
+        blanks: [],
+        ghostRows: SHEET_ROWS,
       };
       row = 1;
       continue;
@@ -156,18 +172,28 @@ export function computeFlow(blocks: FlowInputBlock[]): FlowLayout {
     }
 
     type OpenGroup = FlowGroup & { current: Speech };
-    const open = (start: Speech): OpenGroup => ({ index: s.groups.length, row, span: 1, from: b.pos, to: b.pos + b.size, cells: new Map(), current: start });
+    const open = (start: Speech): OpenGroup => {
+      if (b.gap > 0) {
+        s.blanks.push({ row, count: b.gap, before: s.groups.length });
+        row += b.gap;
+      }
+      return { index: s.groups.length, row, span: 1, from: b.pos, to: b.pos + b.size, cells: new Map(), current: start };
+    };
     let g = group as OpenGroup | null;
     let sp: Speech;
     if (b.kind === 'claim') {
       sp = explicit ?? base;
-      if (!g || sp === base || b.newRow) {
+      if (!g || sp === base || b.newRow || b.gap > 0) {
         closeGroup();
         g = open(sp);
       }
       g.current = sp;
     } else {
       sp = explicit ?? g?.current ?? base;
+      if (b.gap > 0) {
+        closeGroup();
+        g = null;
+      }
       if (!g) g = open(sp);
       if (explicit) g.current = explicit;
     }
