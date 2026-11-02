@@ -11,3 +11,4 @@ worker/static.gen.ts
 src/**/*.js
 tests/**/*.js
 vite.config.js
+worker/**/*.js
