@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: sign-in, teams, round-doc access and the public check page (Phase 3), built and tested locally, **not deployed yet** (the owner asked to finish these before deploying).
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -42,9 +42,9 @@ Done and tested (40 unit tests, plus manual browser checks with Playwright):
 - **Test:** `npx wrangler dev`, then `node scripts/sync-smoke.mjs http://localhost:8787` (two clients, a late joiner, checks the server record). Also checked in a two-browser Playwright run: share link, live text both ways, partner cursor label, per-user server record.
 - **Security limits right now:** no sign-in. Anyone with a doc's id or link can edit it and read `/history`. Ids are random UUIDs. Names in the record are whatever each device entered. Accounts (next) fix this.
 
-### Sign-in, teams, access, check page (done locally, 2026-11-02; NOT deployed)
+### Sign-in, teams, access, check page (deployed 2026-11-02)
 
-The live site still runs the older build (app only). Deploy needs the owner's OK.
+The owner approved the deploy. Each later deploy still needs their OK.
 
 - **Directory** (`worker/directory.ts`): a second SQLite Durable Object, a single instance (`idFromName('directory')`), called over RPC. Tables: users, sessions (SHA-256 of the token), teams (student and coach invite codes), members (role coach/student), docs (team, owner, title, kind, round, order, check_token), doc_partners. Migration `v1` declares both classes (nothing with Durable Objects has been deployed yet, so v1 is still free to change; after the first deploy, add new migrations instead of editing v1).
 - **Access rules:** team docs are open to all team members; round docs to the owner, partners and the team's coaches; docs with no team to the owner only. `/api/sync/<id>` requires a session cookie and access, then passes the verified `{id, name}` to the DocRoom in an `x-pp-user` header. The DocRoom no longer trusts names from the URL.
@@ -64,7 +64,7 @@ The live site still runs the older build (app only). Deploy needs the owner's OK
 
 ## Next steps
 
-1. Owner approves the deploy. Then the owner creates the Google OAuth client and adds the two secrets in the Cloudflare dashboard (steps below), and we test sign-in on the live site.
+1. Owner tests Google sign-in, team creation and invites on the live site (OAuth client and secrets are done).
 2. Emailed-link sign-in fallback, if school Google accounts are blocked (would need an email-sending service).
 3. Color palette / visual design pass (owner called the palette "weird"); iPad touch drag in the sidebar.
 4. Version history from the server (who changed what), now that edits carry verified names.
