@@ -79,6 +79,8 @@ export function HistoryView({
   const [mode, setMode] = useState<'compare' | 'read'>('compare');
   const [changesOnly, setChangesOnly] = useState(false);
   const [naming, setNaming] = useState('');
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
 
   const selectedMeta = versions?.find((v) => v.id === selected) ?? null;
 
@@ -99,6 +101,7 @@ export function HistoryView({
   useEffect(() => {
     let live = true;
     setVersionJson(null);
+    setConfirmRestore(false);
     if (!selected) return;
     void loadVersionDoc(selected).then((vdoc) => {
       if (!live || !vdoc) return;
@@ -125,15 +128,14 @@ export function HistoryView({
   const restore = async () => {
     if (!editor || !versionJson || !selectedMeta) return;
     const when = `${formatDay(selectedMeta.at)} ${formatTime(selectedMeta.at)}`;
-    if (!window.confirm(`Restore the version from ${when}? The current text is saved as a version first, so you can undo this.`)) return;
     await saveVersion(docId, ydoc, { auto: false, name: `Before restoring ${when}` });
     editor.commands.setContent(versionJson);
     onClose();
   };
 
-  const rename = async (v: VersionMeta) => {
-    const name = window.prompt('Name this version', v.name ?? '');
-    if (name !== null) await renameVersion(docId, v.id, name);
+  const commitRename = async (v: VersionMeta, name: string) => {
+    setRenaming(null);
+    if (name.trim() !== (v.name ?? '')) await renameVersion(docId, v.id, name);
   };
 
   let lastDay = '';
@@ -156,9 +158,21 @@ export function HistoryView({
             </label>
           )}
           <span className="tb-spacer" />
-          <button type="button" className="btn primary" disabled={!versionJson} onClick={restore}>
-            Restore this version
-          </button>
+          {confirmRestore ? (
+            <span className="confirm">
+              <span className="confirm-text">Current text is saved as a version first.</span>
+              <button type="button" className="btn ghost" onClick={() => setConfirmRestore(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn primary" onClick={() => void restore()}>
+                Restore
+              </button>
+            </span>
+          ) : (
+            <button type="button" className="btn primary" disabled={!versionJson} onClick={() => setConfirmRestore(true)}>
+              Restore this version
+            </button>
+          )}
         </div>
         {mode === 'compare' && selectedMeta && versionJson && (
           <p className="history-summary">
@@ -203,22 +217,37 @@ export function HistoryView({
             return (
               <FragmentRow key={v.id} header={header}>
                 <li>
-                  <button
-                    type="button"
-                    className={'version' + (v.id === selected ? ' is-on' : '') + (v.name ? ' named' : '')}
-                    onClick={() => setSelected(v.id)}
-                    onDoubleClick={() => void rename(v)}
-                  >
-                    <span className="v-name">{versionLabel(v)}</span>
-                    <span className="v-time">{formatTime(v.at)}</span>
-                  </button>
+                  {renaming === v.id ? (
+                    <input
+                      className="v-rename"
+                      autoFocus
+                      defaultValue={v.name ?? ''}
+                      placeholder="Version name"
+                      aria-label="Version name"
+                      onBlur={(e) => void commitRename(v, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        if (e.key === 'Escape') setRenaming(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className={'version' + (v.id === selected ? ' is-on' : '') + (v.name ? ' named' : '')}
+                      onClick={() => setSelected(v.id)}
+                      onDoubleClick={() => setRenaming(v.id)}
+                    >
+                      <span className="v-name">{versionLabel(v)}</span>
+                      <span className="v-time">{formatTime(v.at)}</span>
+                    </button>
+                  )}
                 </li>
               </FragmentRow>
             );
           })}
         </ul>
         {selectedMeta && (
-          <button type="button" className="btn ghost small" onClick={() => void rename(selectedMeta)}>
+          <button type="button" className="btn ghost small" onClick={() => setRenaming(selectedMeta.id)}>
             {selectedMeta.name ? 'Rename version' : 'Name this version'}
           </button>
         )}

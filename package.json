@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "preview:artifact": "npm run build && node scripts/build-preview.mjs"
   },
   "dependencies": {
     "@tiptap/core": "^3.32.2",

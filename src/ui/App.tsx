@@ -148,7 +148,6 @@ export function App() {
   };
 
   const remove = async (doc: DocMeta) => {
-    if (!window.confirm(`Delete “${doc.title}” and its version history? This can't be undone.`)) return;
     setLayout((l) => ({ ...l, panes: l.panes.map((p) => (p.docId === doc.id ? { ...p, docId: null } : p)) }));
     await deleteDoc(doc.id);
     await destroyDocData(doc.id);

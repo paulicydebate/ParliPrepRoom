@@ -15,6 +15,7 @@ function DocRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(doc.title);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   if (editing) {
     return (
@@ -47,7 +48,7 @@ function DocRow({
         {doc.kind === 'prep' ? <IconDoc /> : <IconBook />}
         <span>{doc.title}</span>
       </button>
-      <details className="doc-menu">
+      <details className="doc-menu" onToggle={(e) => !(e.currentTarget as HTMLDetailsElement).open && setConfirmDelete(false)}>
         <summary aria-label={`More for ${doc.title}`}>⋯</summary>
         <div className="menu">
           <button
@@ -60,16 +61,23 @@ function DocRow({
           >
             Rename
           </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={(e) => {
-              (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
-              onDelete();
-            }}
-          >
-            Delete
-          </button>
+          {confirmDelete ? (
+            <button
+              type="button"
+              className="danger strong"
+              onClick={(e) => {
+                (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+                onDelete();
+              }}
+            >
+              Delete for good
+            </button>
+          ) : (
+            <button type="button" className="danger" onClick={() => setConfirmDelete(true)}>
+              Delete…
+            </button>
+          )}
+          {confirmDelete && <p className="menu-note">Deletes the doc and its version history.</p>}
         </div>
       </details>
     </li>
