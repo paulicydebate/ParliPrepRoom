@@ -33,6 +33,9 @@
   --round: #7c3aed;
   --round-soft: #efe7fe;
   --round-text: #ffffff;
+  /* Flow column stripes: two shades of the page background. */
+  --band-a: color-mix(in srgb, var(--text) 3%, var(--surface));
+  --band-b: color-mix(in srgb, var(--text) 7.5%, var(--surface));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2578,4 +2581,36 @@ del {
 .fl-pin-body .pp-block[data-kind='warrant']::before,
 .fl-pin-body .pp-block[data-kind='analytic']::before {
   display: none;
+}
+
+/* Alternating column stripes in the flow */
+.pp-flow > .fl-band {
+  position: relative;
+  z-index: 0;
+  align-self: stretch;
+  margin: 0 -3px;
+  background: var(--band-a);
+  pointer-events: none;
+}
+.pp-flow > .fl-band.is-alt {
+  background: var(--band-b);
+}
+.pp-flow > .fl-band:first-child {
+  border-radius: 10px 0 0 10px;
+}
+/* Cells sit on the stripes; empty ones stay see-through so the stripe shows. */
+.pp-flow > .fl-cell,
+.pp-flow > .fl-rows {
+  position: relative;
+  z-index: 1;
+}
+.pp-flow > .fl-item,
+.pp-flow > .fl-section {
+  z-index: 2;
+}
+.pp-flow > .fl-pins {
+  z-index: 3;
+}
+.flow-head .flow-col-head {
+  position: relative;
 }

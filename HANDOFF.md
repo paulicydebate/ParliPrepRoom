@@ -106,6 +106,11 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - How: flow plugin state has `pinCol`; command `togglePinColumn(col)`; decorations place blocks and cells at `dc(col)` (+1 after the pins column) and add one widget, the `pinPanel` element passed via `FlowView.configure({ pinPanel })`, spanning all rows. React renders `PinColumn` into it with a portal. The widget uses `stopEvent: () => true`, and ProseMirror ignores mutations inside widgets.
 - Checked in Playwright: headers LOC | Pins | MG…, the pin shows the whole A2 – T section, the MG answer lands in the shifted MG column, and tapping a pin opens the MG doc in the other pane.
 
+### Alternating column shades in the flow (2026-11-02)
+
+- Owner request for visual clarity: each flow column sits on a full-height stripe, alternating two shades of the page background (`--band-a` / `--band-b` in `src/styles.css`, mixed from `--text` and `--surface`, so they work in light, dark and sepia).
+- One `fl-band` widget per speech column (`side: -2`, `pointer-events: none`, z-index 0) in the flow decorations; cells are z1, text z2, the pins column z3. Stripes follow the pins-column shift (`dc(col)`).
+
 ## Next steps
 
 1. Owner tests Google sign-in, team creation and invites on the live site (OAuth client and secrets are done).

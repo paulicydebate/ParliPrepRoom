@@ -380,6 +380,26 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
 
             const sideOf = (col: number) => SPEECH_INFO[sheet.columns[col - 1]].side;
 
+            // Alternating column shades, behind everything, the full height of the sheet.
+            const bandRows = sheet.nextRow + sheet.ghostRows;
+            for (let c = 1; c <= cols; c++) {
+              decos.push(
+                Decoration.widget(
+                  sheet.pos,
+                  () => {
+                    const el = document.createElement('div');
+                    el.className = 'fl-band' + (c % 2 === 0 ? ' is-alt' : '');
+                    el.contentEditable = 'false';
+                    el.setAttribute('aria-hidden', 'true');
+                    el.style.gridColumn = String(dc(c));
+                    el.style.gridRow = `1 / span ${bandRows}`;
+                    return el;
+                  },
+                  { side: -2, key: `band-${c}-${dc(c)}-${bandRows}`, ignoreSelection: true },
+                ),
+              );
+            }
+
             // Background for each cell of a row (and a click target if empty).
             for (const g of sheet.groups) {
               for (let c = 1; c <= cols; c++) {
