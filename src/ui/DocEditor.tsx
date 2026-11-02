@@ -1,4 +1,6 @@
 import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import type { WebsocketProvider } from 'y-websocket';
 import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { useEffect } from 'react';
@@ -20,13 +22,14 @@ import {
   IconUnfold,
 } from './icons';
 
-export function DocEditor({ ydoc, docId, onEditor }: { ydoc: Y.Doc; docId: string; onEditor: (e: Editor | null) => void }) {
+export function DocEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; provider: WebsocketProvider | null; docId: string; onEditor: (e: Editor | null) => void }) {
   const editor = useEditor(
     {
       extensions: [
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
         RoundGuard.configure({ ydoc, docId }),
+        ...(provider ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
         Collapse,
         SpeechTags,
         Placeholder.configure({
@@ -35,7 +38,7 @@ export function DocEditor({ ydoc, docId, onEditor }: { ydoc: Y.Doc; docId: strin
       ],
       editorProps: { attributes: { class: 'pp-doc', spellcheck: 'true' } },
     },
-    [ydoc, docId],
+    [ydoc, docId, provider],
   );
 
   useEffect(() => {

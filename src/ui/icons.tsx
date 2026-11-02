@@ -129,3 +129,11 @@ export const IconLock = () => (
     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
   </Svg>
 );
+export const IconShare = () => (
+  <Svg>
+    <circle cx="18" cy="5" r="2.5" />
+    <circle cx="6" cy="12" r="2.5" />
+    <circle cx="18" cy="19" r="2.5" />
+    <path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" />
+  </Svg>
+);

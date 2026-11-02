@@ -39,6 +39,13 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - The log is saved in batches chained by SHA-256, so editing it afterwards is detectable. History → **Typing log** shows a seal code, whether the log is intact, totals per person, the events worth checking, and everything typed and deleted in order.
 - Still to come in Phase 4: the server stamping the log (so it can't be rewritten on the device), a keystroke replay, and a share link anyone can open to check it.
 
+**Live co-editing (Phase 3, part 1): done on the live site.**
+
+- On https://parlipreproom.paulicydebate.workers.dev, every doc you open is saved to the server and to the browser (offline copy). A dot in the pane header shows the state.
+- The share icon copies a link. Anyone who opens it gets the doc and edits it live with you, with name-labeled cursors.
+- The server keeps every edit with the time and the typist's name, in a hash chain (the start of the record students can't rewrite).
+- No sign-in yet: anyone with a link can edit that doc.
+
 ## Develop
 
 ```sh

@@ -1,4 +1,6 @@
 import Collaboration from '@tiptap/extension-collaboration';
+import CollaborationCaret from '@tiptap/extension-collaboration-caret';
+import type { WebsocketProvider } from 'y-websocket';
 import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
 import { useEffect, useState } from 'react';
@@ -10,13 +12,14 @@ import { KIND_INFO, asKind } from '../model/blocks';
 import { SPEECH_INFO } from '../model/speeches';
 import { IconPlus } from './icons';
 
-export function FlowEditor({ ydoc, docId, onEditor }: { ydoc: Y.Doc; docId: string; onEditor: (e: Editor | null) => void }) {
+export function FlowEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; provider: WebsocketProvider | null; docId: string; onEditor: (e: Editor | null) => void }) {
   const editor = useEditor(
     {
       extensions: [
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
         RoundGuard.configure({ ydoc, docId }),
+        ...(provider ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
         FlowView,
         Placeholder.configure({
           placeholder: ({ node }) => `${KIND_INFO[asKind(node.attrs.kind)].label}…`,
@@ -24,7 +27,7 @@ export function FlowEditor({ ydoc, docId, onEditor }: { ydoc: Y.Doc; docId: stri
       ],
       editorProps: { attributes: { spellcheck: 'true' } },
     },
-    [ydoc, docId],
+    [ydoc, docId, provider],
   );
 
   useEffect(() => {

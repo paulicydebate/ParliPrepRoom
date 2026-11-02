@@ -1,13 +1,15 @@
 import type { Editor } from '@tiptap/react';
 import { useCallback, useEffect, useState } from 'react';
+import type { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';
 import { toast } from '../editor/roundGuard';
-import { renameDoc, type DocMeta } from '../store/docs';
+import { renameDoc, setDocRound, type DocMeta } from '../store/docs';
 import { setRound, useRound } from '../store/roundDoc';
+import { useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
 import { FlowEditor } from './FlowEditor';
 import { HistoryView } from './HistoryView';
-import { IconClose, IconDownload, IconHistory, IconLock, IconOutline, IconSwap } from './icons';
+import { IconClose, IconDownload, IconHistory, IconLock, IconOutline, IconShare, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
 
 export interface PaneState {
@@ -99,13 +101,65 @@ function RoundToggle({ ydoc, docId, round }: { ydoc: Y.Doc; docId: string; round
   );
 }
 
-function TitleInput({ meta }: { meta: DocMeta }) {
+function SyncDot({ status }: { status: SyncStatus }) {
+  const label = status === 'synced' ? 'Saved to the server' : status === 'connecting' ? 'Connecting…' : 'Offline: saved on this device, syncs when back online';
+  return <span className={`sync-dot ${status}`} title={label} aria-label={label} role="img" />;
+}
+
+function ShareButton({ docId }: { docId: string }) {
+  return (
+    <button
+      type="button"
+      className="icon-btn"
+      title="Copy a link your partner can open to edit this doc with you"
+      aria-label="Share"
+      onClick={async () => {
+        const link = `${location.origin}/#join=${encodeURIComponent(docId)}`;
+        try {
+          await navigator.clipboard.writeText(link);
+          toast('Link copied. Anyone with it can open and edit this doc.');
+        } catch {
+          window.prompt('Copy this link', link);
+        }
+      }}
+    >
+      <IconShare />
+    </button>
+  );
+}
+
+function TitleInput({ meta, ydoc, provider }: { meta: DocMeta; ydoc: Y.Doc | null; provider: WebsocketProvider | null }) {
   const [value, setValue] = useState(meta.title);
   useEffect(() => setValue(meta.title), [meta.title]);
+  // The title also lives inside the doc, so a partner who opens a shared
+  // link sees the same name.
+  useEffect(() => {
+    if (!ydoc) return;
+    const map = ydoc.getMap('settings');
+    const pull = () => {
+      const t = map.get('title');
+      if (typeof t === 'string' && t && t !== meta.title) void renameDoc(meta.id, t);
+    };
+    // Only fill in a missing title once we've heard from the server, so a
+    // newly joined device doesn't overwrite the real one with a placeholder.
+    const seed = () => {
+      if (typeof map.get('title') !== 'string') map.set('title', meta.title);
+      else pull();
+    };
+    if (!provider || provider.synced) seed();
+    else provider.once('sync', seed);
+    map.observe(pull);
+    return () => {
+      map.unobserve(pull);
+      provider?.off('sync', seed);
+    };
+  }, [ydoc, provider, meta.id, meta.title]);
   const commit = () => {
     const t = value.trim();
-    if (t && t !== meta.title) void renameDoc(meta.id, t);
-    else setValue(meta.title);
+    if (t && t !== meta.title) {
+      void renameDoc(meta.id, t);
+      ydoc?.getMap('settings').set('title', t);
+    } else setValue(meta.title);
   };
   return (
     <input
@@ -147,7 +201,10 @@ export function Pane({
   onCreate: (kind: DocMeta['kind']) => void;
 }) {
   const meta = docs.find((d) => d.id === pane.docId) ?? null;
-  const ydoc = useYDoc(meta ? meta.id : null);
+  const opened = useYDoc(meta ? meta.id : null);
+  const ydoc = opened?.doc ?? null;
+  const provider = opened?.provider ?? null;
+  const syncStatus = useSyncStatus(provider);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [history, setHistory] = useState(false);
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
@@ -155,6 +212,10 @@ export function Pane({
   useEffect(() => setHistory(false), [pane.docId]);
   const view = pane.view ?? 'doc';
   const round = useRound(ydoc);
+  // Keep the sidebar's round-doc dot right when a partner flips the switch.
+  useEffect(() => {
+    if (meta && ydoc && !!meta.round !== round) void setDocRound(meta.id, round);
+  }, [meta, ydoc, round]);
 
   return (
     <section
@@ -173,7 +234,8 @@ export function Pane({
             ) : (
               <span className={'badge ' + meta.kind}>{meta.kind === 'prep' ? 'Prep' : 'Reference'}</span>
             )}
-            <TitleInput meta={meta} />
+            <TitleInput meta={meta} ydoc={ydoc} provider={provider} />
+            {syncStatus !== 'off' && <SyncDot status={syncStatus} />}
             {alsoOpen && (
               <span className="linked-chip" title="This document is open in another pane too. Both panes show the same text; editing one edits the other.">
                 Same doc as other pane
@@ -230,6 +292,7 @@ export function Pane({
             >
               <IconOutline />
             </button>}
+            {provider && <ShareButton docId={meta.id} />}
             <ExportMenu editor={editor} title={meta.title} />
             <button
               type="button"
@@ -285,7 +348,7 @@ export function Pane({
           {!history && editor && <Toolbar editor={editor} view={view} />}
           <div className="pane-body" hidden={history}>
             {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} docId={meta.id} onEditor={onEditor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} onClose={() => setHistory(false)} />}
         </>

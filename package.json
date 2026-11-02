@@ -15,6 +15,7 @@
     "@tiptap/core": "^3.32.2",
     "@tiptap/extension-bold": "^3.32.2",
     "@tiptap/extension-collaboration": "^3.32.2",
+    "@tiptap/extension-collaboration-caret": "^3.32.2",
     "@tiptap/extension-document": "^3.32.2",
     "@tiptap/extension-hard-break": "^3.32.2",
     "@tiptap/extension-highlight": "^3.32.2",
@@ -33,6 +34,8 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.7",
+    "y-websocket": "^3.1.0",
     "yjs": "^13.6.33"
   },
   "devDependencies": {

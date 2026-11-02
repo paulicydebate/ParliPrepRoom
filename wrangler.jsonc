@@ -6,6 +6,10 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   "build": { "command": "npm run build && node scripts/embed-assets.mjs" },
+  "durable_objects": {
+    "bindings": [{ "name": "DOC_ROOM", "class_name": "DocRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DocRoom"] }],
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true }

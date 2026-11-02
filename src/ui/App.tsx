@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from '../editor/roundGuard';
 import { createDoc, deleteDoc, listDocs, type DocKind, type DocMeta } from '../store/docs';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
 import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeLines, type Line } from '../store/seed';
@@ -122,8 +123,40 @@ export function App() {
   const [sidebarOverlay, setSidebarOverlay] = useState(false);
   const panesRef = useRef<HTMLDivElement>(null);
 
+  // Shared links (#join=<docId>): add the doc to this device and open it.
+  // Otherwise, on a first visit, add the sample docs.
   useEffect(() => {
-    void seedFirstRun().then((l) => l && setLayout(l));
+    const join = async (): Promise<boolean> => {
+      const m = /^#join=([A-Za-z0-9-]{8,64})$/.exec(location.hash);
+      if (!m) return false;
+      const id = decodeURIComponent(m[1]);
+      history.replaceState(null, '', location.pathname + location.search);
+      if (!(await listDocs()).some((d) => d.id === id)) {
+        // The real title arrives with the document from the server.
+        await createDoc({ id, title: 'Shared doc', kind: 'prep' });
+      }
+      openInFocused(id);
+      toast('Opened a shared doc. Edits sync live with everyone who has the link.');
+      return true;
+    };
+    void (async () => {
+      if (await join()) {
+        // Someone arriving by a shared link doesn't need the samples.
+        try {
+          localStorage.setItem('pp-seeded', '1');
+          localStorage.setItem('pp-seeded-flow', '1');
+        } catch {
+          // ignore
+        }
+        return;
+      }
+      const l = await seedFirstRun();
+      if (l) setLayout(l);
+    })();
+    const onHash = () => void join();
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

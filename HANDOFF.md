@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session).
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: live co-editing (Phase 3, step 2).
 
 ## Where the code is
 
@@ -32,14 +32,22 @@ Done and tested (40 unit tests, plus manual browser checks with Playwright):
 - **Deploying:** the Cloudflare API token is a network secret in the Claude Code cloud environment (the proxy adds it to requests to `api.cloudflare.com`). Account ID `cc1fffd57d89d16d2e28ed38e9a58cc1`. Command: `CLOUDFLARE_API_TOKEN=injected-by-proxy CLOUDFLARE_ACCOUNT_ID=cc1fffd57d89d16d2e28ed38e9a58cc1 npx wrangler deploy`. The owner approves deploys; ask before deploying. Other environments need their own token (`CLOUDFLARE_API_TOKEN`) with Workers Scripts edit, D1 edit, Account Settings read, User Details read.
 - The sandbox can't open `*.workers.dev` (network policy), so live checks need the owner, or adding `*.workers.dev` to the environment's allowed domains.
 
+### Live co-editing (done, 2026-11-02)
+
+- **Server:** `worker/docRoom.ts`, a Durable Object `DocRoom`, one per document (`idFromName(docId)`), SQLite-backed (migration `v1`). It speaks the y-websocket protocol (sync and awareness messages) and uses WebSocket hibernation. Every update is stored in the `updates` table with the server time, sender name and device id (from the URL query, not verified yet) and a SHA-256 chain (`prev`, `hash`). The doc is rebuilt from those rows when the room wakes up.
+- **Routes:** `GET /api/sync/<docId>` (WebSocket) and `GET /api/sync/<docId>/history` (JSON list of updates: seq, time, user, device, bytes, hash; no contents). `/api/health` returns `sync: true`.
+- **Client:** `src/store/sync.ts`. Turns on only if `/api/health` says `sync: true`, so the claude.ai preview and `npm run dev` stay local-only. `src/store/registry.ts` attaches a `WebsocketProvider` per open doc next to IndexedDB (offline cache). `useYDoc` returns `{ doc, provider }`; editors add `CollaborationCaret` (live cursors with names) when there's a provider.
+- **Sharing:** pane header share icon copies `<origin>/#join=<docId>`. `App.tsx` handles `#join=`: adds the doc to the sidebar ("Shared doc" until the real title syncs) and opens it, and skips the first-visit samples. The doc title is mirrored in the doc's Yjs map `settings.title` (written only after the server sync, so a joining device can't overwrite it). The round-doc flag already lives in `settings.round`.
+- **Pane header:** dot showing saved to server (green), connecting (yellow) or offline (red).
+- **Test:** `npx wrangler dev`, then `node scripts/sync-smoke.mjs http://localhost:8787` (two clients, a late joiner, checks the server record). Also checked in a two-browser Playwright run: share link, live text both ways, partner cursor label, per-user server record.
+- **Security limits right now:** no sign-in. Anyone with a doc's id or link can edit it and read `/history`. Ids are random UUIDs. Names in the record are whatever each device entered. Accounts (next) fix this.
+
 ## Next steps (Phase 3)
 
-1. Owner to confirm the live site loads.
-2. Live co-editing: one Durable Object per document, speaking the Yjs sync protocol over WebSocket. Keep IndexedDB as the offline cache.
-3. Server-stamped log: the Durable Object records each update to a round doc with server time and user, so the student can't rewrite it. Public check page and QR per round doc.
-4. Accounts: Google sign-in (free; the owner still has to create a Google Cloud OAuth client, steps not sent yet). Maybe an emailed-link fallback, since schools may block student Google accounts.
-5. Teams: a coach creates a team and shares an invite link. Team docs are shared; round docs are visible to partners and coaches (default, not yet confirmed).
-6. Upload the browser's local docs the first time someone signs in.
+1. Accounts: Google sign-in (free; the owner still has to create a Google Cloud OAuth client, steps not sent yet). Maybe an emailed-link fallback, since schools may block student Google accounts. Then the server uses the signed-in name for the record instead of the URL name, and requires sign-in for `/api/sync`.
+2. Teams: a coach creates a team and shares an invite link. Team docs are shared; round docs are visible to partners and coaches (default, not yet confirmed).
+3. Round-doc check page: public read-only page per round doc built from the server record (who typed what, when, flags, hash chain), with a QR code.
+4. Upload a device's local docs to the server at sign-in (docs already sync whenever they're opened on the live site).
 
 Questions still open with the owner: sign-in type (school vs personal Google accounts), round-doc visibility, custom domain, whether to open sign-up to other teams now, whether Doc and Flow should be separate document types.
 

@@ -1814,3 +1814,46 @@ del {
 .is-narrow .linked-chip {
   display: none;
 }
+
+/* Live sync */
+.sync-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.sync-dot.synced {
+  background: #22a06b;
+}
+.sync-dot.connecting {
+  background: #d4a106;
+}
+.sync-dot.offline {
+  background: var(--danger);
+}
+/* Partners' cursors */
+.collaboration-carets__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 2px solid;
+  border-right: 0;
+  word-break: normal;
+  pointer-events: none;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.35em;
+  left: -2px;
+  padding: 1px 6px;
+  border-radius: 5px 5px 5px 0;
+  color: #fff;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  line-height: 1.4;
+  white-space: nowrap;
+  user-select: none;
+}

@@ -1,5 +1,7 @@
 import { IndexeddbPersistence } from 'y-indexeddb';
+import type { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
+import { connect, syncAvailable } from './sync';
 import { saveVersion } from './versions';
 
 // Open documents, shared between panes. Two panes showing the same document
@@ -10,6 +12,8 @@ const AUTO_VERSION_MS = 2 * 60 * 1000;
 interface Entry {
   doc: Y.Doc;
   persistence: IndexeddbPersistence;
+  /** Live connection to the server, when the app is served by it. */
+  provider: WebsocketProvider | null;
   ready: Promise<void>;
   refs: number;
   dirty: boolean;
@@ -29,15 +33,22 @@ async function autoVersion(docId: string, entry: Entry) {
   await saveVersion(docId, entry.doc, { auto: true });
 }
 
-export function acquireDoc(docId: string): { doc: Y.Doc; ready: Promise<void> } {
+export function acquireDoc(docId: string): { doc: Y.Doc; ready: Promise<void>; provider: () => WebsocketProvider | null } {
   let entry = open.get(docId);
   if (!entry) {
     const doc = new Y.Doc();
     const persistence = new IndexeddbPersistence(ydbName(docId), doc);
-    const ready = persistence.whenSynced.then(() => undefined);
+    // Ready once the local copy is loaded and, if the server is there, the
+    // connection is set up (the editor needs it for live cursors).
+    const ready = persistence.whenSynced.then(async () => {
+      if (await syncAvailable()) {
+        if (!doc.isDestroyed) created.provider = connect(docId, doc);
+      }
+    });
     const created: Entry = {
       doc,
       persistence,
+      provider: null,
       ready,
       refs: 0,
       dirty: false,
@@ -57,7 +68,8 @@ export function acquireDoc(docId: string): { doc: Y.Doc; ready: Promise<void> } 
     entry.closeTimer = null;
   }
   entry.refs++;
-  return { doc: entry.doc, ready: entry.ready };
+  const e = entry;
+  return { doc: entry.doc, ready: entry.ready, provider: () => e.provider };
 }
 
 export function releaseDoc(docId: string) {
@@ -71,6 +83,7 @@ export function releaseDoc(docId: string) {
     open.delete(docId);
     clearInterval(entry.timer);
     await autoVersion(docId, entry);
+    entry.provider?.destroy();
     await entry.persistence.destroy();
     entry.doc.destroy();
   }, 1500);
@@ -86,6 +99,7 @@ export async function destroyDocData(docId: string) {
   if (entry) {
     open.delete(docId);
     clearInterval(entry.timer);
+    entry.provider?.destroy();
     await entry.persistence.destroy();
     entry.doc.destroy();
   }
