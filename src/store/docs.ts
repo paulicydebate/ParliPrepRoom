@@ -13,6 +13,8 @@ export interface DocMeta {
   createdAt: number;
   /** Round doc: paste blocked, typing logged (mirrors the flag inside the doc, for the sidebar). */
   round?: boolean;
+  /** Position in the sidebar list (lower first). */
+  order?: number;
 }
 
 const store = createStore('pp-meta', 'meta');
@@ -26,6 +28,27 @@ export async function listDocs(): Promise<DocMeta[]> {
   return cache;
 }
 
+/** Docs in sidebar order: by `order`, then newest first for docs never moved. */
+export function sortDocs(docs: DocMeta[]): DocMeta[] {
+  const key = (d: DocMeta) => d.order ?? -d.createdAt;
+  return [...docs].sort((a, b) => key(a) - key(b) || b.createdAt - a.createdAt);
+}
+
+/**
+ * Drag-and-drop in the sidebar: put `id` in section `kind`, just before
+ * `beforeId` (or at the end). Moving between sections changes the doc's type.
+ */
+export async function moveDoc(id: string, kind: DocKind, beforeId: string | null) {
+  const docs = await listDocs();
+  const moving = docs.find((d) => d.id === id);
+  if (!moving || id === beforeId) return;
+  const section = sortDocs(docs.filter((d) => d.kind === kind && d.id !== id));
+  const at = beforeId ? section.findIndex((d) => d.id === beforeId) : -1;
+  section.splice(at < 0 ? section.length : at, 0, { ...moving, kind });
+  const orders = new Map(section.map((d, i) => [d.id, i]));
+  await save(docs.map((d) => (orders.has(d.id) ? { ...d, kind: d.id === id ? kind : d.kind, order: orders.get(d.id) } : d)));
+}
+
 async function save(docs: DocMeta[]) {
   cache = docs;
   await set(KEY, docs, store);
@@ -37,8 +60,13 @@ export function newDocId(): string {
 }
 
 export async function createDoc(input: { title: string; kind: DocKind; id?: string }): Promise<DocMeta> {
-  const meta: DocMeta = { id: input.id ?? newDocId(), title: input.title, kind: input.kind, createdAt: Date.now() };
-  await save([...(await listDocs()), meta]);
+  const docs = await listDocs();
+  // New docs go to the top of their section. A section that was never
+  // reordered sorts newest first, so the new doc needs no number there.
+  const ordered = docs.filter((d) => d.kind === input.kind && d.order !== undefined).map((d) => d.order!);
+  const order = ordered.length ? Math.min(...ordered) - 1 : undefined;
+  const meta: DocMeta = { id: input.id ?? newDocId(), title: input.title, kind: input.kind, createdAt: Date.now(), order };
+  await save([...docs, meta]);
   return meta;
 }
 

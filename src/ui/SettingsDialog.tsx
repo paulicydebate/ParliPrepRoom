@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { setProfileName, useProfile } from '../settings/profile';
 import { PRESET_LABELS, type StyleKeyPreset } from '../editor/shortcuts';
 import { BLOCK_KINDS, KIND_INFO, type BlockKind } from '../model/blocks';
 import { DEFAULT_SETTINGS, FONTS, fontStack, updateSettings, useSettings, type StyleSetting, type Theme } from '../settings/settings';
@@ -13,6 +14,7 @@ const THEMES: { id: Theme; label: string }[] = [
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
+  const profile = useProfile();
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -38,6 +40,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <p className="muted">Saved in this browser only. Your partner can use different fonts on the same doc.</p>
+
+      <h3>Your name</h3>
+      <input
+        className="name-input"
+        defaultValue={profile.name}
+        aria-label="Your name"
+        onBlur={(e) => e.target.value.trim() && setProfileName(e.target.value)}
+      />
 
       <h3>Theme</h3>
       <div className="seg" role="group" aria-label="Theme">

@@ -61,3 +61,26 @@ describe('revision history', () => {
     expect(await listVersions('d4')).toHaveLength(5);
   });
 });
+
+import { createDoc, listDocs, moveDoc, resetDocsCache, sortDocs } from '../src/store/docs';
+
+describe('sidebar order', () => {
+  it('drags a doc above another, into the other section, and new docs land on top', async () => {
+    resetDocsCache();
+    const a = await createDoc({ title: 'A', kind: 'prep' });
+    await new Promise((r) => setTimeout(r, 2));
+    const b = await createDoc({ title: 'B', kind: 'prep' });
+    await new Promise((r) => setTimeout(r, 2));
+    const c = await createDoc({ title: 'C', kind: 'prep' });
+    const titles = async (kind: string) => sortDocs((await listDocs()).filter((d) => d.kind === kind)).map((d) => d.title);
+    expect(await titles('prep')).toEqual(['C', 'B', 'A']);
+    await moveDoc(a.id, 'prep', c.id);
+    expect(await titles('prep')).toEqual(['A', 'C', 'B']);
+    await moveDoc(c.id, 'reference', null);
+    expect(await titles('prep')).toEqual(['A', 'B']);
+    expect(await titles('reference')).toEqual(['C']);
+    await createDoc({ title: 'D', kind: 'prep' });
+    expect(await titles('prep')).toEqual(['D', 'A', 'B']);
+    void b;
+  });
+});

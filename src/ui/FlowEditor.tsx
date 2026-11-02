@@ -91,8 +91,7 @@ function SheetTabs({ editor }: { editor: Editor }) {
             aria-selected={s.key === active}
             className={`sheet-tab fl-${s.side}` + (s.key === active ? ' is-on' : '')}
             title="Double-click to rename"
-            onClick={() => editor.chain().showSheet(s.key).focus().run()}
-            onDoubleClick={() => setRenaming(s.key)}
+            onClick={(e) => (e.detail >= 2 ? setRenaming(s.key) : editor.commands.showSheet(s.key))}
           >
             <span className="sheet-dot" />
             {s.title || 'Untitled'}

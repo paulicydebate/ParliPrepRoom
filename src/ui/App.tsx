@@ -6,6 +6,7 @@ import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
 import { IconMenu, IconSettings, IconSplit } from './icons';
 import { Pane, type PaneState } from './Pane';
+import { NameDialog } from './NameDialog';
 import { SettingsDialog } from './SettingsDialog';
 import { Sidebar } from './Sidebar';
 
@@ -277,6 +278,7 @@ export function App() {
                     docs={docs}
                     focused={i === layout.focused && layout.panes.length > 1}
                     canClose={layout.panes.length > 1}
+                    alsoOpen={!!p.docId && layout.panes.filter((x) => x.docId === p.docId).length > 1}
                     onFocus={() => layout.focused !== i && setLayout((l) => ({ ...l, focused: i }))}
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
@@ -288,6 +290,7 @@ export function App() {
         </div>
       </div>
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <NameDialog />
       <div className="toast" role="status" aria-live="polite" hidden={!toastMsg}>
         {toastMsg}
       </div>

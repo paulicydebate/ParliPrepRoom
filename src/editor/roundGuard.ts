@@ -16,18 +16,23 @@ export function toast(message: string) {
   window.dispatchEvent(new CustomEvent('pp-toast', { detail: message }));
 }
 
-/** Text inserted and characters removed by a transaction. */
-export function editsOf(tr: Transaction): { inserted: string; removed: number } {
+/** Text inserted and text removed by a transaction. */
+export function editsOf(tr: Transaction): { inserted: string; removed: number; removedText: string } {
   let inserted = '';
   let removed = 0;
-  for (const step of tr.steps) {
-    if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
-      const { from, to, slice } = step as unknown as { from: number; to: number; slice: { content: { size: number; textBetween: (a: number, b: number, sep: string) => string } } };
-      if (step instanceof ReplaceStep) removed += to - from;
-      inserted += slice.content.textBetween(0, slice.content.size, '\n');
+  let removedText = '';
+  tr.steps.forEach((step, i) => {
+    if (!(step instanceof ReplaceStep || step instanceof ReplaceAroundStep)) return;
+    const { from, to, slice } = step as unknown as { from: number; to: number; slice: { content: { size: number; textBetween: (a: number, b: number, sep: string) => string } } };
+    if (step instanceof ReplaceStep && to > from) {
+      // The document as it was just before this step.
+      const before = tr.docs[i];
+      removed += to - from;
+      removedText += before.textBetween(from, to, '\n');
     }
-  }
-  return { inserted, removed };
+    inserted += slice.content.textBetween(0, slice.content.size, '\n');
+  });
+  return { inserted, removed, removedText };
 }
 
 // Track which round docs are open, to log time spent in other apps or tabs.
@@ -59,8 +64,8 @@ export const RoundGuard = Extension.create<{ ydoc: Y.Doc | null; docId: string |
           apply(tr) {
             if (!docId || !tr.docChanged || !round()) return null;
             if (tr.getMeta(ySyncPluginKey)?.isChangeOrigin) return null;
-            const { inserted, removed } = editsOf(tr);
-            if (removed) logEvent(docId, { k: 'delete', n: removed });
+            const { inserted, removed, removedText } = editsOf(tr);
+            if (removed) logEvent(docId, { k: 'delete', n: removedText.length || removed, s: removedText.slice(0, 500) });
             if (inserted) {
               if (inserted.length > LARGE_INSERT) logEvent(docId, { k: 'large', n: inserted.length, s: inserted.slice(0, 200) });
               else logEvent(docId, { k: 'type', s: inserted });

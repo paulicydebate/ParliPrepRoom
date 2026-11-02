@@ -1,17 +1,28 @@
 import { useState } from 'react';
-import { renameDoc, type DocKind, type DocMeta } from '../store/docs';
+import { moveDoc, renameDoc, sortDocs, type DocKind, type DocMeta } from '../store/docs';
 import { IconBook, IconDoc, IconPlus } from './icons';
+
+interface RowDrag {
+  dropBefore: boolean;
+  dragging: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}
 
 function DocRow({
   doc,
   openHere,
   onOpen,
   onDelete,
+  drag,
 }: {
   doc: DocMeta;
   openHere: boolean;
   onOpen: () => void;
   onDelete: () => void;
+  drag: RowDrag;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(doc.title);
@@ -43,8 +54,20 @@ function DocRow({
   }
 
   return (
-    <li className={'doc-row' + (openHere ? ' is-open' : '')}>
-      <button type="button" className="doc-link" onClick={onOpen} onDoubleClick={() => setEditing(true)} title="Open (double-click to rename)">
+    <li
+      className={'doc-row' + (openHere ? ' is-open' : '') + (drag.dropBefore ? ' drop-before' : '') + (drag.dragging ? ' is-dragging' : '')}
+      draggable
+      onDragStart={drag.onDragStart}
+      onDragOver={drag.onDragOver}
+      onDrop={drag.onDrop}
+      onDragEnd={drag.onDragEnd}
+    >
+      <button
+        type="button"
+        className="doc-link"
+        onClick={(e) => (e.detail >= 2 ? setEditing(true) : onOpen())}
+        title="Click to open, double-click to rename, drag to reorder"
+      >
         {doc.kind === 'prep' ? <IconDoc /> : <IconBook />}
         <span>{doc.title}</span>
         {doc.round && <span className="round-dot" title="Round doc" />}
@@ -98,8 +121,20 @@ export function Sidebar({
   onCreate: (kind: DocKind) => void;
   onDelete: (doc: DocMeta) => void;
 }) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ kind: DocKind; before: string | null } | null>(null);
+  const endDrag = () => {
+    setDragId(null);
+    setDrop(null);
+  };
+  const commit = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragId && drop) void moveDoc(dragId, drop.kind, drop.before);
+    endDrag();
+  };
+
   const section = (kind: DocKind, title: string, hint: string) => {
-    const list = docs.filter((d) => d.kind === kind).sort((a, b) => b.createdAt - a.createdAt);
+    const list = sortDocs(docs.filter((d) => d.kind === kind));
     return (
       <div className="side-section">
         <div className="side-head">
@@ -109,9 +144,42 @@ export function Sidebar({
           </button>
         </div>
         <p className="side-hint">{hint}</p>
-        <ul>
-          {list.map((d) => (
-            <DocRow key={d.id} doc={d} openHere={openIds.has(d.id)} onOpen={() => onOpen(d.id)} onDelete={() => onDelete(d)} />
+        <ul
+          className={'doc-list' + (drop && drop.kind === kind && drop.before === null ? ' drop-end' : '')}
+          onDragOver={(e) => {
+            if (!dragId) return;
+            e.preventDefault();
+            if (e.target === e.currentTarget) setDrop({ kind, before: null });
+          }}
+          onDrop={commit}
+        >
+          {list.map((d, i) => (
+            <DocRow
+              key={d.id}
+              doc={d}
+              openHere={openIds.has(d.id)}
+              onOpen={() => onOpen(d.id)}
+              onDelete={() => onDelete(d)}
+              drag={{
+                dragging: dragId === d.id,
+                dropBefore: !!dragId && drop?.kind === kind && drop.before === d.id,
+                onDragStart: (e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', d.title);
+                  setDragId(d.id);
+                },
+                onDragOver: (e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const lowerHalf = e.clientY > box.top + box.height / 2;
+                  setDrop({ kind, before: lowerHalf ? (list[i + 1]?.id ?? null) : d.id });
+                },
+                onDrop: commit,
+                onDragEnd: endDrag,
+              }}
+            />
           ))}
         </ul>
       </div>

@@ -13,7 +13,8 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Fonts, sizes, colors per style, and Light / Dark / Sepia themes (Appearance button, saved per browser).
 - Fold any heading; "collapse to claims" button; outline sidebar to jump around.
 - Split view: up to three documents side by side, resizable. The same doc can be open in two panes.
-- Prep docs and Reference docs (coach briefs). Reference docs are editable for now; the prep lockout comes in Phase 4.
+- Prep docs and Reference docs (coach briefs). Drag docs in the sidebar to reorder them (or move them between sections); double-click a name to rename it.
+- When the same doc is open in two panes, both panes say so (they are one document, not copies). Reference docs are editable for now; the prep lockout comes in Phase 4.
 - Revision history: auto-saves every 2 minutes while editing (and when the tab closes), named versions, "changes since" view, restore.
 - Everything is saved in the browser (IndexedDB). No accounts or server yet; that's Phase 3.
 
@@ -33,8 +34,9 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Any doc can be switched to a **Round doc** with the toggle at the top right of its pane. Team docs stay normal (copy and paste allowed).
 - Round docs get a thick purple border, a purple header and a "Round doc" label, so an opponent can see which windows are round docs. The sidebar marks them with a purple dot.
 - In a round doc, paste and drag-and-drop are blocked (with a message). Copying *out* is allowed.
-- Every local edit is logged with a timestamp: typed text, deletions, blocked pastes, large single edits (flagged), restores, time in other apps, and the switch being turned on or off. Turning it off needs a second click and is logged. A named version is saved whenever the switch flips.
-- The log is saved in batches chained by SHA-256, so editing it afterwards is detectable. History → **Typing log** shows a seal code, whether the log is intact, totals, and the events worth checking.
+- Each device asks once for the typist's name; every log entry records the name and a device id.
+- Every local edit is logged with a timestamp and the exact text: typed text, deleted text, blocked pastes, large single edits (flagged), restores, time in other apps, and the switch being turned on or off. Turning it off needs a second click and is logged. A named version is saved whenever the switch flips.
+- The log is saved in batches chained by SHA-256, so editing it afterwards is detectable. History → **Typing log** shows a seal code, whether the log is intact, totals per person, the events worth checking, and everything typed and deleted in order.
 - Still to come in Phase 4: the server stamping the log (so it can't be rewritten on the device), a keystroke replay, and a share link anyone can open to check it.
 
 ## Develop

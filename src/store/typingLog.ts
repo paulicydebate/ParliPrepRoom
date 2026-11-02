@@ -1,4 +1,5 @@
 import { createStore, get, set } from 'idb-keyval';
+import { getProfile } from '../settings/profile';
 import { createSignal } from './emitter';
 
 // Typing log for round docs: every local edit, blocked paste and round-doc
@@ -11,7 +12,7 @@ import { createSignal } from './emitter';
 
 export type LogKind =
   | 'type' // text inserted by typing (s = text)
-  | 'delete' // n = characters removed
+  | 'delete' // n = characters removed, s = the text removed
   | 'large' // one edit inserted many characters at once (autocorrect, dictation, undo)
   | 'paste-blocked'
   | 'drop-blocked'
@@ -25,7 +26,12 @@ export interface LogEvent {
   t: number;
   k: LogKind;
   n?: number;
+  /** Text typed, or for deletes the text removed. */
   s?: string;
+  /** Who: the name entered on this device. */
+  a?: string;
+  /** Which device (random id per browser). */
+  d?: string;
 }
 
 export interface LogBatch {
@@ -59,7 +65,8 @@ const batchPayload = (b: Omit<LogBatch, 'hash'>) => JSON.stringify([b.seq, b.at,
 /** Queue an event; batches are written about once a second. */
 export function logEvent(docId: string, e: Omit<LogEvent, 't'> & { t?: number }) {
   const list = pending.get(docId) ?? [];
-  list.push({ t: Date.now(), ...e });
+  const who = getProfile();
+  list.push({ t: Date.now(), a: who.name || 'Unnamed', d: who.deviceId, ...e });
   pending.set(docId, list);
   if (!timer) timer = setTimeout(() => void flushLog(), 1000);
 }
@@ -140,7 +147,50 @@ export function summarizeLog(events: LogEvent[]) {
       awaySince = null;
     }
   }
+  const byAuthor = new Map<string, { typed: number; deleted: number }>();
+  for (const e of events) {
+    if (e.k !== 'type' && e.k !== 'delete' && e.k !== 'large') continue;
+    const key = e.a ?? 'Unnamed';
+    const a = byAuthor.get(key) ?? { typed: 0, deleted: 0 };
+    if (e.k === 'delete') a.deleted += e.n ?? 0;
+    else a.typed += e.s?.length ?? e.n ?? 0;
+    byAuthor.set(key, a);
+  }
   const first = events[0]?.t ?? null;
   const last = events[events.length - 1]?.t ?? null;
-  return { typed, deleted, blocked, large, awayMs, first, last };
+  return { typed, deleted, blocked, large, awayMs, first, last, byAuthor };
+}
+
+/** A run of edits by one person with no pause longer than `gapMs`. */
+export interface Burst {
+  start: number;
+  end: number;
+  author: string;
+  device?: string;
+  /** Pieces in order: typed text, or removed text. */
+  parts: { kind: 'typed' | 'removed' | 'large'; text: string }[];
+}
+
+/** Group typing and deleting into readable bursts for the full record. */
+export function burstsOf(events: LogEvent[], gapMs = 4000): Burst[] {
+  const out: Burst[] = [];
+  let cur: Burst | null = null;
+  for (const e of events) {
+    if (e.k !== 'type' && e.k !== 'delete' && e.k !== 'large') {
+      cur = null;
+      continue;
+    }
+    const author = e.a ?? 'Unnamed';
+    if (!cur || cur.author !== author || cur.device !== e.d || e.t - cur.end > gapMs) {
+      cur = { start: e.t, end: e.t, author, device: e.d, parts: [] };
+      out.push(cur);
+    }
+    cur.end = e.t;
+    const kind = e.k === 'type' ? 'typed' : e.k === 'delete' ? 'removed' : 'large';
+    const text = e.s ?? (e.k === 'delete' ? `[${e.n ?? 0} characters]` : '');
+    const last = cur.parts[cur.parts.length - 1];
+    if (last && last.kind === kind && kind !== 'large') last.text = kind === 'removed' ? text + last.text : last.text + text;
+    else cur.parts.push({ kind, text });
+  }
+  return out;
 }

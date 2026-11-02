@@ -130,6 +130,7 @@ export function Pane({
   docs,
   focused,
   canClose,
+  alsoOpen = false,
   onFocus,
   onChange,
   onClose,
@@ -139,6 +140,7 @@ export function Pane({
   docs: DocMeta[];
   focused: boolean;
   canClose: boolean;
+  alsoOpen?: boolean;
   onFocus: () => void;
   onChange: (p: PaneState) => void;
   onClose: () => void;
@@ -172,6 +174,11 @@ export function Pane({
               <span className={'badge ' + meta.kind}>{meta.kind === 'prep' ? 'Prep' : 'Reference'}</span>
             )}
             <TitleInput meta={meta} />
+            {alsoOpen && (
+              <span className="linked-chip" title="This document is open in another pane too. Both panes show the same text; editing one edits the other.">
+                Same doc as other pane
+              </span>
+            )}
           </>
         ) : (
           <span className="pane-empty-title">Open a document</span>

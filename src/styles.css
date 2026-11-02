@@ -1711,3 +1711,106 @@ del {
   margin-top: 20px;
   font-size: 12.5px;
 }
+
+.name-input,
+.name-dialog input {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  font-size: 15px;
+}
+.name-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+.name-dialog h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.name-dialog p {
+  margin: 0 0 14px;
+}
+.log-who {
+  font-weight: 600;
+  min-width: 90px;
+}
+.log-authors {
+  margin: 0;
+  padding-left: 18px;
+}
+.log-bursts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.log-bursts li {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.burst-meta {
+  display: flex;
+  gap: 10px;
+  flex: none;
+}
+.burst-text {
+  flex: 1 1 260px;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--pp-warrant-font);
+  line-height: 1.5;
+}
+.burst-text ins,
+.burst-text del {
+  padding: 0 1px;
+}
+
+/* Sidebar drag to reorder */
+.doc-list {
+  min-height: 28px;
+  padding-bottom: 6px !important;
+}
+.doc-row {
+  position: relative;
+}
+.doc-row.is-dragging {
+  opacity: 0.4;
+}
+.doc-row.drop-before::before,
+.doc-list.drop-end::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.doc-list {
+  position: relative;
+}
+.doc-list.drop-end::after {
+  top: auto;
+  bottom: 2px;
+}
+
+.linked-chip {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  white-space: nowrap;
+}
+.is-narrow .linked-chip {
+  display: none;
+}

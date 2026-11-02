@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { logChanged, readLog, summarizeLog, type LogEvent, type LogReport } from '../store/typingLog';
+import { burstsOf, logChanged, readLog, summarizeLog, type LogEvent, type LogReport } from '../store/typingLog';
 
 const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
 const day = (t: number) => new Date(t).toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -91,12 +91,25 @@ export function TypingLogView({ docId }: { docId: string }) {
           <dd>{minutes(s.awayMs)}</dd>
         </div>
       </dl>
+      {s.byAuthor.size > 0 && (
+        <>
+          <h4>Who typed</h4>
+          <ul className="log-authors">
+            {[...s.byAuthor].map(([name, a]) => (
+              <li key={name}>
+                <strong>{name}</strong> typed {a.typed.toLocaleString()} characters, deleted {a.deleted.toLocaleString()}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h4>Events to check</h4>
       {notable.length === 0 && <p className="muted">None: only typing and deleting.</p>}
       <ul className="log-events">
         {notable.map((e, i) => (
           <li key={i} data-kind={e.k}>
             <span className="log-time">{time(e.t)}</span>
+            <span className="log-who">{e.a ?? ''}</span>
             <span className="log-what">
               {LABEL[e.k]}
               {e.k === 'large' && e.n ? ` (${e.n} characters at once)` : ''}
@@ -107,6 +120,29 @@ export function TypingLogView({ docId }: { docId: string }) {
           </li>
         ))}
       </ul>
+      <h4>Everything typed, in order</h4>
+      <p className="muted">Grouped into bursts with no pause over 4 seconds. <ins>Typed text</ins> <del>deleted text</del></p>
+      <ol className="log-bursts">
+        {burstsOf(report.events).map((b, i) => (
+          <li key={i}>
+            <div className="burst-meta">
+              <span className="log-time">{time(b.start)}</span>
+              <span className="log-who">{b.author}</span>
+            </div>
+            <div className="burst-text">
+              {b.parts.map((p, j) =>
+                p.kind === 'removed' ? (
+                  <del key={j}>{p.text}</del>
+                ) : p.kind === 'large' ? (
+                  <mark key={j} title="Inserted in one go">{p.text}</mark>
+                ) : (
+                  <ins key={j}>{p.text}</ins>
+                ),
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
       <p className="muted small-print">
         This records what happened in this app on this device. It can’t see another screen or phone.
       </p>
