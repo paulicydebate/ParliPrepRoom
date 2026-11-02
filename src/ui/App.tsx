@@ -51,8 +51,25 @@ async function makeDoc(title: string, kind: DocKind, lines: Line[]): Promise<Doc
 /** First visit: add one sample reference doc and one sample prep doc, side by side. */
 async function seedFirstRun(): Promise<Layout | null> {
   try {
-    if (localStorage.getItem('pp-seeded')) return null;
+    if (localStorage.getItem('pp-seeded')) {
+      // Browsers that saw the first preview get the flow sample once.
+      if (!localStorage.getItem('pp-seeded-flow')) {
+        localStorage.setItem('pp-seeded-flow', '1');
+        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_PREP);
+        return {
+          panes: [
+            { key: paneKey(), docId: flow.id, outline: false, view: 'doc' },
+            { key: paneKey(), docId: flow.id, outline: false, view: 'flow' },
+          ],
+          weights: [1, 1.4],
+          focused: 1,
+          sidebar: true,
+        };
+      }
+      return null;
+    }
     localStorage.setItem('pp-seeded', '1');
+    localStorage.setItem('pp-seeded-flow', '1');
   } catch {
     return null;
   }
