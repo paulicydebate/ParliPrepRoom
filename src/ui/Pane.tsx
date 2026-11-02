@@ -4,7 +4,7 @@ import { renameDoc, type DocMeta } from '../store/docs';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
 import { FlowEditor } from './FlowEditor';
 import { HistoryView } from './HistoryView';
-import { IconClose, IconHistory, IconOutline, IconSwap } from './icons';
+import { IconClose, IconDownload, IconHistory, IconOutline, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
 
 export interface PaneState {
@@ -12,6 +12,43 @@ export interface PaneState {
   docId: string | null;
   outline: boolean;
   view?: 'doc' | 'flow';
+}
+
+function ExportMenu({ editor, title }: { editor: Editor | null; title: string }) {
+  const [busy, setBusy] = useState(false);
+  const run = async (e: React.MouseEvent, kind: 'docx' | 'xlsx') => {
+    (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+    if (!editor) return;
+    setBusy(true);
+    try {
+      const { download, safeFilename } = await import('../export/runs');
+      const name = safeFilename(title);
+      if (kind === 'docx') {
+        const { buildDocx } = await import('../export/docx');
+        download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      } else {
+        const { buildFlowXlsx } = await import('../export/xlsx');
+        download(new Uint8Array(buildFlowXlsx(editor.state.doc)), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <details className="export-menu">
+      <summary className="icon-btn" title="Export" aria-label="Export">
+        <IconDownload />
+      </summary>
+      <div className="menu">
+        <button type="button" disabled={busy} onClick={(e) => void run(e, 'docx')}>
+          Word document (.docx)
+        </button>
+        <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
+          Excel flow (.xlsx)
+        </button>
+      </div>
+    </details>
+  );
 }
 
 function TitleInput({ meta }: { meta: DocMeta }) {
@@ -131,6 +168,7 @@ export function Pane({
             >
               <IconOutline />
             </button>}
+            <ExportMenu editor={editor} title={meta.title} />
             <button
               type="button"
               className={'icon-btn' + (history ? ' is-on' : '')}

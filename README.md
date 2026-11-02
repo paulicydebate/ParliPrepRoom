@@ -17,6 +17,15 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Revision history: auto-saves every 2 minutes while editing (and when the tab closes), named versions, "changes since" view, restore.
 - Everything is saved in the browser (IndexedDB). No accounts or server yet; that's Phase 3.
 
+**Phase 2 (flow view): done.**
+
+- Every pane has a **Doc / Flow** switch. Both views edit the same document, so the same prep can be open as a doc on one side and a flow on the other.
+- Each Position title is a **sheet** (tab), marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR, PMR columns; Opp sheets start at the LOC.
+- A claim starts a row. Lines tagged with a later speech (toolbar speech menu, or by typing in that column) are answers and sit beside it. Warrants follow their claim. Section titles are full-width label rows.
+- In the flow: click any empty cell to type there; Tab / Shift+Tab move to the next/previous speech in the row; Cmd/Ctrl+Enter starts a new row; + Gov / + Opp add a sheet; double-click a tab to rename it.
+- The doc view labels answers with their speech (LOC, MG, ...).
+- Export: Word (.docx, using your fonts, with real headings) and an Excel flow (.xlsx, one worksheet per sheet, colored gov/opp columns).
+
 ## Develop
 
 ```sh
@@ -31,6 +40,9 @@ npm run build      # typecheck + production build in dist/
 | Path | What |
 |---|---|
 | `src/model/blocks.ts` | The named styles and their outline rules. No UI code. |
+| `src/model/speeches.ts`, `src/model/flow.ts` | Speeches and the rules that turn the doc into a flow (pure functions, tested). |
+| `src/editor/flowView.ts` | The flow editor: grid placement, sheets, cell commands. |
+| `src/export/` | Word and Excel export. |
 | `src/editor/` | TipTap/ProseMirror pieces: the styled block node, folding, schema. |
 | `src/store/` | Local storage: document list, open-document registry (Yjs + IndexedDB), versions, sample content. |
 | `src/history/diff.ts` | Block-level comparison between versions. |

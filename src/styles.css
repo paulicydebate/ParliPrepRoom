@@ -266,6 +266,7 @@ select {
   min-height: 0;
   display: flex;
   position: relative;
+  overflow: hidden;
 }
 
 /* ---------- Sidebar ---------- */
@@ -1454,4 +1455,24 @@ del {
 }
 .is-narrow {
   --fl-min: 70vw;
+}
+
+.export-menu {
+  position: relative;
+}
+.export-menu summary {
+  list-style: none;
+}
+.export-menu summary::-webkit-details-marker {
+  display: none;
+}
+.export-menu .menu {
+  min-width: 200px;
+}
+
+.pane-head {
+  min-width: 0;
+}
+.is-narrow .pane-head .badge {
+  display: none;
 }

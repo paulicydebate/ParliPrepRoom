@@ -1,6 +1,6 @@
 # ParliPrepRoom — Plan
 
-Status: Phase 1 (editor core) done, 2026-11-02. See README.md for what works now.
+Status: Phases 1 (editor core) and 2 (flow view) done, 2026-11-02. See README.md for what works now.
 
 ## 1. The goal
 
