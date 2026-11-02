@@ -363,8 +363,11 @@ export function App() {
   // Inserting a prepped block: a copy, so it's only allowed outside Round
   // Mode and never into a round doc (that would be pasting into prep).
   const editors = useRef(new Map<string, Editor>());
+  // Re-render when a pane's editor appears, so the pin board can follow it.
+  const [, setEditorTick] = useState(0);
   const focusedPane = layout.panes[Math.min(layout.focused, layout.panes.length - 1)];
   const focusedMeta = docs?.find((d) => d.id === focusedPane?.docId) ?? null;
+  const focusedEditor = focusedPane ? editors.current.get(focusedPane.key) ?? null : null;
   const insertBlocked: string | null = roundMode
     ? 'Turn off Round Mode to insert blocks.'
     : !focusedMeta
@@ -477,6 +480,7 @@ export function App() {
                     onEditorChange={(e) => {
                       if (e) editors.current.set(p.key, e);
                       else editors.current.delete(p.key);
+                      setEditorTick((t) => t + 1);
                     }}
                     onFocus={() => layout.focused !== i && setLayout((l) => ({ ...l, focused: i }))}
                     onChange={(np) => setPane(i, np)}
@@ -488,7 +492,16 @@ export function App() {
             ))}
         </div>
         {pinsOpen && (
-          <PinBoard space={acct.space} docs={searchable} index={library} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setPinsOpen(false)} />
+          <PinBoard
+            space={acct.space}
+            docs={searchable}
+            index={library}
+            followEditor={focusedEditor}
+            onJump={jumpTo}
+            onInsert={insertBlock}
+            insertBlocked={insertBlocked}
+            onClose={() => setPinsOpen(false)}
+          />
         )}
       </div>
       {findOpen && (

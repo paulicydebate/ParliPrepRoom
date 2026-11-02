@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: sidebar-rename fix and insert-a-block (outside Round Mode, never into round docs) on `main`, not deployed. Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: pin groups that follow flow sheets, sidebar-rename fix and insert-a-block (outside Round Mode, never into round docs) on `main`, not deployed. Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -84,6 +84,13 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Cause: the doc title is stored twice, in the doc list and inside the Yjs doc (`settings.title`, so partners get it). An open pane re-read the old in-doc title after a sidebar rename and copied it back.
 - Fix (`TitleInput` in `src/ui/Pane.tsx`): when a doc first opens, the in-doc title wins (a partner may have renamed it). After that, any local rename (sidebar or title box) is written into the doc. Remote changes still arrive through the map observer (local transactions are ignored there).
 - Checked: sidebar rename persists signed in and offline, including after reload; a partner still sees the owner's rename.
+
+### Pin groups that follow flow sheets (2026-11-02; on `main`, not deployed yet)
+
+- The owner asked: if the neg reads T, show only my T answers. Pins now have an optional group name (`src/store/pins.ts`; a board per space in localStorage `pp-pins-<space>` with pins, groups, the selected tab and followFlow; older plain-list data still loads).
+- Pin board: tabs "All" + groups (+ Group), "Follow flow sheets" checkbox, "Delete group" (pins stay, ungrouped), a group menu on each pin. New pins go into the selected tab's group.
+- Following: the App passes the focused pane's editor to `PinBoard`; when it's a flow and the active sheet's title matches a group name (case-insensitive), the tab switches. Doc-view panes don't change the tab.
+- Checked in Playwright: groups T and CP, pins filed per tab, renaming a flow sheet to "CP" and opening it switches the board to CP.
 
 ## Next steps
 
