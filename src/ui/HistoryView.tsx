@@ -6,7 +6,9 @@ import type * as Y from 'yjs';
 import { BODY_FIELD } from '../editor/extensions';
 import { diffBlocks, flattenDoc, summarize, type DiffRow, type FlatBlock } from '../history/diff';
 import { loadVersionDoc, renameVersion, saveVersion, type VersionMeta } from '../store/versions';
+import { logEvent } from '../store/typingLog';
 import { useVersions } from './hooks';
+import { TypingLogView } from './TypingLogView';
 
 function formatTime(at: number) {
   return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -65,12 +67,62 @@ export function HistoryView({
   docId,
   ydoc,
   editor,
+  round = false,
   onClose,
 }: {
   docId: string;
   ydoc: Y.Doc;
   editor: Editor | null;
+  round?: boolean;
   onClose: () => void;
+}) {
+  const [tab, setTab] = useState<'versions' | 'log'>(round ? 'log' : 'versions');
+  if (tab === 'log') {
+    return (
+      <div className="history">
+        <div className="history-main">
+          <div className="history-bar">
+            <HistoryTabs tab={tab} setTab={setTab} />
+            <span className="tb-spacer" />
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Done
+            </button>
+          </div>
+          <TypingLogView docId={docId} />
+        </div>
+      </div>
+    );
+  }
+  return <VersionsView docId={docId} ydoc={ydoc} editor={editor} round={round} onClose={onClose} tabs={<HistoryTabs tab={tab} setTab={setTab} />} />;
+}
+
+function HistoryTabs({ tab, setTab }: { tab: 'versions' | 'log'; setTab: (t: 'versions' | 'log') => void }) {
+  return (
+    <div className="seg" role="group" aria-label="History">
+      <button type="button" className={tab === 'versions' ? 'is-on' : ''} onClick={() => setTab('versions')}>
+        Versions
+      </button>
+      <button type="button" className={tab === 'log' ? 'is-on' : ''} onClick={() => setTab('log')}>
+        Typing log
+      </button>
+    </div>
+  );
+}
+
+function VersionsView({
+  docId,
+  ydoc,
+  editor,
+  round,
+  onClose,
+  tabs,
+}: {
+  docId: string;
+  ydoc: Y.Doc;
+  editor: Editor | null;
+  round: boolean;
+  onClose: () => void;
+  tabs: React.ReactNode;
 }) {
   const versions = useVersions(docId);
   const [selected, setSelected] = useState<string | null>(null);
@@ -129,6 +181,7 @@ export function HistoryView({
     if (!editor || !versionJson || !selectedMeta) return;
     const when = `${formatDay(selectedMeta.at)} ${formatTime(selectedMeta.at)}`;
     await saveVersion(docId, ydoc, { auto: false, name: `Before restoring ${when}` });
+    if (round) logEvent(docId, { k: 'restore', s: when });
     editor.commands.setContent(versionJson);
     onClose();
   };
@@ -144,6 +197,7 @@ export function HistoryView({
     <div className="history">
       <div className="history-main">
         <div className="history-bar">
+          {tabs}
           <div className="seg" role="group" aria-label="View">
             <button type="button" className={mode === 'compare' ? 'is-on' : ''} onClick={() => setMode('compare')}>
               Changes since

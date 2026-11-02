@@ -103,6 +103,20 @@ export function App() {
   const docs = useDocs();
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const on = (e: Event) => {
+      setToastMsg((e as CustomEvent<string>).detail);
+      clearTimeout(t);
+      t = setTimeout(() => setToastMsg(null), 3500);
+    };
+    window.addEventListener('pp-toast', on);
+    return () => {
+      window.removeEventListener('pp-toast', on);
+      clearTimeout(t);
+    };
+  }, []);
   const narrow = useNarrow();
   const [sidebarOverlay, setSidebarOverlay] = useState(false);
   const panesRef = useRef<HTMLDivElement>(null);
@@ -274,6 +288,9 @@ export function App() {
         </div>
       </div>
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <div className="toast" role="status" aria-live="polite" hidden={!toastMsg}>
+        {toastMsg}
+      </div>
     </div>
   );
 }

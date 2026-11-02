@@ -4,17 +4,19 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import { useEffect, useState } from 'react';
 import type * as Y from 'yjs';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
+import { RoundGuard } from '../editor/roundGuard';
 import { activeSheet, flowKey, FlowView, sheetKey } from '../editor/flowView';
 import { KIND_INFO, asKind } from '../model/blocks';
 import { SPEECH_INFO } from '../model/speeches';
 import { IconPlus } from './icons';
 
-export function FlowEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Editor | null) => void }) {
+export function FlowEditor({ ydoc, docId, onEditor }: { ydoc: Y.Doc; docId: string; onEditor: (e: Editor | null) => void }) {
   const editor = useEditor(
     {
       extensions: [
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
+        RoundGuard.configure({ ydoc, docId }),
         FlowView,
         Placeholder.configure({
           placeholder: ({ node }) => `${KIND_INFO[asKind(node.attrs.kind)].label}…`,
@@ -22,7 +24,7 @@ export function FlowEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Edit
       ],
       editorProps: { attributes: { spellcheck: 'true' } },
     },
-    [ydoc],
+    [ydoc, docId],
   );
 
   useEffect(() => {

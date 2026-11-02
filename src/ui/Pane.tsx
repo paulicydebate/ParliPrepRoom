@@ -1,10 +1,13 @@
 import type { Editor } from '@tiptap/react';
 import { useCallback, useEffect, useState } from 'react';
+import type * as Y from 'yjs';
+import { toast } from '../editor/roundGuard';
 import { renameDoc, type DocMeta } from '../store/docs';
+import { setRound, useRound } from '../store/roundDoc';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
 import { FlowEditor } from './FlowEditor';
 import { HistoryView } from './HistoryView';
-import { IconClose, IconDownload, IconHistory, IconOutline, IconSwap } from './icons';
+import { IconClose, IconDownload, IconHistory, IconLock, IconOutline, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
 
 export interface PaneState {
@@ -48,6 +51,51 @@ function ExportMenu({ editor, title }: { editor: Editor | null; title: string })
         </button>
       </div>
     </details>
+  );
+}
+
+/** Top-right switch that makes a doc a round doc (paste off, typing logged). */
+function RoundToggle({ ydoc, docId, round }: { ydoc: Y.Doc; docId: string; round: boolean }) {
+  const [confirmOff, setConfirmOff] = useState(false);
+  useEffect(() => {
+    if (!confirmOff) return;
+    const t = setTimeout(() => setConfirmOff(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmOff]);
+  if (!round) {
+    return (
+      <button
+        type="button"
+        className="round-toggle"
+        title="Make this a round doc: paste and drag-and-drop are blocked and typing is logged"
+        aria-pressed={false}
+        onClick={() => {
+          setRound(ydoc, docId, true);
+          toast('Round doc on: paste is off and typing is logged.');
+        }}
+      >
+        <span className="switch" /> Round doc
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className={'round-toggle is-on' + (confirmOff ? ' confirm' : '')}
+      aria-pressed={true}
+      title="Round doc: paste is off and typing is logged"
+      onClick={() => {
+        if (!confirmOff) {
+          setConfirmOff(true);
+          return;
+        }
+        setConfirmOff(false);
+        setRound(ydoc, docId, false);
+        toast('Round doc off. This is recorded in the typing log.');
+      }}
+    >
+      <span className="switch" /> {confirmOff ? 'Turn off? (logged)' : 'Round doc'}
+    </button>
   );
 }
 
@@ -104,10 +152,11 @@ export function Pane({
 
   useEffect(() => setHistory(false), [pane.docId]);
   const view = pane.view ?? 'doc';
+  const round = useRound(ydoc);
 
   return (
     <section
-      className={'pane' + (focused ? ' is-focused' : '')}
+      className={'pane' + (focused ? ' is-focused' : '') + (round ? ' is-round' : '')}
       onPointerDownCapture={onFocus}
       onFocusCapture={onFocus}
       aria-label={meta ? meta.title : 'Empty pane'}
@@ -115,7 +164,13 @@ export function Pane({
       <header className="pane-head">
         {meta ? (
           <>
-            <span className={'badge ' + meta.kind}>{meta.kind === 'prep' ? 'Prep' : 'Reference'}</span>
+            {round ? (
+              <span className="badge round" title="Round doc: paste is off and typing is logged">
+                <IconLock /> Round doc
+              </span>
+            ) : (
+              <span className={'badge ' + meta.kind}>{meta.kind === 'prep' ? 'Prep' : 'Reference'}</span>
+            )}
             <TitleInput meta={meta} />
           </>
         ) : (
@@ -181,6 +236,7 @@ export function Pane({
             </button>
           </>
         )}
+        {meta && ydoc && <RoundToggle ydoc={ydoc} docId={meta.id} round={round} />}
         {canClose && (
           <button type="button" className="icon-btn" title="Close pane" aria-label="Close pane" onClick={onClose}>
             <IconClose />
@@ -222,9 +278,9 @@ export function Pane({
           {!history && editor && <Toolbar editor={editor} view={view} />}
           <div className="pane-body" hidden={history}>
             {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} onEditor={onEditor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} docId={meta.id} onEditor={onEditor} />}
           </div>
-          {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} onClose={() => setHistory(false)} />}
+          {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} onClose={() => setHistory(false)} />}
         </>
       )}
     </section>

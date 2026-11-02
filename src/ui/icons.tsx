@@ -123,3 +123,9 @@ export const IconDownload = () => (
     <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
   </Svg>
 );
+export const IconLock = () => (
+  <Svg size={13}>
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </Svg>
+);

@@ -11,6 +11,8 @@ export interface DocMeta {
   title: string;
   kind: DocKind;
   createdAt: number;
+  /** Round doc: paste blocked, typing logged (mirrors the flag inside the doc, for the sidebar). */
+  round?: boolean;
 }
 
 const store = createStore('pp-meta', 'meta');
@@ -42,6 +44,12 @@ export async function createDoc(input: { title: string; kind: DocKind; id?: stri
 
 export async function renameDoc(id: string, title: string) {
   await save((await listDocs()).map((d) => (d.id === id ? { ...d, title } : d)));
+}
+
+export async function setDocRound(id: string, round: boolean) {
+  const docs = await listDocs();
+  if (docs.find((d) => d.id === id)?.round === round) return;
+  await save(docs.map((d) => (d.id === id ? { ...d, round } : d)));
 }
 
 export async function deleteDoc(id: string) {

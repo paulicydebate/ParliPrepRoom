@@ -47,6 +47,7 @@ function DocRow({
       <button type="button" className="doc-link" onClick={onOpen} onDoubleClick={() => setEditing(true)} title="Open (double-click to rename)">
         {doc.kind === 'prep' ? <IconDoc /> : <IconBook />}
         <span>{doc.title}</span>
+        {doc.round && <span className="round-dot" title="Round doc" />}
       </button>
       <details className="doc-menu" onToggle={(e) => !(e.currentTarget as HTMLDetailsElement).open && setConfirmDelete(false)}>
         <summary aria-label={`More for ${doc.title}`}>⋯</summary>

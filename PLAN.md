@@ -1,6 +1,8 @@
 # ParliPrepRoom — Plan
 
-Status: Phases 1 (editor core) and 2 (flow view) done, 2026-11-02. See README.md for what works now.
+Status: Phases 1 (editor core) and 2 (flow view) done, plus local round docs from Phase 4, 2026-11-02. See README.md for what works now.
+
+Decision (2026-11-02): instead of separate "Prep Mode", any doc can be marked a **round doc** with a toggle. Team docs allow copy/paste; round docs block paste, log typing, and get a clear colored border for opponents to see.
 
 ## 1. The goal
 

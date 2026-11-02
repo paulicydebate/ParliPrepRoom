@@ -10,6 +10,7 @@ import { SPEECHES, isSpeech, type Speech } from '../model/speeches';
 import { isMac, styleKeyLabel } from '../editor/shortcuts';
 import { useSettings } from '../settings/settings';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
+import { RoundGuard } from '../editor/roundGuard';
 import { BLOCK_KINDS, KIND_INFO, asKind, isHeading, levelOf, type BlockKind } from '../model/blocks';
 import {
   IconFold,
@@ -19,12 +20,13 @@ import {
   IconUnfold,
 } from './icons';
 
-export function DocEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Editor | null) => void }) {
+export function DocEditor({ ydoc, docId, onEditor }: { ydoc: Y.Doc; docId: string; onEditor: (e: Editor | null) => void }) {
   const editor = useEditor(
     {
       extensions: [
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
+        RoundGuard.configure({ ydoc, docId }),
         Collapse,
         SpeechTags,
         Placeholder.configure({
@@ -33,7 +35,7 @@ export function DocEditor({ ydoc, onEditor }: { ydoc: Y.Doc; onEditor: (e: Edito
       ],
       editorProps: { attributes: { class: 'pp-doc', spellcheck: 'true' } },
     },
-    [ydoc],
+    [ydoc, docId],
   );
 
   useEffect(() => {

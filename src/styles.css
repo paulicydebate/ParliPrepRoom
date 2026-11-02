@@ -30,6 +30,9 @@
   --warrant-color: var(--text);
   --analytic-color: #3d4a7a;
   --note-color: var(--text-2);
+  --round: #7c3aed;
+  --round-soft: #efe7fe;
+  --round-text: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -55,6 +58,9 @@
     --position-color: #d9f3ea;
     --section-color: #6fd3b5;
     --analytic-color: #aeb9ec;
+    --round: #a77bff;
+    --round-soft: #2a1d47;
+    --round-text: #170a33;
   }
 }
 
@@ -80,6 +86,9 @@
   --position-color: #d9f3ea;
   --section-color: #6fd3b5;
   --analytic-color: #aeb9ec;
+  --round: #a77bff;
+  --round-soft: #2a1d47;
+  --round-text: #170a33;
 }
 
 :root[data-theme='sepia'] {
@@ -1493,4 +1502,212 @@ del {
 }
 .is-narrow .pane-head .badge {
   display: none;
+}
+
+/* ---------- Round docs ---------- */
+/* A thick, unmistakable border so an opponent can see at a glance which
+   windows are round docs. */
+.pane.is-round {
+  border: 3px solid var(--round);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--round) 22%, transparent), var(--shadow);
+}
+.pane.is-round .pane-head {
+  background: var(--round-soft);
+  border-bottom-color: color-mix(in srgb, var(--round) 35%, var(--border));
+}
+.badge.round {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--round);
+  color: var(--round-text);
+}
+.is-narrow .pane-head .badge.round {
+  display: inline-flex;
+}
+.round-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px 0 6px;
+  border-radius: 15px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  flex: none;
+}
+.round-toggle .switch {
+  position: relative;
+  width: 26px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--border-strong);
+  transition: background 0.15s;
+}
+.round-toggle .switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+.round-toggle.is-on {
+  border-color: var(--round);
+  color: var(--round);
+}
+.round-toggle.is-on .switch {
+  background: var(--round);
+}
+.round-toggle.is-on .switch::after {
+  transform: translateX(10px);
+}
+.round-toggle.confirm {
+  background: var(--round);
+  color: var(--round-text);
+}
+.round-toggle.confirm .switch {
+  background: color-mix(in srgb, var(--round-text) 30%, transparent);
+}
+.round-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--round);
+}
+@media (prefers-reduced-motion: reduce) {
+  .round-toggle .switch,
+  .round-toggle .switch::after {
+    transition: none;
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--surface);
+  font-weight: 500;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+}
+
+/* Typing log */
+.log-view {
+  overflow-y: auto;
+  flex: 1;
+  padding: 18px 20px 60px;
+  max-width: 720px;
+}
+.seal {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.seal.ok {
+  background: var(--added-bg);
+  color: var(--added-text);
+}
+.seal.bad {
+  background: var(--removed-bg);
+  color: var(--removed-text);
+}
+.seal p {
+  margin: 0;
+  flex: 1 1 220px;
+}
+.seal-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.seal-code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.log-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.log-stats div {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.log-stats dt {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.log-stats dd {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.log-stats dd.warn {
+  color: var(--opp);
+}
+.log-view h4 {
+  margin: 18px 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+.log-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.log-events li {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.log-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  min-width: 92px;
+}
+.log-events li[data-kind='paste-blocked'] .log-what,
+.log-events li[data-kind='drop-blocked'] .log-what,
+.log-events li[data-kind='round-off'] .log-what,
+.log-events li[data-kind='large'] .log-what {
+  color: var(--opp);
+  font-weight: 600;
+}
+.log-text {
+  flex-basis: 100%;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.small-print {
+  margin-top: 20px;
+  font-size: 12.5px;
 }

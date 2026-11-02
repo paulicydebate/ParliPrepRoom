@@ -28,6 +28,15 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - The doc view labels answers with their speech (LOC, MG, ...).
 - Export: Word (.docx, using your fonts, with real headings) and an Excel flow (.xlsx, one worksheet per sheet, colored gov/opp columns).
 
+**Round docs (early part of Phase 4): done, on this device.**
+
+- Any doc can be switched to a **Round doc** with the toggle at the top right of its pane. Team docs stay normal (copy and paste allowed).
+- Round docs get a thick purple border, a purple header and a "Round doc" label, so an opponent can see which windows are round docs. The sidebar marks them with a purple dot.
+- In a round doc, paste and drag-and-drop are blocked (with a message). Copying *out* is allowed.
+- Every local edit is logged with a timestamp: typed text, deletions, blocked pastes, large single edits (flagged), restores, time in other apps, and the switch being turned on or off. Turning it off needs a second click and is logged. A named version is saved whenever the switch flips.
+- The log is saved in batches chained by SHA-256, so editing it afterwards is detectable. History → **Typing log** shows a seal code, whether the log is intact, totals, and the events worth checking.
+- Still to come in Phase 4: the server stamping the log (so it can't be rewritten on the device), a keystroke replay, and a share link anyone can open to check it.
+
 ## Develop
 
 ```sh
@@ -45,6 +54,7 @@ npm run build      # typecheck + production build in dist/
 | `src/model/speeches.ts`, `src/model/flow.ts` | Speeches and the rules that turn the doc into a flow (pure functions, tested). |
 | `src/editor/flowView.ts` | The flow editor: grid placement, sheets, cell commands. |
 | `src/export/` | Word and Excel export. |
+| `src/editor/roundGuard.ts`, `src/store/roundDoc.ts`, `src/store/typingLog.ts` | Round docs: paste blocking, the typing log and its hash chain. |
 | `src/editor/` | TipTap/ProseMirror pieces: the styled block node, folding, schema. |
 | `src/store/` | Local storage: document list, open-document registry (Yjs + IndexedDB), versions, sample content. |
 | `src/history/diff.ts` | Block-level comparison between versions. |
