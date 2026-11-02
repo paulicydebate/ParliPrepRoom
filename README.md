@@ -66,8 +66,8 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 
 **Rounds and tournaments: built, not deployed yet.**
 
-- **Timer** in the top bar: prep 20:00, PMC 7, LOC 8, MG 8, MO 8, LOR 4, PMR 5, flex 2:00 and 1:00, or custom. Shared with your partner when a round doc is open.
-- **New round:** round, side, resolution, partner and tournament code in one step; opens the round doc and its flow side by side with the prep timer running.
+- **Timer** in the top bar: prep 20:00, PMC 7, LOC 8, MG 8, MO 8, LOR 4, PMR 5, flex 2:00 and 1:00, or any custom length. **Change times** sets your own lengths (e.g. 25 or 30-minute prep; saved on your device), and ±1:00 adjusts a running timer. Shared with your partner when a round doc is open.
+- **New round:** round, side, resolution, partner and tournament code in one step; opens the round doc and its flow side by side with the prep timer running (prep length can be changed there).
 - **Tab room:** set up a tournament (account menu → Tournaments), give teams its code, and give the tab room the director link: every round doc tagged with the tournament, flagged first, with full records.
 
 ## Develop

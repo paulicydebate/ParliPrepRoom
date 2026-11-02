@@ -14,7 +14,7 @@ import { createRoundDoc } from '../store/docs';
 import { acquireDoc, releaseDoc } from '../store/registry';
 import { setRound } from '../store/roundDoc';
 import { writeLines, type Line } from '../store/seed';
-import { choose } from '../store/timer';
+import { choose, format, formatMinutes, loadPresets, parseMinutes, prepMinutes, savePresets } from '../store/timer';
 import { IconClose } from './icons';
 
 const LAST_TOURNAMENT = 'pp-last-tournament';
@@ -53,6 +53,8 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
   const [tournament, setTournament] = useState<{ name: string } | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [startTimer, setStartTimer] = useState(true);
+  const [prep, setPrep] = useState(() => formatMinutes(prepMinutes()));
+  const prepLen = parseMinutes(prep);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -101,10 +103,16 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
       lines.push(['position', side === 'gov' ? 'Gov case' : 'Opp case', { side }], ['claim', '']);
       writeLines(doc, lines);
       setRound(doc, meta.id, true);
-      if (startTimer) doc.getMap('timer').set('state', choose('Prep', 20, true));
+      // Remember this prep length as the Prep button's time on this device.
+      if (startTimer && prepLen && prepLen !== prepMinutes()) {
+        const presets = loadPresets();
+        const has = presets.some((p) => p.label.toLowerCase() === 'prep');
+        savePresets(has ? presets.map((p) => (p.label.toLowerCase() === 'prep' ? { ...p, minutes: prepLen } : p)) : [{ label: 'Prep', minutes: prepLen }, ...presets]);
+      }
+      if (startTimer && prepLen) doc.getMap('timer').set('state', choose('Prep', prepLen, true));
       releaseDoc(meta.id);
       onCreated(meta.id);
-      toast(startTimer ? 'Round doc ready. Prep timer started: 20:00.' : 'Round doc ready.');
+      toast(startTimer && prepLen ? `Round doc ready. Prep timer started: ${format(prepLen * 60_000)}.` : 'Round doc ready.');
       onClose();
     } catch (e) {
       toast((e as Error).message);
@@ -181,15 +189,27 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
           {codeError && <span className="form-err">{codeError}</span>}
         </label>
 
-        <label className="check form-row">
-          <input type="checkbox" checked={startTimer} onChange={(e) => setStartTimer(e.target.checked)} /> Start the 20-minute prep timer
-        </label>
+        <div className="check form-row prep-row">
+          <label>
+            <input type="checkbox" checked={startTimer} onChange={(e) => setStartTimer(e.target.checked)} /> Start the prep timer:
+          </label>
+          <input
+            className="name-input prep-len"
+            value={prep}
+            onChange={(e) => setPrep(e.target.value)}
+            inputMode="decimal"
+            aria-label="Prep length in minutes"
+            disabled={!startTimer}
+          />
+          <span className="muted small">minutes</span>
+          {startTimer && !prepLen && <span className="form-err">Type a length like 25 or 22:30.</span>}
+        </div>
 
         <div className="settings-foot">
           <button type="button" className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn primary" disabled={busy || (!!code.trim() && !tournament && !codeError) || !!codeError}>
+          <button type="submit" className="btn primary" disabled={busy || (!!code.trim() && !tournament && !codeError) || !!codeError || (startTimer && !prepLen)}>
             Start round
           </button>
         </div>

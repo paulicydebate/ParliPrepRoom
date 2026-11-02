@@ -3173,7 +3173,8 @@ del {
 .timer-pop {
   left: 0;
   right: auto;
-  width: 280px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
   padding: 10px;
   z-index: 40;
   color: var(--text);
@@ -3206,6 +3207,46 @@ del {
 }
 .timer-pop p {
   margin: 4px 2px 0;
+}
+.timer-custom input.timer-name {
+  flex: 0 0 72px;
+}
+.timer-adjust {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0;
+}
+.timer-edit ul {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+.timer-edit li {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.timer-edit input {
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.timer-edit input:first-child {
+  flex: 1;
+}
+.timer-edit input:nth-child(2) {
+  width: 64px;
+  font-variant-numeric: tabular-nums;
+}
+.timer-edit li.is-bad input {
+  border-color: var(--danger);
 }
 .is-round-mode .topbar .timer {
   color: var(--text);
@@ -3458,4 +3499,30 @@ del {
 .side-head-btns {
   display: inline-flex;
   gap: 2px;
+}
+
+.prep-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.prep-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+input.name-input.prep-len {
+  width: 72px;
+  font-variant-numeric: tabular-nums;
+}
+.timer-pop .timer-adjust button,
+.timer-pop .timer-custom button,
+.timer-edit li button {
+  width: auto;
+  flex: none;
+}
+.timer-edit li button {
+  width: 30px;
+  text-align: center;
 }
