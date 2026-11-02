@@ -148,3 +148,25 @@ describe('collapse to claims', () => {
     expect(hiddenKinds).toEqual(['warrant', 'analytic']);
   });
 });
+
+describe('flow marks', () => {
+  it('toggles a mark on the selected block, and the same mark again clears it', () => {
+    const e = make([['claim', 'C1'], ['claim', 'C2']]);
+    caretAtEnd(e, 0);
+    e.commands.toggleFlowMark('dropped');
+    expect(e.state.doc.child(0).attrs.mark).toBe('dropped');
+    expect(e.state.doc.child(1).attrs.mark).toBeNull();
+    e.commands.toggleFlowMark('extend');
+    expect(e.state.doc.child(0).attrs.mark).toBe('extend');
+    e.commands.toggleFlowMark('extend');
+    expect(e.state.doc.child(0).attrs.mark).toBeNull();
+  });
+
+  it('a new line after a marked claim starts unmarked', () => {
+    const e = make([['claim', 'C1']]);
+    caretAtEnd(e, 0);
+    e.commands.toggleFlowMark('key');
+    press(e, 'Enter');
+    expect(e.state.doc.child(1).attrs.mark).toBeNull();
+  });
+});

@@ -6,6 +6,7 @@ import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/r
 import { useEffect } from 'react';
 import type * as Y from 'yjs';
 import { Collapse } from '../editor/collapse';
+import { FLOW_MARKS, type FlowMark } from '../model/marks';
 import { SpeechTags } from '../editor/speechTags';
 import { computeFlow, readBlocks, sheetAt } from '../model/flow';
 import { SPEECHES, isSpeech, type Speech } from '../model/speeches';
@@ -51,6 +52,8 @@ export function DocEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; pr
 
 export const MOD = isMac ? '⌘' : 'Ctrl';
 
+const MARK_GLYPH: Record<FlowMark, string> = { extend: '→', dropped: '!', answered: '✓', key: '★' };
+
 /** The speech a line will show under on the flow, and whether it was chosen by hand. */
 function speechInfo(e: Editor) {
   const { $from } = e.state.selection;
@@ -69,6 +72,7 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
     selector: ({ editor: e }) => ({
       ...speechInfo(e),
       kind: asKind(e.state.selection.$from.parent.attrs.kind),
+      mark: (e.state.selection.$from.parent.attrs.mark as string | null) ?? null,
       bold: e.isActive('bold'),
       italic: e.isActive('italic'),
       underline: e.isActive('underline'),
@@ -131,6 +135,18 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
       {btn(s.underline, 'U', `Underline (${MOD}+U)`, () => editor.chain().focus().toggleUnderline().run(), <u>U</u>)}
       {btn(s.strike, 'S', 'Strikethrough', () => editor.chain().focus().toggleStrike().run(), <s>S</s>)}
       {btn(s.highlight, 'H', `Highlight (${MOD}+Shift+H)`, () => editor.chain().focus().toggleHighlight().run(), <IconHighlight />)}
+      <span className="tb-sep" />
+      <span className="mark-btns" role="group" aria-label="Flow marks">
+        {FLOW_MARKS.map((m) =>
+          btn(
+            s.mark === m.mark,
+            m.label,
+            `${m.label}: ${m.hint} (${MOD}+Shift+${m.key})`,
+            () => editor.chain().focus().toggleFlowMark(m.mark).run(),
+            <span className={`mark-glyph mark-${m.mark}`}>{MARK_GLYPH[m.mark]}</span>,
+          ),
+        )}
+      </span>
       {view === 'doc' && (
         <>
           <span className="tb-sep" />

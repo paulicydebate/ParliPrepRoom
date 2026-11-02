@@ -173,7 +173,7 @@ export function App() {
   // Ctrl/Cmd+K opens the block finder.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setFindOpen(true);
       }

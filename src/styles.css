@@ -3289,3 +3289,80 @@ del {
   border-radius: 6px;
   background: var(--surface-2);
 }
+
+/* ---------- Flow marks ---------- */
+.mark-btns {
+  display: inline-flex;
+  gap: 1px;
+}
+.mark-glyph {
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+}
+.mark-glyph.mark-dropped {
+  color: var(--danger);
+}
+.mark-glyph.mark-key {
+  color: #ca8a04;
+}
+/* Badges go in front of headings and claims (body lines keep their side rail
+   and get a colored edge instead). */
+.pp-block[data-mark]:is([data-kind='claim'], [data-kind='section'], [data-kind='position'])::before {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.03em;
+  line-height: 18px;
+  vertical-align: 2px;
+  text-decoration: none;
+}
+.pp-block[data-mark='extend']:is([data-kind='claim'], [data-kind='section'], [data-kind='position'])::before {
+  content: '→ EXT';
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.pp-block[data-mark='dropped']:is([data-kind='claim'], [data-kind='section'], [data-kind='position'])::before {
+  content: '! DROPPED';
+  color: #fff;
+  background: var(--danger);
+}
+.pp-block[data-mark='key']:is([data-kind='claim'], [data-kind='section'], [data-kind='position'])::before {
+  content: '★ KEY';
+  color: #7a5a00;
+  background: #fde68a;
+}
+.pp-block[data-mark='answered']:is([data-kind='claim'], [data-kind='section'], [data-kind='position'])::before {
+  content: '✓';
+  color: var(--added-text);
+  background: var(--added-bg);
+}
+.pp-block[data-mark='answered'] {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: color-mix(in srgb, var(--text) 45%, transparent);
+  opacity: 0.6;
+}
+.pp-doc > .pp-block[data-mark='dropped']:not([data-kind='claim']):not([data-kind='section']):not([data-kind='position']) {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.pp-doc > .pp-block[data-mark='key']:not([data-kind='claim']):not([data-kind='section']):not([data-kind='position']) {
+  box-shadow: inset 3px 0 0 #ca8a04;
+}
+.pp-doc > .pp-block[data-mark='extend']:not([data-kind='claim']):not([data-kind='section']):not([data-kind='position']) {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.pp-flow > .pp-block[data-mark='dropped'] {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.pp-flow > .pp-block[data-mark='key'] {
+  box-shadow: inset 3px 0 0 #ca8a04;
+}
+.pp-flow > .pp-block[data-mark='extend'] {
+  box-shadow: inset 3px 0 0 var(--accent);
+}

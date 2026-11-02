@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { ySyncPluginKey } from '@tiptap/y-tiptap';
 import { isSpeech, type Speech } from '../model/speeches';
+import { isFlowMark, type FlowMark } from '../model/marks';
 import { styleForKey } from './shortcuts';
 import { KIND_INFO, asKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
 
@@ -10,6 +11,8 @@ declare module '@tiptap/core' {
     prepBlock: {
       /** Apply a named style to every block in the selection. */
       setBlockKind: (kind: BlockKind) => ReturnType;
+      /** Mark every selected block (same mark again clears it). */
+      toggleFlowMark: (mark: FlowMark) => ReturnType;
       /** Tag every selected block with a speech (null = automatic). */
       setBlockSpeech: (speech: Speech | null) => ReturnType;
       /** Tab / Shift-Tab: move every selected block one level down or up. */
@@ -92,6 +95,13 @@ export const PrepBlock = Node.create({
         parseHTML: (el) => el.getAttribute('data-side'),
         renderHTML: (attrs) => (attrs.side ? { 'data-side': attrs.side } : {}),
       },
+      // Flow mark: how an argument stands in the round (extended, dropped, answered, key).
+      mark: {
+        default: null,
+        keepOnSplit: false,
+        parseHTML: (el) => (isFlowMark(el.getAttribute('data-mark')) ? el.getAttribute('data-mark') : null),
+        renderHTML: (attrs) => (isFlowMark(attrs.mark) ? { 'data-mark': attrs.mark } : {}),
+      },
       // Blank flow rows kept above this row (clicking a row further down the flow).
       gap: {
         default: 0,
@@ -136,6 +146,20 @@ export const PrepBlock = Node.create({
             for (const b of blocks) {
               const node = tr.doc.nodeAt(b.pos);
               if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, kind });
+            }
+          }
+          return true;
+        },
+      toggleFlowMark:
+        (mark) =>
+        ({ state, tr, dispatch }) => {
+          const blocks = selectedBlocks(state);
+          if (!blocks.length) return false;
+          if (dispatch) {
+            const allHave = blocks.every((b) => tr.doc.nodeAt(b.pos)?.attrs.mark === mark);
+            for (const b of blocks) {
+              const node = tr.doc.nodeAt(b.pos);
+              if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, mark: allHave ? null : mark });
             }
           }
           return true;
@@ -206,6 +230,10 @@ export const PrepBlock = Node.create({
         this.editor.commands.shiftBlockLevel('out');
         return true;
       },
+      'Mod-Shift-e': () => this.editor.commands.toggleFlowMark('extend'),
+      'Mod-Shift-d': () => this.editor.commands.toggleFlowMark('dropped'),
+      'Mod-Shift-a': () => this.editor.commands.toggleFlowMark('answered'),
+      'Mod-Shift-k': () => this.editor.commands.toggleFlowMark('key'),
       'Mod-]': () => this.editor.commands.shiftBlockLevel('in'),
       'Mod-[': () => this.editor.commands.shiftBlockLevel('out'),
     };

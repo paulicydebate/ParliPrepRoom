@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). In progress next (owner-approved list): flow marks, named server version history (mandatory) and replay, import into reference docs. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-02 by Claude (Claude Code cloud session). Latest: flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, on `main`, not deployed. Coach view deployed 2026-11-02 (version 5fb5c578). In progress next (owner-approved list): named server version history (mandatory) and replay, import into reference docs. Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -163,6 +163,13 @@ The owner approved the deploy. Each later deploy still needs their OK.
   - **Director link `/td/<secret>`** (no sign-in; the link is the key): `worker/tabroomPage.ts` lists every round doc tagged with the tournament from every team, flagged first, with team, round, names, last edit and flag chips. `/td/<secret>/doc/<docId>` shows that doc's full check page **including the text** (owner-approved, so the director can rule on disputes; the privacy page says so).
 - Starting content (catch-up within 15 s of a doc's first save) is labeled "Doc created with N characters of starting text" and not counted as offline typing (`isStarting` in `worker/summary.ts`).
 - Checked end to end in Playwright with test sign-in: a director creates "Fall Classic"; a coach's team; Ana starts Round 2 with Ben and the code; doc and flow open; both see Prep 19:5x; the director page lists the round with names; the full record shows Ana's text.
+
+### Flow marks (2026-11-03; on `main`, not deployed yet)
+
+- Block attribute `mark` (`src/model/marks.ts`): `extend`, `dropped`, `answered`, `key`; not carried over when a line is split. Command `toggleFlowMark(mark)` on the selected blocks (the same mark again clears it). Keys: Ctrl/Cmd+Shift+E (extend), D (dropped), A (answered), K (key). Toolbar buttons →, !, ✓, ★ in both views.
+- Look: position titles, sections and claims get a badge in front ("→ EXT", "! DROPPED", "✓", "★ KEY"); answered lines are crossed out and faded; body lines and flow cells get a colored left edge. Badges use `::before` so they don't clash with the speech tags (`::after`). Word export prefixes "[DROPPED]" etc.; the Excel flow prefixes →, [DROPPED], ✓, ★.
+- Search (Ctrl/Cmd+K) now ignores Shift, so Ctrl+Shift+K marks "key" instead of opening search.
+- Tests in `tests/editor.test.ts`. Note for Playwright: pressing a shortcut right after a click can hit the previous line, because the caret position syncs a moment later; wait ~300 ms after clicking.
 
 ## Next steps
 

@@ -53,6 +53,8 @@ export async function buildDocx(doc: PMNode, title: string): Promise<Blob> {
             highlight: r.highlight ? 'yellow' : undefined,
           }),
     );
+    const markLabel = ({ extend: 'EXTEND', dropped: 'DROPPED', answered: 'ANSWERED', key: 'KEY' } as Record<string, string>)[String(node.attrs.mark)];
+    if (markLabel) children.unshift(new TextRun({ text: `[${markLabel}] `, font: 'Calibri', size: 16, bold: true, color: node.attrs.mark === 'dropped' ? 'B42318' : '1F6F5C' }));
     const tag = tags.get(pos);
     if (tag) {
       children.push(new TextRun({ text: `  ${tag.speech}`, font: 'Calibri', size: 16, bold: true, color: tag.side === 'gov' ? '2F6FD6' : 'C2410C' }));

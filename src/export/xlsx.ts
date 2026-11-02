@@ -100,7 +100,9 @@ export function buildFlowXlsx(doc: PMNode): Uint8Array {
         const list = g.cells.get(ci + 1) ?? [];
         const lines = list.map((b) => {
           const node = doc.nodeAt(b.pos)!;
-          return { runs: runsOf(node.toJSON()), claim: node.attrs.kind === 'claim' };
+          const mark = ({ extend: '→ ', dropped: '[DROPPED] ', answered: '✓ ', key: '★ ' } as Record<string, string>)[String(node.attrs.mark)];
+          const runs = runsOf(node.toJSON());
+          return { runs: mark ? [{ text: mark, bold: true }, ...runs] : runs, claim: node.attrs.kind === 'claim' };
         });
         return richCell(`${colName(ci)}${r}`, SPEECH_INFO[sp].side === 'gov' ? S.bodyGov : S.bodyOpp, lines);
       });
