@@ -39,6 +39,22 @@ export interface DocRecord {
   tournamentId: string | null;
   tournamentName: string | null;
   roundLabel: string | null;
+  /** In Recently deleted (or hidden from its owner): when, and by whom. */
+  deletedAt: number | null;
+  deletedBy: string | null;
+  /** Kept with the doc, so it survives that person deleting their account. */
+  deletedByName: string | null;
+}
+
+/** One line of a team's deletion log. */
+export interface DeletionEntry {
+  docId: string;
+  title: string;
+  round: boolean;
+  action: 'deleted' | 'restored' | 'purged' | 'moved-out';
+  userId: string;
+  userName: string;
+  at: number;
 }
 
 export interface Tournament {
@@ -104,6 +120,16 @@ export class Directory extends DurableObject {
       const cols = this.ctx.storage.sql.exec('PRAGMA table_info(docs)').toArray().map((r) => String(r.name));
       if (!cols.includes('tournament_id')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN tournament_id TEXT');
       if (!cols.includes('round_label')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN round_label TEXT');
+      if (!cols.includes('deleted_at')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_at INTEGER');
+      if (!cols.includes('deleted_by')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_by TEXT');
+      if (!cols.includes('deleted_by_name')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_by_name TEXT');
+      // Every deletion, restore and permanent delete of a team doc. Kept even
+      // after the doc is gone, so coaches can see that it happened.
+      this.ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS deletions (
+          seq INTEGER PRIMARY KEY AUTOINCREMENT, team_id TEXT, doc_id TEXT NOT NULL, title TEXT NOT NULL,
+          round INTEGER NOT NULL, action TEXT NOT NULL, user_id TEXT NOT NULL, user_name TEXT NOT NULL, at INTEGER NOT NULL);
+      `);
     });
   }
 
@@ -237,20 +263,26 @@ export class Directory extends DurableObject {
       const members = Number(this.one('SELECT COUNT(*) AS n FROM members WHERE team_id = ?', t.id)?.n ?? 0);
       if (coaches <= 1 && members > 1) return { ok: false, reason: `You're the only coach of ${t.name}. Make someone else a coach first (Team → Members).` };
     }
-    const personal = this.all('SELECT id FROM docs WHERE team_id IS NULL AND owner_id = ?', userId).map((r) => String(r.id));
-    for (const id of personal) {
-      this.sql.exec('DELETE FROM docs WHERE id = ?', id);
-      this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', id);
-    }
+    // Round docs tagged with a tournament are kept (hidden) for the tab room.
+    const userName = String(this.one('SELECT name FROM users WHERE id = ?', userId)?.name ?? '');
+    const keepForTabRoom = (where: string, arg: string) =>
+      this.sql.exec(
+        `UPDATE docs SET deleted_at = COALESCE(deleted_at, ?), deleted_by = COALESCE(deleted_by, ?), deleted_by_name = COALESCE(deleted_by_name, ?) WHERE ${where} AND tournament_id IS NOT NULL`,
+        Date.now(), userId, `${userName} (account deleted)`, arg,
+      );
+    keepForTabRoom('team_id IS NULL AND owner_id = ?', userId);
+    const personal = this.all('SELECT id FROM docs WHERE team_id IS NULL AND owner_id = ? AND tournament_id IS NULL', userId).map((r) => String(r.id));
+    for (const id of personal) this.purge(id);
     // Teams where they were the only member go too.
     for (const t of this.teamsFor(userId)) {
       const members = Number(this.one('SELECT COUNT(*) AS n FROM members WHERE team_id = ?', t.id)?.n ?? 0);
       if (members <= 1) {
-        for (const r of this.all('SELECT id FROM docs WHERE team_id = ?', t.id)) {
+        keepForTabRoom('team_id = ?', t.id);
+        for (const r of this.all('SELECT id FROM docs WHERE team_id = ? AND tournament_id IS NULL', t.id)) {
           personal.push(String(r.id));
-          this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', String(r.id));
+          this.purge(String(r.id));
         }
-        this.sql.exec('DELETE FROM docs WHERE team_id = ?', t.id);
+        this.sql.exec('DELETE FROM deletions WHERE team_id = ?', t.id);
         this.sql.exec('DELETE FROM teams WHERE id = ?', t.id);
       }
     }
@@ -298,10 +330,15 @@ export class Directory extends DurableObject {
       tournamentId: (row.tournament_id as string | null) ?? null,
       tournamentName: row.tournament_id ? String(this.one('SELECT name FROM tournaments WHERE id = ?', String(row.tournament_id))?.name ?? '') || null : null,
       roundLabel: (row.round_label as string | null) ?? null,
+      deletedAt: row.deleted_at === null || row.deleted_at === undefined ? null : Number(row.deleted_at),
+      deletedBy: (row.deleted_by as string | null) ?? null,
+      deletedByName: (row.deleted_by_name as string | null) ?? null,
     };
   }
 
   private canAccess(d: DocRecord, userId: string): boolean {
+    // A deleted doc: only the team's coaches can still open it.
+    if (d.deletedAt !== null) return !!d.teamId && this.role(d.teamId, userId) === 'coach';
     if (d.ownerId === userId) return true;
     if (!d.teamId) return false;
     const role = this.role(d.teamId, userId);
@@ -325,7 +362,7 @@ export class Directory extends DurableObject {
         ? this.all('SELECT * FROM docs WHERE team_id = ?', teamId)
         : []
       : this.all('SELECT * FROM docs WHERE team_id IS NULL AND owner_id = ?', userId);
-    return rows.map((r) => this.doc(r)).filter((d) => this.canAccess(d, userId));
+    return rows.map((r) => this.doc(r)).filter((d) => d.deletedAt === null && this.canAccess(d, userId));
   }
 
   /**
@@ -365,7 +402,9 @@ export class Directory extends DurableObject {
     if (patch.title !== undefined && patch.title.trim()) this.sql.exec('UPDATE docs SET title = ? WHERE id = ?', patch.title.trim().slice(0, 200), docId);
     if (patch.kind !== undefined) this.sql.exec('UPDATE docs SET kind = ? WHERE id = ?', patch.kind === 'reference' ? 'reference' : 'prep', docId);
     if (patch.order !== undefined) this.sql.exec('UPDATE docs SET ord = ? WHERE id = ?', patch.order, docId);
-    if (patch.tournamentCode !== undefined) {
+    // A tournament tag can be added but not removed or changed, so a round
+    // doc can't be taken out of the tab room's view.
+    if (patch.tournamentCode !== undefined && !doc.tournamentId) {
       const t = patch.tournamentCode ? this.tournamentByCode(patch.tournamentCode) : null;
       this.sql.exec('UPDATE docs SET tournament_id = ? WHERE id = ?', t?.id ?? null, docId);
     }
@@ -375,8 +414,13 @@ export class Directory extends DurableObject {
       if (patch.round && !doc.checkToken) this.sql.exec('UPDATE docs SET check_token = ? WHERE id = ?', randomToken(12), docId);
     }
     // Moving a doc into a team: only its owner, only into a team they're on.
-    if (patch.teamId !== undefined && doc.ownerId === userId && patch.teamId !== doc.teamId) {
-      if (patch.teamId === null || this.role(patch.teamId, userId)) this.sql.exec('UPDATE docs SET team_id = ? WHERE id = ?', patch.teamId, docId);
+    // Moving out of a team: never for round docs (the coach would lose them);
+    // other docs can go, and the move is in the team's deletion log.
+    if (patch.teamId !== undefined && doc.ownerId === userId && patch.teamId !== doc.teamId && !(doc.teamId && doc.round)) {
+      if (patch.teamId === null || this.role(patch.teamId, userId)) {
+        if (doc.teamId) this.logDeletion(doc, 'moved-out', userId);
+        this.sql.exec('UPDATE docs SET team_id = ? WHERE id = ?', patch.teamId, docId);
+      }
     }
     if (patch.partners !== undefined) {
       this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', docId);
@@ -388,16 +432,84 @@ export class Directory extends DurableObject {
     return this.doc(this.one('SELECT * FROM docs WHERE id = ?', docId)!);
   }
 
-  /** Only the owner (or a team coach) can delete a doc from the server list. */
-  deleteDoc(userId: string, docId: string): boolean {
-    const row = this.one('SELECT * FROM docs WHERE id = ?', docId);
-    if (!row) return true;
-    const d = this.doc(row);
-    const coach = d.teamId ? this.role(d.teamId, userId) === 'coach' : false;
-    if (d.ownerId !== userId && !coach) return false;
+  private logDeletion(d: DocRecord, action: DeletionEntry['action'], userId: string) {
+    const name = String(this.one('SELECT name FROM users WHERE id = ?', userId)?.name ?? '');
+    this.sql.exec(
+      'INSERT INTO deletions (team_id, doc_id, title, round, action, user_id, user_name, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      d.teamId, d.id, d.title, d.round ? 1 : 0, action, userId, name, Date.now(),
+    );
+  }
+
+  private purge(docId: string) {
     this.sql.exec('DELETE FROM docs WHERE id = ?', docId);
     this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', docId);
+  }
+
+  private hide(d: DocRecord, userId: string) {
+    const name = String(this.one('SELECT name FROM users WHERE id = ?', userId)?.name ?? '');
+    this.sql.exec('UPDATE docs SET deleted_at = ?, deleted_by = ?, deleted_by_name = ? WHERE id = ?', Date.now(), userId, name, d.id);
+  }
+
+  /**
+   * Delete a doc.
+   * - Team docs (owner or coach): go to Recently deleted, where coaches can
+   *   still open them, restore them or delete them for good. Logged.
+   * - A team doc already in Recently deleted, by a coach: deleted for good
+   *   (not tournament round docs: the tab room keeps those). Logged.
+   * - My own docs outside a team: deleted for good, except tournament round
+   *   docs, which are only hidden from me (the tab room still sees them).
+   * `purged` tells the caller to wipe the doc's contents too.
+   */
+  deleteDoc(userId: string, docId: string): { ok: true; purged: boolean } | { ok: false; reason: string } {
+    const row = this.one('SELECT * FROM docs WHERE id = ?', docId);
+    if (!row) return { ok: true, purged: false };
+    const d = this.doc(row);
+    const coach = d.teamId ? this.role(d.teamId, userId) === 'coach' : false;
+    if (d.deletedAt !== null) {
+      if (!coach) return { ok: false, reason: 'Only a coach can delete this for good' };
+      if (d.tournamentId) return { ok: false, reason: 'Round docs from a tournament stay for the tab room' };
+      this.logDeletion(d, 'purged', userId);
+      this.purge(docId);
+      return { ok: true, purged: true };
+    }
+    if (d.ownerId !== userId && !coach) return { ok: false, reason: 'Only the owner or a coach can delete this doc' };
+    if (d.teamId || d.tournamentId) {
+      if (d.teamId) this.logDeletion(d, 'deleted', userId);
+      this.hide(d, userId);
+      return { ok: true, purged: false };
+    }
+    this.purge(docId);
+    return { ok: true, purged: true };
+  }
+
+  /** Coaches: bring a doc back from Recently deleted. */
+  restoreDoc(userId: string, docId: string): boolean {
+    const row = this.one('SELECT * FROM docs WHERE id = ?', docId);
+    if (!row) return false;
+    const d = this.doc(row);
+    if (d.deletedAt === null || !d.teamId || this.role(d.teamId, userId) !== 'coach') return false;
+    this.sql.exec('UPDATE docs SET deleted_at = NULL, deleted_by = NULL, deleted_by_name = NULL WHERE id = ?', docId);
+    this.logDeletion(d, 'restored', userId);
     return true;
+  }
+
+  /** Coaches: Recently deleted and the deletion log (newest first). */
+  trash(teamId: string, userId: string): { docs: (DocRecord & { ownerName: string })[]; log: DeletionEntry[] } | null {
+    if (this.role(teamId, userId) !== 'coach') return null;
+    const docs = this.all('SELECT * FROM docs WHERE team_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC', teamId).map((r) => {
+      const d = this.doc(r);
+      return { ...d, ownerName: this.names([d.ownerId])[d.ownerId] ?? '' };
+    });
+    const log = this.all('SELECT * FROM deletions WHERE team_id = ? ORDER BY seq DESC LIMIT 300', teamId).map((r) => ({
+      docId: String(r.doc_id),
+      title: String(r.title),
+      round: Number(r.round) === 1,
+      action: String(r.action) as DeletionEntry['action'],
+      userId: String(r.user_id),
+      userName: String(r.user_name),
+      at: Number(r.at),
+    }));
+    return { docs, log };
   }
 
   /** Coach view: every round doc on a team (coaches only; null otherwise). */

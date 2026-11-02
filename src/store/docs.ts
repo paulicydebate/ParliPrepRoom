@@ -172,12 +172,28 @@ export async function setDocTeam(id: string, teamId: string | null) {
   push(id, { teamId });
 }
 
-/** Remove a doc from this device and, if allowed, from the server. Throws if the server refuses. */
-export async function deleteDoc(id: string) {
+/**
+ * Remove a doc from this device and, if allowed, from the server. Throws if
+ * the server refuses. Returns false when the server kept it (team docs go to
+ * the coaches' Recently deleted; tournament round docs stay for the tab room).
+ */
+export async function deleteDoc(id: string): Promise<boolean> {
   const d = (await listDocs()).find((x) => x.id === id);
-  if (syncing() && onServer(d)) await deleteServerDoc(id);
+  let purged = true;
+  if (syncing() && onServer(d)) purged = (await deleteServerDoc(id)).purged;
   await save((await listDocs()).filter((x) => x.id !== id));
   await del(`seeded:${id}`, store).catch(() => {});
+  return purged;
+}
+
+/** What deleting this doc does, in words, for the menu. */
+export function deleteEffect(d: DocMeta, coach: boolean): { label: string; note: string } {
+  if (d.teamId)
+    return coach
+      ? { label: 'Move to Recently deleted', note: 'Coaches can open it, restore it or delete it for good from Coach view → Recently deleted.' }
+      : { label: 'Delete', note: 'Removes it from your list. Your coaches can still see it and restore it, and the deletion is logged.' };
+  if (d.teamId === null && d.tournamentName) return { label: 'Delete', note: `Removes it from your list. The ${d.tournamentName} tab room still sees it and its record.` };
+  return { label: 'Delete for good', note: 'Deletes the doc and its version history.' };
 }
 
 /**

@@ -56,6 +56,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Team docs are open to the whole team. Round docs are open to their owner, the partners they pick and the team's coaches.
 - Coaches get a **Coach view**: every round doc on the team, anything flagged first, with a link to each check page.
 - Each round doc has a **Check link** with a QR code. Anyone can open it to see who typed, when, how much, blocked pastes, big single edits and whether the server's record is intact. Partners and coaches also see every character typed and deleted, by whom and when.
+- Deleting a team doc moves it to the coaches' **Recently deleted** (Coach view), where they can open, restore or delete it for good; every deletion is in Coach view → **Deletion log**. Round docs entered for a tournament stay for the tab room.
 
 **Round Mode (Phase 5): live.**
 

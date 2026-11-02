@@ -224,6 +224,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
   ins { text-decoration:none; }
   del { color:var(--bad); background:var(--bad-bg); border-radius:3px; }
   footer { color:var(--muted); font-size:12.5px; }
+  .deleted-note { display:inline-block; margin:6px 0; padding:4px 10px; border-radius:8px; background:var(--bad-bg); color:var(--bad); font-weight:600; font-size:14px; }
 </style>
 </head>
 <body>
@@ -232,6 +233,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
     <div class="eyebrow">Round doc check</div>
     <h1>${esc(doc.title)}</h1>
     <p class="meta">${esc([team, `Owner: ${owner}`, partners.length ? `Partners: ${partners.join(', ')}` : ''].filter(Boolean).join(' · '))}</p>
+    ${doc.deletedAt ? `<p class="deleted-note">Deleted${doc.deletedByName ? ` by ${esc(doc.deletedByName)}` : ''} on ${esc(date(doc.deletedAt))}, ${esc(clock(doc.deletedAt))}. The record below is kept.</p>` : ''}
     <p class="meta">${first ? `Edits from ${esc(date(first))}, ${esc(clock(first))} to ${esc(clock(last!))} (${esc(zoneName())})` : 'No edits yet.'}</p>
   </header>
 

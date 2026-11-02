@@ -83,6 +83,8 @@ function publicDoc(d: DocRecord) {
     checkToken: d.round ? d.checkToken : null,
     createdAt: d.createdAt,
     tournamentName: d.tournamentName,
+    deletedAt: d.deletedAt,
+    deletedByName: d.deletedByName,
     roundLabel: d.roundLabel,
   };
 }
@@ -271,10 +273,30 @@ export default {
       const rows = await Promise.all(
         list.map(async (d) => {
           const record = await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).record(false);
-          return { id: d.id, title: d.title, owner: d.ownerName, partners: d.partnerNames, checkToken: d.checkToken, createdAt: d.createdAt, summary: summarizeRecord(record) };
+          return {
+            id: d.id,
+            title: d.title,
+            owner: d.ownerName,
+            partners: d.partnerNames,
+            checkToken: d.checkToken,
+            createdAt: d.createdAt,
+            deletedAt: d.deletedAt,
+            deletedByName: d.deletedByName,
+            summary: summarizeRecord(record),
+          };
         }),
       );
       return json({ rounds: rows });
+    }
+    // Coaches: Recently deleted and the deletion log.
+    const trashM = /^\/api\/teams\/([A-Za-z0-9-]{8,64})\/deleted$/.exec(path);
+    if (trashM && request.method === 'GET') {
+      const t = await dir.trash(trashM[1], user!.id);
+      if (!t) return fail('Only coaches can see this', 403);
+      return json({
+        docs: t.docs.map((d) => ({ ...publicDoc(d), owner: d.ownerName, tournamentLocked: !!d.tournamentId })),
+        log: t.log,
+      });
     }
     const inviteM = /^\/api\/teams\/([A-Za-z0-9-]{8,64})\/invites$/.exec(path);
     if (inviteM && request.method === 'POST') {
@@ -316,7 +338,7 @@ export default {
       });
       return d ? json(publicDoc(d)) : fail('That doc belongs to someone else', 403);
     }
-    const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record|\/state|\/log)?$/.exec(path);
+    const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record|\/state|\/log|\/restore)?$/.exec(path);
     if (docM) {
       const [, id, sub] = docM;
       if (!sub && request.method === 'PATCH') {
@@ -329,7 +351,13 @@ export default {
         return ok && doc ? json(publicDoc(doc)) : fail('No access to this doc', 403);
       }
       if (!sub && request.method === 'DELETE') {
-        return (await dir.deleteDoc(user!.id, id)) ? json({ ok: true }) : fail('Only the owner or a coach can delete this doc', 403);
+        const r = await dir.deleteDoc(user!.id, id);
+        if (!r.ok) return fail(r.reason, 403);
+        if (r.purged) await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(id)).wipe();
+        return json({ ok: true, purged: r.purged });
+      }
+      if (sub === '/restore' && request.method === 'POST') {
+        return (await dir.restoreDoc(user!.id, id)) ? json({ ok: true }) : fail('Only a coach can restore this doc', 403);
       }
       const { ok } = await dir.access(id, user!.id);
       if (!ok) return fail('No access to this doc', 403);

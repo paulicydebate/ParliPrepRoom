@@ -3526,3 +3526,27 @@ input.name-input.prep-len {
   width: 30px;
   text-align: center;
 }
+
+.coach-tabs {
+  margin: 4px 0 10px;
+}
+.deletion-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.deletion-log li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.deletion-log li > .small {
+  flex: 0 0 120px;
+  font-variant-numeric: tabular-nums;
+}
+.deletion-log li.is-deleted strong,
+.deletion-log li.is-purged strong {
+  color: var(--danger);
+}

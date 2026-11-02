@@ -332,7 +332,8 @@ export function App() {
 
   const remove = async (doc: DocMeta) => {
     try {
-      await deleteDoc(doc.id);
+      const purged = await deleteDoc(doc.id);
+      if (!purged) toast(doc.teamId ? 'Deleted. Your coaches can still see it in Recently deleted.' : 'Removed from your list. The tab room still has it.');
     } catch (e) {
       toast((e as Error).message);
       return;

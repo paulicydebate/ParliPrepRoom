@@ -27,15 +27,15 @@ function chips(s: RecordSummary) {
 
 export function renderTabroomPage(t: Tournament, rows: TabroomRow[], secret: string, tz: string): string {
   const clock = (ms: number | null) => (ms ? new Date(ms).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: tz }) : '—');
-  const sorted = [...rows].sort((a, b) => b.summary.flags - a.summary.flags || (b.summary.lastAt ?? 0) - (a.summary.lastAt ?? 0));
+  const sorted = [...rows].sort((a, b) => Number(!!b.doc.deletedAt) - Number(!!a.doc.deletedAt) || b.summary.flags - a.summary.flags || (b.summary.lastAt ?? 0) - (a.summary.lastAt ?? 0));
   const flagged = rows.filter((r) => r.summary.flags > 0).length;
   const list = sorted
     .map(
-      (r) => `<li class="${r.summary.flags ? 'flagged' : ''}">
+      (r) => `<li class="${r.summary.flags || r.doc.deletedAt ? 'flagged' : ''}">
         <div class="main">
           <div class="title"><strong>${esc(r.doc.roundLabel || 'Round ?')}</strong> · ${esc(r.doc.teamName || 'No team')} · ${esc(r.doc.title)}</div>
           <div class="meta">${esc([r.doc.ownerName, ...r.doc.partnerNames].filter(Boolean).join(', '))} · last edit ${esc(clock(r.summary.lastAt))} · ${r.summary.typedLive.toLocaleString()} characters typed live</div>
-          <div class="chips">${chips(r.summary)}</div>
+          <div class="chips">${r.doc.deletedAt ? `<span class="chip bad">Deleted${r.doc.deletedByName ? ` by ${esc(r.doc.deletedByName)}` : ''} ${esc(clock(r.doc.deletedAt))}</span>` : ''}${chips(r.summary)}</div>
         </div>
         <a class="btn" href="/td/${esc(secret)}/doc/${esc(r.doc.id)}">Full record</a>
       </li>`,

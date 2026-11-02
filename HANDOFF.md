@@ -2,7 +2,7 @@
 
 **Read this first.** Several AI assistants work on this project. Whoever makes a change updates this file in the same commit: what changed, the current state, and what's next.
 
-Last updated: 2026-11-03 by Claude (Claude Code cloud session). Latest: adjustable timer lengths, deployed 2026-11-03 (version 9010a62b) with the owner's approval. Before that: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, deployed 2026-11-03 (version a39bedb3) with the owner's approval. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
+Last updated: 2026-11-03 by Claude (Claude Code cloud session). Latest: deletions are kept and logged for coaches (on `main`, not deployed). Before that: adjustable timer lengths, deployed 2026-11-03 (version 9010a62b) with the owner's approval. Before that: import into reference docs, named version history and replay, flow marks, timer, New round and tab room, plus reset invite links, delete my account and download-all, deployed 2026-11-03 (version a39bedb3) with the owner's approval. Coach view deployed 2026-11-02 (version 5fb5c578). Design and tablet pass deployed 2026-11-02 (version 6795cdc1). Colorways deployed 2026-11-02 (version f0b30f8c). Before that: alternating column shades, pins column inside the flow and delete-a-flow-sheet, all deployed 2026-11-02 (version 1ccc7a0f). Before that, pins matched to flow sheets, the sidebar-rename fix and insert-a-block were deployed 2026-11-02 (version 42837dfa). Round Mode is live. Before that: sign-in, teams, round-doc access and the public check page (Phase 3), deployed to the live site 2026-11-02 (version 503634be) with the owner's approval. Google secrets are set in Cloudflare; the owner is testing sign-in.
 
 ## Where the code is
 
@@ -193,6 +193,17 @@ The owner approved the deploy. Each later deploy still needs their OK.
 - Lengths can be typed as `25`, `2.5` or `2:30` (`parseMinutes` / `formatMinutes` in `src/store/timer.ts`; `adjust` adds or removes time).
 - New round has a prep-length box (defaults to this device's Prep preset). A different length there becomes the Prep preset's time on that device.
 - Tests: `tests/timer.test.ts`.
+
+### Deleting docs: Recently deleted and a deletion log (2026-11-03; on `main`, not deployed yet)
+
+- Owner's question: did a student's "Delete for good" hide a round doc from the coach with no trace? It did. Now:
+  - **Team docs** (owner or coach deletes): `docs.deleted_at / deleted_by / deleted_by_name` are set; the doc leaves every list and only the team's coaches can open it (`canAccess`). Logged in the `deletions` table. Coach view → **Recently deleted** lets coaches open, restore (`POST /api/docs/<id>/restore`) or **delete for good** (a second DELETE on a deleted doc; wipes the DocRoom too). **Deletion log** tab shows every deleted / restored / deleted-for-good / moved-out line, kept after the doc is gone.
+  - **Round docs** in Coach view stay listed with a red "Deleted by X" chip and count as flagged. The check page and the tab room page also show "Deleted by X".
+  - **Tournament round docs** can't be deleted for good by anyone; the tab room keeps them. A personal (no team) tournament doc is only hidden from its owner. Account deletion keeps them too (hidden, "Name (account deleted)").
+  - **My own docs** outside a team and not in a tournament: still deleted for good.
+  - Loopholes closed: round docs can't be moved out of a team; a tournament tag can't be removed or changed once set; moving any other doc out of a team is logged.
+- Sidebar menu wording comes from `deleteEffect` in `src/store/docs.ts`. Privacy page updated to match.
+- Checked against a local server (student delete, no access afterwards, coach sees and restores, student can't restore or purge, coach purges, log lines, tournament tag lock, tab room and check page labels) and in a browser (Coach view tabs).
 
 ## Next steps
 

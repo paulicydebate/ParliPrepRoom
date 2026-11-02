@@ -46,6 +46,8 @@ export interface ServerDoc {
   createdAt: number;
   tournamentName?: string | null;
   roundLabel?: string | null;
+  deletedAt?: number | null;
+  deletedByName?: string | null;
 }
 
 export interface Tournament {
@@ -221,7 +223,25 @@ export const createServerDoc = (doc: {
   api<ServerDoc>('/api/docs', { method: 'POST', json: doc });
 export const patchServerDoc = (id: string, patch: Partial<Pick<ServerDoc, 'title' | 'kind' | 'round' | 'order' | 'partners' | 'teamId'>>) =>
   api<ServerDoc>(`/api/docs/${id}`, { method: 'PATCH', json: patch });
-export const deleteServerDoc = (id: string) => api<{ ok: true }>(`/api/docs/${id}`, { method: 'DELETE' });
+export const deleteServerDoc = (id: string) => api<{ ok: true; purged: boolean }>(`/api/docs/${id}`, { method: 'DELETE' });
+export const restoreServerDoc = (id: string) => api<{ ok: true }>(`/api/docs/${id}/restore`, { method: 'POST' });
+
+export interface DeletedDoc extends ServerDoc {
+  owner: string;
+  /** Tagged with a tournament: the tab room keeps it, so it can't be deleted for good. */
+  tournamentLocked: boolean;
+}
+export interface DeletionEntry {
+  docId: string;
+  title: string;
+  round: boolean;
+  action: 'deleted' | 'restored' | 'purged' | 'moved-out';
+  userId: string;
+  userName: string;
+  at: number;
+}
+/** Coaches: Recently deleted and the deletion log. */
+export const teamDeleted = (teamId: string) => api<{ docs: DeletedDoc[]; log: DeletionEntry[] }>(`/api/teams/${teamId}/deleted`);
 export const postDocEvents = (id: string, events: unknown[]) => api<{ ok: true }>(`/api/docs/${id}/events`, { method: 'POST', json: { events } });
 
 export interface RoundRow {
@@ -231,6 +251,8 @@ export interface RoundRow {
   partners: string[];
   checkToken: string | null;
   createdAt: number;
+  deletedAt?: number | null;
+  deletedByName?: string | null;
   summary: {
     firstAt: number | null;
     lastAt: number | null;

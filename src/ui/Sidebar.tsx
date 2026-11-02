@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useAccount } from '../store/account';
-import { moveDoc, renameDoc, setDocTeam, sortDocs, type DocKind, type DocMeta } from '../store/docs';
+import { deleteEffect, moveDoc, renameDoc, setDocTeam, sortDocs, type DocKind, type DocMeta } from '../store/docs';
 import { IconBook, IconDoc, IconGrip, IconPlus, IconUpload } from './icons';
 
 const coarsePointer = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -33,6 +33,7 @@ function DocRow({
   const [value, setValue] = useState(doc.title);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { teams } = useAccount();
+  const effect = deleteEffect(doc, !!doc.teamId && teams.some((t) => t.id === doc.teamId && t.role === 'coach'));
 
   if (editing) {
     return (
@@ -118,14 +119,14 @@ function DocRow({
                 onDelete();
               }}
             >
-              Delete for good
+              {effect.label}
             </button>
           ) : (
             <button type="button" className="danger" onClick={() => setConfirmDelete(true)}>
               Delete…
             </button>
           )}
-          {confirmDelete && <p className="menu-note">Deletes the doc and its version history.</p>}
+          {confirmDelete && <p className="menu-note">{effect.note}</p>}
         </div>
       </details>
     </li>
