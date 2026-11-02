@@ -1,6 +1,6 @@
 # ParliPrepRoom — Plan
 
-Status: draft v2 (2026-11-02), updated with answers to the open questions. Nothing is built yet.
+Status: Phase 1 (editor core) done, 2026-11-02. See README.md for what works now.
 
 ## 1. The goal
 
