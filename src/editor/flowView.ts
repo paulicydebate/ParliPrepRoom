@@ -366,7 +366,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
               const n = state.doc.nodeAt(p.pos);
               if (!n) continue;
               if (p.col === 0) {
-                decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: 'fl-section', style: `grid-column: 1 / -1; grid-row: ${p.row}` }));
+                decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: 'fl-section', style: `grid-column: 1; grid-row: ${p.row}` }));
               } else {
                 const side = p.speech ? SPEECH_INFO[p.speech].side : sheet.side;
                 decos.push(

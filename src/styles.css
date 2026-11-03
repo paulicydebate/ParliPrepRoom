@@ -1313,7 +1313,13 @@ del {
   font-weight: 600;
   box-shadow: var(--shadow);
 }
+.sheet-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sheet-dot {
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -1487,7 +1493,19 @@ del {
   margin: 16px 0 2px;
   padding: 4px 4px 4px 2px;
   font-size: calc(var(--pp-section-size) * 0.8);
-  border-bottom: 1px solid var(--border);
+  /* A section title stays inside its own column and wraps there... */
+  overflow-wrap: anywhere;
+}
+/* ...while its divider line still runs across every column. */
+.pp-flow > .fl-section::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  width: calc(var(--fl-cols, 6) * 100% + (var(--fl-cols, 6) - 1) * 6px);
+  background: var(--border);
+  pointer-events: none;
 }
 .pp-flow > .fl-section .pp-toggle {
   display: none;

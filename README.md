@@ -25,7 +25,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 
 - Every pane has a **Doc / Flow** switch. Both views edit the same document, so the same prep can be open as a doc on one side and a flow on the other.
 - Each Position title is a **sheet** (tab), marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR, PMR columns; Opp sheets start at the LOC.
-- A claim starts a row. Lines tagged with a later speech (toolbar speech menu, or by typing in that column) are answers and sit beside it. Warrants follow their claim. Section titles are full-width label rows.
+- A claim starts a row. Lines tagged with a later speech (toolbar speech menu, or by typing in that column) are answers and sit beside it. Warrants follow their claim. Section titles are label rows: the text stays in the first column (long ones wrap there) and a divider line runs across every column. Long sheet names are shortened with “…” in the tabs (hover for the full name).
 - Every sheet shows 150 rows. Click any empty cell in any row to type there; the rows above stay blank (stored as a blank-row count on the line, so the doc view has no empty lines).
 - Dragging a selection down across cells selects and copies only the column you started in.
 - In the flow: Tab / Shift+Tab move to the next/previous speech in the row; Cmd/Ctrl+Enter starts a new row; + Gov / + Opp add a sheet; double-click a tab to rename it; Delete sheet removes the one in view (Undo brings it back).
