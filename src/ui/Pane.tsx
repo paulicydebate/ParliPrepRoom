@@ -387,6 +387,7 @@ export function Pane({
             )}
             <TitleInput meta={meta} ydoc={ydoc} provider={provider} />
             {syncStatus !== 'off' && <SyncDot status={syncStatus} provider={provider} />}
+            {provider && meta.teamId && !round && <PartnersButton meta={meta} />}
             {alsoOpen && (
               <span className="linked-chip" title="This document is open in another pane too. Both panes show the same text; editing one edits the other.">
                 Same doc as other pane

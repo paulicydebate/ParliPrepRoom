@@ -27,6 +27,8 @@ const MSG_PING = 99;
 export interface Who {
   id: string;
   name: string;
+  /** Access was taken away: ignore anything this connection sends. */
+  revoked?: boolean;
 }
 
 /** One saved update, as shown on the check page. */
@@ -137,7 +139,7 @@ export class DocRoom extends DurableObject {
     encoding.writeVarUint(enc, MSG_SYNC);
     syncProtocol.writeUpdate(enc, update);
     const msg = encoding.toUint8Array(enc);
-    for (const peer of this.ctx.getWebSockets()) if (peer !== ws) peer.send(msg);
+    for (const peer of this.ctx.getWebSockets()) if (peer !== ws && !(peer.deserializeAttachment() as Who | null)?.revoked) peer.send(msg);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -165,6 +167,7 @@ export class DocRoom extends DurableObject {
 
   async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
     if (typeof message === 'string') return;
+    if ((ws.deserializeAttachment() as Who | null)?.revoked) return;
     const data = new Uint8Array(message);
     const doc = this.loadDoc();
     const dec = decoding.createDecoder(data);
@@ -186,7 +189,7 @@ export class DocRoom extends DurableObject {
       return;
     } else if (type === MSG_AWARENESS) {
       // Cursors and names: relay as-is to the others.
-      for (const peer of this.ctx.getWebSockets()) if (peer !== ws) peer.send(data);
+      for (const peer of this.ctx.getWebSockets()) if (peer !== ws && !(peer.deserializeAttachment() as Who | null)?.revoked) peer.send(data);
     }
     await this.writes;
   }
@@ -232,6 +235,31 @@ export class DocRoom extends DurableObject {
         via: String(r.via),
         data: toBase64(new Uint8Array(r.data as ArrayBuffer)),
       }));
+  }
+
+  /** Ids of the people connected right now (so the server can check they still have access). */
+  connectedUsers(): string[] {
+    const ids = new Set<string>();
+    for (const ws of this.ctx.getWebSockets()) {
+      const who = ws.deserializeAttachment() as Who | null;
+      if (who) ids.add(who.id);
+    }
+    return [...ids];
+  }
+
+  /** Disconnect these people (their access to the doc was taken away). */
+  kick(userIds: string[]): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      const who = ws.deserializeAttachment() as Who | null;
+      if (who && userIds.includes(who.id)) {
+        try {
+          ws.serializeAttachment({ ...who, revoked: true });
+          ws.close(4403, 'no access');
+        } catch {
+          // already closed
+        }
+      }
+    }
   }
 
   /** Erase this document's contents and record (account deletion). */

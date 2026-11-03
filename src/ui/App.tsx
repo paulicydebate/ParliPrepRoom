@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
+import { clearPins } from '../store/pins';
 import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
 import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
@@ -355,6 +356,26 @@ export function App() {
     await deleteAllVersions(doc.id);
   };
 
+  /** "Start fresh": delete my docs in this list, close every window, clear this list's pins. */
+  const resetWorkspace = async () => {
+    let kept = 0;
+    for (const d of myDocs) {
+      try {
+        const purged = await deleteDoc(d.id);
+        if (!purged) kept++;
+        await destroyDocData(d.id);
+        await deleteAllVersions(d.id);
+      } catch {
+        kept++;
+      }
+    }
+    setLayout((l) => ({ ...l, panes: [{ key: paneKey(), docId: null, outline: false }], weights: [1], focused: 0 }));
+    clearPins(acct.space);
+    toast(
+      `Fresh start: ${myDocs.length} doc${myDocs.length === 1 ? '' : 's'} cleared.${kept ? " Team docs stay with your coaches in Recently deleted; tournament rounds stay for the tab room." : ''}`,
+    );
+  };
+
   // Drag the divider between two panes to resize them.
   const startResize = useCallback((i: number, e: React.PointerEvent) => {
     const container = panesRef.current;
@@ -407,6 +428,9 @@ export function App() {
   const visibleDocs = spaceDocs ? (roundMode ? spaceDocs.filter((d) => d.round) : spaceDocs) : null;
   const spaceName = signedIn ? (acct.teams.find((t) => t.id === acct.space)?.name ?? 'My own docs') : null;
   const searchable = visibleDocs ?? [];
+  /** Docs in this list that are mine to delete (not ones teammates shared with me). */
+  const myDocs = (spaceDocs ?? []).filter((d) => !d.ownerId || d.ownerId === acct.user?.id);
+
   const { index: library, blockContent } = useLibrary(
     searchable.map((d) => d.id),
     findOpen || pinsOpen,
@@ -570,7 +594,7 @@ export function App() {
         {showSidebar && docs && (
           <>
             {overlaySidebar && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
-            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} />
+            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} onReset={roundMode ? undefined : () => void resetWorkspace()} resetCount={myDocs.length} />
             {!overlaySidebar && <PanelHandle panel={sideWidth} edge="right" label="Resize the doc list" onCollapse={() => setLayout((l) => ({ ...l, sidebar: false }))} />}
           </>
         )}

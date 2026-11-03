@@ -3,13 +3,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from '../editor/roundGuard';
 import { teamDetails, useAccount, type Member } from '../store/account';
-import { setDocPartners, type DocMeta } from '../store/docs';
+import { setDocAccess, setDocPartners, type DocMeta } from '../store/docs';
 import { IconClose } from './icons';
 
 /** "Partners" button on a team round doc: who besides the owner and coaches can open it. */
 export function PartnersButton({ meta }: { meta: DocMeta }) {
   const acct = useAccount();
   const [open, setOpen] = useState(false);
+  // Floats above the window (a pane clips anything that sticks out of it).
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) ref.current.open = false;
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
   const [members, setMembers] = useState<Member[] | null>(null);
   useEffect(() => {
     if (!open || !meta.teamId) return;
@@ -21,33 +32,64 @@ export function PartnersButton({ meta }: { meta: DocMeta }) {
   if (!meta.teamId) return null;
   const canEdit = meta.ownerId === acct.user?.id || acct.teams.find((t) => t.id === meta.teamId)?.role === 'coach';
 
+  const isRound = !!meta.round;
+  const everyone = !isRound && meta.access === 'team';
+  const students = members?.filter((m) => m.userId !== meta.ownerId && m.role === 'student') ?? [];
+  const label = isRound ? `Partners${partners.length ? ` (${partners.length})` : ''}` : everyone ? 'Whole team' : partners.length ? `Partners (${partners.length})` : 'Only me';
+
   return (
-    <details className="partners-menu" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
-      <summary className="btn ghost small" title="Who can open this round doc">
-        Partners{partners.length ? ` (${partners.length})` : ''}
+    <details
+      ref={ref}
+      className="partners-menu"
+      open={open}
+      onToggle={(e) => {
+        const d = e.currentTarget as HTMLDetailsElement;
+        setOpen(d.open);
+        if (d.open) {
+          const r = d.getBoundingClientRect();
+          setPos({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 280)) });
+        }
+      }}
+    >
+      <summary className="btn ghost small" title={isRound ? 'Who can open this round doc' : 'Who can open and edit this doc'}>
+        {label}
       </summary>
-      <div className="menu partners-pop">
-        <p className="muted small">Round docs open only to the owner, the partners checked here, and the team's coaches.</p>
-        {!members && <p className="muted small">Loading team…</p>}
-        {members
-          ?.filter((m) => m.userId !== meta.ownerId && m.role === 'student')
-          .map((m) => (
-            <label key={m.userId} className="check-row">
-              <input
-                type="checkbox"
-                disabled={!canEdit}
-                checked={partners.includes(m.userId)}
-                onChange={(e) => {
-                  const next = e.target.checked ? [...partners, m.userId] : partners.filter((p) => p !== m.userId);
-                  setPartners(next);
-                  void setDocPartners(meta.id, next);
-                }}
-              />
-              {m.name}
+      <div className="menu partners-pop" style={pos ? { position: 'fixed', top: pos.top, left: pos.left, right: 'auto' } : undefined}>
+        {isRound ? (
+          <p className="muted small">Round docs open only to the owner, the partners checked here, and the team's coaches.</p>
+        ) : (
+          <>
+            <p className="muted small">Who can open and edit this doc? Coaches can always open it.</p>
+            <label className="check-row">
+              <input type="radio" name={`access-${meta.id}`} disabled={!canEdit} checked={!everyone} onChange={() => void setDocAccess(meta.id, 'partners')} />
+              Just me and the partners I pick
             </label>
-          ))}
-        {members && members.filter((m) => m.userId !== meta.ownerId && m.role === 'student').length === 0 && (
-          <p className="muted small">No other students on the team yet.</p>
+            <label className="check-row">
+              <input type="radio" name={`access-${meta.id}`} disabled={!canEdit} checked={everyone} onChange={() => void setDocAccess(meta.id, 'team')} />
+              Everyone on the team
+            </label>
+          </>
+        )}
+        {!everyone && (
+          <>
+            {!members && <p className="muted small">Loading team…</p>}
+            {students.map((m) => (
+              <label key={m.userId} className="check-row">
+                <input
+                  type="checkbox"
+                  disabled={!canEdit}
+                  checked={partners.includes(m.userId)}
+                  onChange={(e) => {
+                    const next = e.target.checked ? [...partners, m.userId] : partners.filter((p) => p !== m.userId);
+                    setPartners(next);
+                    void setDocPartners(meta.id, next);
+                  }}
+                />
+                {m.name}
+              </label>
+            ))}
+            {members && students.length === 0 && <p className="muted small">No other students on the team yet.</p>}
+          </>
         )}
         {!canEdit && <p className="muted small">Only the doc's owner or a coach can change this.</p>}
       </div>

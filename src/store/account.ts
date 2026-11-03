@@ -46,6 +46,8 @@ export interface ServerDoc {
   createdAt: number;
   tournamentName?: string | null;
   roundLabel?: string | null;
+  /** Who on the team can open it: everyone, or only the owner, partners and coaches. */
+  access?: 'team' | 'partners';
   deletedAt?: number | null;
   deletedByName?: string | null;
 }
@@ -219,9 +221,10 @@ export const createServerDoc = (doc: {
   partners?: string[];
   tournamentCode?: string | null;
   roundLabel?: string | null;
+  access?: 'team' | 'partners';
 }) =>
   api<ServerDoc>('/api/docs', { method: 'POST', json: doc });
-export const patchServerDoc = (id: string, patch: Partial<Pick<ServerDoc, 'title' | 'kind' | 'round' | 'order' | 'partners' | 'teamId'>>) =>
+export const patchServerDoc = (id: string, patch: Partial<Pick<ServerDoc, 'title' | 'kind' | 'round' | 'order' | 'partners' | 'teamId' | 'access'>>) =>
   api<ServerDoc>(`/api/docs/${id}`, { method: 'PATCH', json: patch });
 export const deleteServerDoc = (id: string) => api<{ ok: true; purged: boolean }>(`/api/docs/${id}`, { method: 'DELETE' });
 export const restoreServerDoc = (id: string) => api<{ ok: true }>(`/api/docs/${id}/restore`, { method: 'POST' });

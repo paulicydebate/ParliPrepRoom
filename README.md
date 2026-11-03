@@ -54,7 +54,8 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 
 - Sign in with Google (once the Google key is added on the server). A coach creates a team and shares invite links (one for students, one for coaches).
 - The sidebar shows the current team's docs; a switcher in the top bar changes team or shows "My own docs".
-- Team docs are open to the whole team. Round docs are open to their owner, the partners they pick and the team's coaches.
+- A team prep doc is open to its owner, the partners they pick and the team's coaches; the button in the doc's header can share it with the whole team instead. Round docs are always private that way. Coach briefs (reference docs) are team-wide by default.
+- **Reset: start fresh** at the bottom of the doc list deletes your own docs in that list, closes every window and clears pins (team docs still go to the coaches' Recently deleted).
 - Coaches get a **Coach view**: every round doc on the team, anything flagged first, with a link to each check page.
 - Each round doc has a **Check link** with a QR code. Anyone can open it to see who typed, when, how much, blocked pastes, big single edits and whether the server's record is intact. Partners and coaches also see every character typed and deleted, by whom and when.
 - Deleting a team doc moves it to the coaches' **Recently deleted** (Coach view), where they can open, restore or delete it for good; every deletion is in Coach view → **Deletion log**. Round docs entered for a tournament stay for the tab room.

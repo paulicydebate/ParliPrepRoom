@@ -3720,3 +3720,12 @@ kbd {
   border-radius: 4px;
   background: var(--surface-2);
 }
+
+.side-reset {
+  margin: 14px 2px 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.side-reset p {
+  margin: 0 0 6px;
+}

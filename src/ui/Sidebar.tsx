@@ -142,6 +142,8 @@ export function Sidebar({
   onCreate,
   onDelete,
   onImport,
+  onReset,
+  resetCount,
 }: {
   docs: DocMeta[];
   /** Team (or "My own docs") whose docs are listed, when signed in. */
@@ -154,7 +156,12 @@ export function Sidebar({
   onDelete: (doc: DocMeta) => void;
   /** Import a file as a new reference doc (hidden when not allowed, e.g. Round Mode). */
   onImport?: (file: File) => void;
+  /** One-step "start fresh": delete my docs in this list and close every window (hidden when not allowed). */
+  onReset?: () => void;
+  /** How many docs a reset would delete. */
+  resetCount?: number;
 }) {
+  const [confirmReset, setConfirmReset] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ kind: DocKind; before: string | null } | null>(null);
@@ -294,6 +301,36 @@ export function Sidebar({
       )}
       {section('prep', 'Prep', 'What you type during prep.')}
       {section('reference', 'Reference', 'Coach briefs and notes to read from.')}
+      {onReset && (
+        <div className="side-reset">
+          {confirmReset ? (
+            <>
+              <p className="small">
+                Delete {resetCount ? `your ${resetCount} doc${resetCount === 1 ? '' : 's'}` : 'nothing (no docs of yours)'} here and close every window?
+              </p>
+              <div className="row-inline">
+                <button type="button" className="btn ghost small" onClick={() => setConfirmReset(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn small danger-fill"
+                  onClick={() => {
+                    setConfirmReset(false);
+                    onReset();
+                  }}
+                >
+                  Yes, reset
+                </button>
+              </div>
+            </>
+          ) : (
+            <button type="button" className="btn ghost small" onClick={() => setConfirmReset(true)} title="Delete your docs in this list, close every window and clear your pins">
+              Reset: start fresh
+            </button>
+          )}
+        </div>
+      )}
       <p className="side-foot">
         <a href="/privacy" target="_blank" rel="noreferrer">
           Privacy

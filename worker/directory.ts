@@ -39,6 +39,12 @@ export interface DocRecord {
   tournamentId: string | null;
   tournamentName: string | null;
   roundLabel: string | null;
+  /**
+   * Who on the team can open it. 'partners': the owner, the partners picked
+   * for it and the team's coaches. 'team': everyone on the team. Round docs
+   * are always 'partners'.
+   */
+  access: 'team' | 'partners';
   /** In Recently deleted (or hidden from its owner): when, and by whom. */
   deletedAt: number | null;
   deletedBy: string | null;
@@ -120,6 +126,12 @@ export class Directory extends DurableObject {
       const cols = this.ctx.storage.sql.exec('PRAGMA table_info(docs)').toArray().map((r) => String(r.name));
       if (!cols.includes('tournament_id')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN tournament_id TEXT');
       if (!cols.includes('round_label')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN round_label TEXT');
+      if (!cols.includes('access')) {
+        this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN access TEXT');
+        // First run of this change: prep docs become private to their owner,
+        // partners and coaches; reference docs (coach briefs) stay team-wide.
+        this.ctx.storage.sql.exec("UPDATE docs SET access = CASE WHEN kind = 'reference' AND round = 0 THEN 'team' ELSE 'partners' END");
+      }
       if (!cols.includes('deleted_at')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_at INTEGER');
       if (!cols.includes('deleted_by')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_by TEXT');
       if (!cols.includes('deleted_by_name')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_by_name TEXT');
@@ -330,6 +342,7 @@ export class Directory extends DurableObject {
       tournamentId: (row.tournament_id as string | null) ?? null,
       tournamentName: row.tournament_id ? String(this.one('SELECT name FROM tournaments WHERE id = ?', String(row.tournament_id))?.name ?? '') || null : null,
       roundLabel: (row.round_label as string | null) ?? null,
+      access: Number(row.round) === 1 || row.access === 'partners' ? 'partners' : row.access === 'team' ? 'team' : row.kind === 'reference' ? 'team' : 'partners',
       deletedAt: row.deleted_at === null || row.deleted_at === undefined ? null : Number(row.deleted_at),
       deletedBy: (row.deleted_by as string | null) ?? null,
       deletedByName: (row.deleted_by_name as string | null) ?? null,
@@ -343,7 +356,7 @@ export class Directory extends DurableObject {
     if (!d.teamId) return false;
     const role = this.role(d.teamId, userId);
     if (!role) return false;
-    if (!d.round) return true;
+    if (d.access === 'team') return true;
     return role === 'coach' || d.partners.includes(userId);
   }
 
@@ -371,7 +384,7 @@ export class Directory extends DurableObject {
    */
   createDoc(
     userId: string,
-    input: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null },
+    input: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string },
   ): DocRecord | null {
     const existing = this.one('SELECT * FROM docs WHERE id = ?', input.id);
     if (existing) {
@@ -380,9 +393,11 @@ export class Directory extends DurableObject {
     }
     if (input.teamId && !this.role(input.teamId, userId)) return null;
     this.sql.exec(
-      'INSERT INTO docs (id, team_id, owner_id, title, kind, round, ord, check_token, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO docs (id, team_id, owner_id, title, kind, round, ord, check_token, created_at, access) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       input.id, input.teamId, userId, input.title.slice(0, 200) || 'Untitled', input.kind === 'reference' ? 'reference' : 'prep',
       input.round ? 1 : 0, input.order ?? null, input.round ? randomToken(12) : null, Date.now(),
+      // New docs: prep is private to its owner, partners and coaches; coach briefs are team-wide.
+      !input.round && (input.access === 'team' || (input.access === undefined && input.kind === 'reference')) ? 'team' : 'partners',
     );
     const t = input.tournamentCode ? this.tournamentByCode(input.tournamentCode) : null;
     if (t || input.roundLabel) {
@@ -395,7 +410,7 @@ export class Directory extends DurableObject {
   updateDoc(
     userId: string,
     docId: string,
-    patch: { title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null; tournamentCode?: string | null; roundLabel?: string | null },
+    patch: { title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null; tournamentCode?: string | null; roundLabel?: string | null; access?: string },
   ): DocRecord | null {
     const { ok, doc } = this.access(docId, userId);
     if (!ok || !doc) return null;
@@ -422,7 +437,13 @@ export class Directory extends DurableObject {
         this.sql.exec('UPDATE docs SET team_id = ? WHERE id = ?', patch.teamId, docId);
       }
     }
-    if (patch.partners !== undefined) {
+    const manager = doc.ownerId === userId || (!!doc.teamId && this.role(doc.teamId, userId) === 'coach');
+    if (patch.access !== undefined && manager) {
+      // Round docs are always private; turning round on makes the doc private too.
+      this.sql.exec('UPDATE docs SET access = ? WHERE id = ?', patch.access === 'team' && !patch.round && !doc.round ? 'team' : 'partners', docId);
+    }
+    if (patch.round === true && manager) this.sql.exec("UPDATE docs SET access = 'partners' WHERE id = ?", docId);
+    if (patch.partners !== undefined && manager) {
       this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', docId);
       const teamId = this.doc(this.one('SELECT * FROM docs WHERE id = ?', docId)!).teamId;
       for (const p of patch.partners.slice(0, 6)) {

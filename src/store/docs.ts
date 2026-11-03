@@ -37,6 +37,8 @@ export interface DocMeta {
   /** Round docs started with "New round": tournament and round, e.g. "Round 3". */
   tournamentName?: string | null;
   roundLabel?: string | null;
+  /** Team docs: who can open it (see ServerDoc.access). */
+  access?: 'team' | 'partners';
 }
 
 const store = createStore('pp-meta', 'meta');
@@ -99,6 +101,7 @@ function fromServer(s: ServerDoc): Partial<DocMeta> {
     checkToken: s.checkToken,
     tournamentName: s.tournamentName ?? null,
     roundLabel: s.roundLabel ?? null,
+    access: s.access,
   };
 }
 
@@ -159,6 +162,11 @@ export async function setDocRound(id: string, round: boolean) {
   if (!d || !!d.round === round) return;
   await update(id, { round });
   push(id, { round });
+}
+
+export async function setDocAccess(id: string, access: 'team' | 'partners') {
+  await update(id, { access });
+  push(id, { access });
 }
 
 export async function setDocPartners(id: string, partners: string[]) {

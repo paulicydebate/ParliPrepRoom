@@ -83,6 +83,7 @@ function publicDoc(d: DocRecord) {
     checkToken: d.round ? d.checkToken : null,
     createdAt: d.createdAt,
     tournamentName: d.tournamentName,
+    access: d.access,
     deletedAt: d.deletedAt,
     deletedByName: d.deletedByName,
     roundLabel: d.roundLabel,
@@ -323,7 +324,7 @@ export default {
       return json({ docs: (await dir.docsFor(user!.id, team && team !== 'personal' ? team : null)).map(publicDoc) });
     }
     if (path === '/api/docs' && request.method === 'POST') {
-      const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null }>(request);
+      const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string }>(request);
       if (!b?.id || !DOC_ID.test(b.id)) return fail('Bad document id', 400);
       const d = await dir.createDoc(user!.id, {
         id: b.id,
@@ -335,6 +336,7 @@ export default {
         partners: Array.isArray(b.partners) ? b.partners : undefined,
         tournamentCode: b.tournamentCode ?? null,
         roundLabel: b.roundLabel ?? null,
+        access: b.access,
       });
       return d ? json(publicDoc(d)) : fail('That doc belongs to someone else', 403);
     }
@@ -342,9 +344,17 @@ export default {
     if (docM) {
       const [, id, sub] = docM;
       if (!sub && request.method === 'PATCH') {
-        const b = await body<{ title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null; tournamentCode?: string | null; roundLabel?: string | null }>(request);
+        const b = await body<{ title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; teamId?: string | null; tournamentCode?: string | null; roundLabel?: string | null; access?: string }>(request);
         const d = b ? await dir.updateDoc(user!.id, id, b) : null;
-        return d ? json(publicDoc(d)) : fail('No access to this doc', 403);
+        if (!d) return fail('No access to this doc', 403);
+        // Anyone connected who can no longer open the doc is disconnected now.
+        if (b && (b.access !== undefined || b.partners !== undefined || b.round !== undefined)) {
+          const room = env.DOC_ROOM.get(env.DOC_ROOM.idFromName(id));
+          const gone: string[] = [];
+          for (const uid of await room.connectedUsers()) if (!(await dir.access(id, uid)).ok) gone.push(uid);
+          if (gone.length) await room.kick(gone);
+        }
+        return json(publicDoc(d));
       }
       if (!sub && request.method === 'GET') {
         const { ok, doc } = await dir.access(id, user!.id);
