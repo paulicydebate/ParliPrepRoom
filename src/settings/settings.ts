@@ -27,6 +27,10 @@ export interface Settings {
   colorway: string;
   customColors: { gov: string; opp: string };
   styles: Record<BlockKind, StyleSetting>;
+  /** Tight: less padding around panes, headers and the doc, narrower flow columns (for small laptops). */
+  spacing: 'roomy' | 'tight';
+  /** Show the formatting bar under each window's header (style keys work either way). */
+  toolbar: boolean;
 }
 
 export const FONTS: { label: string; stack: string }[] = [
@@ -53,6 +57,8 @@ export const DEFAULT_SETTINGS: Settings = {
   styleKeys: defaultPreset(),
   colorway: DEFAULT_COLORWAY,
   customColors: { gov: '#1f5fc9', opp: '#c62828' },
+  spacing: 'roomy',
+  toolbar: true,
   styles: {
     position: { font: 'Inter', size: 26, color: null, bold: true, italic: false, underline: false },
     section: { font: 'Inter', size: 20, color: null, bold: true, italic: false, underline: false },
@@ -78,6 +84,8 @@ function load(): Settings {
       styleKeys: parsed.styleKeys ?? DEFAULT_SETTINGS.styleKeys,
       colorway: parsed.colorway ?? DEFAULT_SETTINGS.colorway,
       customColors: { ...DEFAULT_SETTINGS.customColors, ...(parsed.customColors ?? {}) },
+      spacing: parsed.spacing === 'tight' ? 'tight' : 'roomy',
+      toolbar: parsed.toolbar !== false,
       styles,
     };
   } catch {
@@ -112,6 +120,8 @@ export function applySettings(s: Settings) {
   const root = document.documentElement;
   root.dataset.theme = s.theme === 'system' ? '' : s.theme;
   if (s.theme === 'system') delete root.dataset.theme;
+  root.dataset.spacing = s.spacing;
+  root.dataset.toolbar = s.toolbar ? 'on' : 'off';
   const cw = resolveColorway(s.colorway, s.customColors);
   root.style.setProperty('--gov-l', cw.gov.light);
   root.style.setProperty('--gov-d', cw.gov.dark);

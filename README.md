@@ -13,7 +13,8 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Fonts, sizes, colors per style, and Light / Dark / Sepia themes (Appearance button, saved per browser).
 - Gov/Opp colorways (Teal & Orange, Purple & Gold, Green & Pink and more, or pick your own) from the Colors button on the flow or in Appearance.
 - Fold any heading; "collapse to claims" button; outline sidebar to jump around.
-- Split view: up to three documents side by side, resizable. The same doc can be open in two panes.
+- Split view: up to three documents side by side, resizable. The doc list, pinned blocks and outline can be dragged wider or narrower (or dragged closed). Ctrl/⌘+\\ hides the doc list; Ctrl/⌘+Shift+\\ or a window's ⋯ menu fills the screen with one window. Appearance → Screen space has Tight spacing and can hide the formatting bar, for small laptops.
+- Tap the dot in a window's header to check the connection: round trip to the server and whether your edits are saved there. The same doc can be open in two panes.
 - Prep docs and Reference docs (coach briefs). **Import** a Word, Excel, CSV, text or Markdown file as a reference doc from the Reference header. Drag docs in the sidebar to reorder them (or move them between sections); double-click a name to rename it.
 - When the same doc is open in two panes, both panes say so (they are one document, not copies). Reference docs are editable for now; the prep lockout comes in Phase 4.
 - Revision history: auto-saves every 2 minutes while editing (and when the tab closes), named versions, "changes since" view, restore.

@@ -20,6 +20,8 @@ export { measureUpdate };
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
+/** Not part of y-websocket: the app's connection check (echoed back). */
+const MSG_PING = 99;
 
 /** Who is on a connection. Set by the worker from the signed-in session. */
 export interface Who {
@@ -175,6 +177,13 @@ export class DocRoom extends DurableObject {
       syncProtocol.readSyncMessage(dec, enc, doc, ws);
       this.via = 'live';
       if (encoding.length(enc) > 1) ws.send(encoding.toUint8Array(enc));
+    } else if (type === MSG_PING) {
+      // Connection check from the app: answered only after every earlier
+      // message from this connection is saved, so the reply also means
+      // "your edits so far are on the server".
+      await this.writes;
+      ws.send(data);
+      return;
     } else if (type === MSG_AWARENESS) {
       // Cursors and names: relay as-is to the others.
       for (const peer of this.ctx.getWebSockets()) if (peer !== ws) peer.send(data);

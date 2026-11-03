@@ -5,7 +5,7 @@ import type * as Y from 'yjs';
 import { toast } from '../editor/roundGuard';
 import { renameDoc, setDocRound, type DocMeta } from '../store/docs';
 import { setRound, useRound } from '../store/roundDoc';
-import { useSyncStatus, type SyncStatus } from '../store/sync';
+import { useConnectionCheck, useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
 import { FlowEditor } from './FlowEditor';
 import { CheckLinkButton, PartnersButton } from './RoundTools';
@@ -13,6 +13,7 @@ import { PinButton } from './RoundModeUI';
 import { HistoryView } from './HistoryView';
 import { IconClose, IconDownload, IconHistory, IconLock, IconMore, IconOutline, IconShare, IconSwap } from './icons';
 import { useYDoc } from './useYDoc';
+import { PanelHandle, usePanelWidth } from './PanelResize';
 
 export interface PaneState {
   key: string;
@@ -151,9 +152,67 @@ function RoundToggle({ ydoc, docId, round }: { ydoc: Y.Doc; docId: string; round
   );
 }
 
-function SyncDot({ status }: { status: SyncStatus }) {
+function SyncDot({ status, provider }: { status: SyncStatus; provider: WebsocketProvider | null }) {
   const label = status === 'synced' ? 'Saved to the server' : status === 'connecting' ? 'Connecting…' : 'Offline: saved on this device, syncs when back online';
-  return <span className={`sync-dot ${status}`} title={label} aria-label={label} role="img" />;
+  const [open, setOpen] = useState(false);
+  // Fixed position, so a narrow window's edge doesn't cut the panel off.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const check = useConnectionCheck(provider, open && status !== 'offline');
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) ref.current.open = false;
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+  return (
+    <details
+      ref={ref}
+      className="sync-check"
+      onToggle={(e) => {
+        const d = e.currentTarget as HTMLDetailsElement;
+        setOpen(d.open);
+        if (d.open) {
+          const r = d.querySelector('summary')!.getBoundingClientRect();
+          setPos({ top: r.bottom + 10, left: Math.max(8, Math.min(r.left - 12, window.innerWidth - 290)) });
+        }
+      }}
+    >
+      <summary className={`sync-dot ${status}`} title={`${label}. Tap for connection details.`} aria-label={`${label}. Connection details`} />
+      <div className="menu sync-pop" role="dialog" aria-label="Connection" style={pos ? { position: 'fixed', top: pos.top, left: pos.left } : undefined}>
+        <p className="sync-line">
+          <span className={`sync-dot ${status}`} /> <strong>{status === 'synced' ? 'Connected' : status === 'connecting' ? 'Connecting…' : 'Offline'}</strong>
+        </p>
+        {status === 'offline' ? (
+          <p className="muted small">Your edits are saved on this device and go to the server when you're back online. They merge with your partner's edits automatically.</p>
+        ) : (
+          <>
+            <dl className="sync-stats">
+              <div>
+                <dt>Round trip</dt>
+                <dd>{check.rtt === null ? (check.slow ? 'No answer yet' : 'Checking…') : `${check.rtt} ms`}</dd>
+              </div>
+              <div>
+                <dt>Your edits</dt>
+                <dd className={check.checked && check.unsaved === 0 ? 'ok' : ''}>
+                  {!check.checked ? 'Checking…' : check.unsaved === 0 ? '✓ All saved on the server' : `${check.unsaved} on the way…`}
+                </dd>
+              </div>
+            </dl>
+            <p className="muted small">
+              {check.slow
+                ? 'The server is slow to answer. Keep typing: nothing is lost, and edits go through when the connection catches up.'
+                : check.typical !== null
+                  ? `${check.typical < 150 ? 'Fast' : check.typical < 400 ? 'Fine' : 'Slow'} connection (typical ${check.typical} ms). This is how long your partner waits to see your typing. Edits always merge the same way, whatever the delay.`
+                  : 'Checking the connection every 2 seconds while this is open.'}
+            </p>
+          </>
+        )}
+      </div>
+    </details>
+  );
 }
 
 function ShareButton({ docId }: { docId: string }) {
@@ -244,6 +303,8 @@ export function Pane({
   onChange,
   onClose,
   onCreate,
+  focusMode,
+  onFocusMode,
 }: {
   pane: PaneState;
   docs: DocMeta[];
@@ -260,6 +321,9 @@ export function Pane({
   onChange: (p: PaneState) => void;
   onClose: () => void;
   onCreate: (kind: DocMeta['kind']) => void;
+  /** One window fills the screen. */
+  focusMode: boolean;
+  onFocusMode: () => void;
 }) {
   const meta = docs.find((d) => d.id === pane.docId) ?? null;
   const opened = useYDoc(meta && !(roundMode && !meta.round) ? meta.id : null);
@@ -268,6 +332,7 @@ export function Pane({
   const syncStatus = useSyncStatus(provider);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [history, setHistory] = useState(false);
+  const outlineWidth = usePanelWidth('outline', 220, 140, 400);
   const reportRef = useRef(onEditorChange);
   reportRef.current = onEditorChange;
   const onEditor = useCallback((e: Editor | null) => {
@@ -321,7 +386,7 @@ export function Pane({
               <span className={'badge ' + meta.kind}>{meta.kind === 'prep' ? 'Prep' : 'Reference'}</span>
             )}
             <TitleInput meta={meta} ydoc={ydoc} provider={provider} />
-            {syncStatus !== 'off' && <SyncDot status={syncStatus} />}
+            {syncStatus !== 'off' && <SyncDot status={syncStatus} provider={provider} />}
             {alsoOpen && (
               <span className="linked-chip" title="This document is open in another pane too. Both panes show the same text; editing one edits the other.">
                 Same doc as other pane
@@ -399,6 +464,9 @@ export function Pane({
                     {pane.outline ? 'Hide outline' : 'Show outline'}
                   </button>
                 )}
+                <button type="button" onClick={(e) => (closeMenu(e), onFocusMode())}>
+                  {focusMode ? 'Show all windows' : 'Fill the screen with this window'}
+                </button>
                 <button type="button" onClick={(e) => (closeMenu(e), setHistory((h) => !h))}>
                   {history ? 'Close history' : 'Version history'}
                 </button>
@@ -479,8 +547,13 @@ export function Pane({
       {meta && ydoc && !(roundMode && !meta.round) && (
         <>
           {!history && editor && <Toolbar editor={editor} view={view} extra={<PinButton editor={editor} docId={meta.id} space={space} />} />}
-          <div className="pane-body" hidden={history}>
-            {view === 'doc' && pane.outline && editor && <Outline editor={editor} />}
+          <div className="pane-body" hidden={history} style={{ ['--outline-w' as string]: `${outlineWidth.width}px` }}>
+            {view === 'doc' && pane.outline && editor && (
+              <>
+                <Outline editor={editor} />
+                <PanelHandle panel={outlineWidth} edge="right" label="Resize the outline" onCollapse={() => onChange({ ...pane, outline: false })} />
+              </>
+            )}
             {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} onEditor={onEditor} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}

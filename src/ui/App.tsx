@@ -18,6 +18,7 @@ import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeJSON, writeLines, ty
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
 import { IconMenu, IconPin, IconSearch, IconSettings, IconSplit } from './icons';
+import { PanelHandle, usePanelWidth } from './PanelResize';
 import { Pane, type PaneState } from './Pane';
 import { NameDialog } from './NameDialog';
 import { SettingsDialog } from './SettingsDialog';
@@ -140,6 +141,10 @@ export function App() {
   // Tablets and small laptops fit two windows; bigger screens three.
   const maxPanes = compact ? 2 : MAX_PANES;
   const [sidebarOverlay, setSidebarOverlay] = useState(false);
+  const sideWidth = usePanelWidth('sidebar', 248, 170, 440);
+  /** One window fills the screen (doc list and other windows hidden). */
+  const [focusMode, setFocusMode] = useState(false);
+  const pinsWidth = usePanelWidth('pins', 320, 220, 560);
   const panesRef = useRef<HTMLDivElement>(null);
 
   const acct = useAccount();
@@ -170,12 +175,19 @@ export function App() {
     return () => window.removeEventListener('pp-jump', on);
   }, []);
 
+  const toggleSidebarRef = useRef(() => {});
   // Ctrl/Cmd+K opens the block finder.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setFindOpen(true);
+      }
+      // Ctrl/Cmd+\ shows or hides the doc list; with Shift, one window fills the screen.
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'Backslash' || e.key === '\\' || e.key === '|')) {
+        e.preventDefault();
+        if (e.shiftKey) setFocusMode((f) => !f);
+        else toggleSidebarRef.current();
       }
     };
     window.addEventListener('keydown', on);
@@ -379,7 +391,16 @@ export function App() {
   }, []);
 
   const overlaySidebar = narrow || compact;
-  const showSidebar = overlaySidebar ? sidebarOverlay : layout.sidebar;
+  const showSidebar = overlaySidebar ? sidebarOverlay : layout.sidebar && !focusMode;
+  const toggleSidebar = () => {
+    if (focusMode) {
+      setFocusMode(false);
+      setLayout((l) => ({ ...l, sidebar: true }));
+    } else if (overlaySidebar) setSidebarOverlay((o) => !o);
+    else setLayout((l) => ({ ...l, sidebar: !l.sidebar }));
+  };
+  toggleSidebarRef.current = toggleSidebar;
+  const focusing = focusMode && layout.panes.length > 1;
   const signedIn = acct.server && !!acct.user;
   const spaceDocs = docs ? (signedIn ? docs.filter((d) => spaceOf(d) === acct.space) : docs) : null;
   // In Round Mode only round docs are listed (and searchable).
@@ -485,7 +506,7 @@ export function App() {
           className="icon-btn"
           aria-label="Toggle document list"
           title="Documents"
-          onClick={() => (overlaySidebar ? setSidebarOverlay((s) => !s) : setLayout((l) => ({ ...l, sidebar: !l.sidebar })))}
+          onClick={toggleSidebar}
         >
           <IconMenu />
         </button>
@@ -503,6 +524,11 @@ export function App() {
           </div>
         )}
         <span className="tb-spacer" />
+        {focusMode && (
+          <button type="button" className="btn small focus-exit" onClick={() => setFocusMode(false)} title="Show the doc list and all windows again (Ctrl/⌘+Shift+\)">
+            Show all windows
+          </button>
+        )}
         <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
           <IconSplit /> <span className="hide-narrow">Split view</span>
         </button>
@@ -540,21 +566,22 @@ export function App() {
         </button>
       </header>
 
-      <div className="workspace">
+      <div className="workspace" style={{ ['--side-w' as string]: `${sideWidth.width}px`, ['--pins-w' as string]: `${pinsWidth.width}px` }}>
         {showSidebar && docs && (
           <>
             {overlaySidebar && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
             <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} />
+            {!overlaySidebar && <PanelHandle panel={sideWidth} edge="right" label="Resize the doc list" onCollapse={() => setLayout((l) => ({ ...l, sidebar: false }))} />}
           </>
         )}
         <div className="panes" ref={panesRef}>
           {docs &&
             layout.panes.map((p, i) => (
               <Fragment key={p.key}>
-                {i > 0 && !narrow && (
+                {i > 0 && !narrow && !focusing && (
                   <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panes" onPointerDown={(e) => startResize(i - 1, e)} />
                 )}
-                <div className="pane-slot" style={{ flexGrow: layout.weights[i] ?? 1 }} hidden={narrow && i !== layout.focused}>
+                <div className="pane-slot" style={{ flexGrow: layout.weights[i] ?? 1 }} hidden={(narrow || focusing) && i !== layout.focused}>
                   <Pane
                     pane={p}
                     docs={docs}
@@ -572,11 +599,17 @@ export function App() {
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
                     onCreate={(k) => void create(k, i)}
+                    focusMode={focusMode}
+                    onFocusMode={() => {
+                      setLayout((l) => ({ ...l, focused: i }));
+                      setFocusMode((f) => !f);
+                    }}
                   />
                 </div>
               </Fragment>
             ))}
         </div>
+        {pinsOpen && !compact && <PanelHandle panel={pinsWidth} edge="left" label="Resize pinned blocks" onCollapse={() => setPinsOpen(false)} />}
         {pinsOpen && (
           <PinBoard
             space={acct.space}

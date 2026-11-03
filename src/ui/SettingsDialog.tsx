@@ -13,6 +13,8 @@ const THEMES: { id: Theme; label: string }[] = [
   { id: 'sepia', label: 'Sepia' },
 ];
 
+const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
+
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const settings = useSettings();
   const profile = useProfile();
@@ -58,6 +60,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
+
+      <h3>Screen space</h3>
+      <p className="muted small">For small laptops: tighter spacing fits more on screen, and the formatting bar can go (the style keys still work).</p>
+      <div className="row-inline wrap">
+        <div className="seg" role="group" aria-label="Spacing">
+          <button type="button" className={settings.spacing === 'roomy' ? 'is-on' : ''} onClick={() => updateSettings({ ...settings, spacing: 'roomy' })}>
+            Roomy
+          </button>
+          <button type="button" className={settings.spacing === 'tight' ? 'is-on' : ''} onClick={() => updateSettings({ ...settings, spacing: 'tight' })}>
+            Tight
+          </button>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={settings.toolbar} onChange={(e) => updateSettings({ ...settings, toolbar: e.target.checked })} /> Formatting bar
+        </label>
+      </div>
+      <p className="muted small">
+        Also: drag the edge of the doc list, pins or outline to resize them (drag all the way in to close). <kbd>{MOD}+\</kbd> shows or hides the doc list;{' '}
+        <kbd>{MOD}+Shift+\</kbd> fills the screen with the window you're in.
+      </p>
 
       <h3>Gov &amp; Opp colors</h3>
       <ColorwayPicker />

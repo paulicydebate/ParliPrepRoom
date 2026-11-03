@@ -295,7 +295,7 @@ a.btn.primary {
 
 /* ---------- Sidebar ---------- */
 .sidebar {
-  width: 248px;
+  width: var(--side-w, 248px);
   flex: none;
   overflow-y: auto;
   padding: 12px 8px;
@@ -623,7 +623,7 @@ a.btn.primary {
   display: flex;
 }
 .outline {
-  width: 220px;
+  width: var(--outline-w, 220px);
   flex: none;
   overflow-y: auto;
   border-right: 1px solid var(--border);
@@ -2265,7 +2265,7 @@ del {
 
 /* Pin board */
 .pinboard {
-  width: 320px;
+  width: var(--pins-w, 320px);
   flex: none;
   border-left: 1px solid var(--border);
   background: var(--surface);
@@ -3549,4 +3549,174 @@ input.name-input.prep-len {
 .deletion-log li.is-deleted strong,
 .deletion-log li.is-purged strong {
   color: var(--danger);
+}
+
+/* Drag handles on side panels (doc list, pins, outline). They take no room. */
+.panel-handle {
+  flex: none;
+  width: 9px;
+  margin: 0 -4px;
+  position: relative;
+  z-index: 6;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background 0.12s;
+}
+.panel-handle:hover::after,
+.panel-handle:focus-visible::after,
+body.is-resizing .panel-handle:active::after {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.panel-handle.is-closing::after {
+  background: var(--danger);
+}
+.panel-handle:focus-visible {
+  outline: none;
+}
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.is-resizing .pp-doc {
+  pointer-events: none;
+}
+
+/* Connection details: tap the dot in a pane header. */
+.sync-check {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+.sync-check > summary {
+  list-style: none;
+  cursor: pointer;
+  /* A bigger tap target around the small dot. */
+  box-shadow: 0 0 0 6px transparent;
+}
+.sync-check > summary::-webkit-details-marker {
+  display: none;
+}
+.sync-check > summary:hover {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-3) 25%, transparent);
+}
+.sync-pop {
+  left: -10px;
+  right: auto;
+  top: calc(100% + 10px);
+  width: 270px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 12px;
+  z-index: 40;
+  color: var(--text);
+}
+.sync-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.sync-line .sync-dot {
+  display: inline-block;
+}
+.sync-stats {
+  margin: 0 0 8px;
+  display: grid;
+  gap: 4px;
+}
+.sync-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sync-stats dt {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.sync-stats dd {
+  text-align: right;
+}
+.sync-stats dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sync-stats dd.ok {
+  color: #22a06b;
+}
+.sync-pop p {
+  margin: 0;
+}
+
+/* Screen space: Tight spacing (Appearance). */
+:root[data-spacing='tight'] .topbar {
+  height: 40px;
+  gap: 6px;
+  padding: 0 6px;
+}
+:root[data-spacing='tight'] .panes {
+  padding: 4px;
+}
+:root[data-spacing='tight'] .resizer {
+  width: 6px;
+}
+:root[data-spacing='tight'] .pane {
+  border-radius: 8px;
+  box-shadow: none;
+}
+:root[data-spacing='tight'] .pane-head {
+  min-height: 36px;
+  padding: 2px 4px 2px 8px;
+  gap: 4px;
+}
+:root[data-spacing='tight'] .toolbar {
+  padding: 2px 6px;
+}
+:root[data-spacing='tight'] .pp-doc {
+  padding: 14px 18px 50vh 24px;
+}
+@media (min-width: 761px) {
+  :root[data-spacing='tight'] .flow-wrap {
+    --fl-min: 138px;
+  }
+}
+:root[data-spacing='tight'] .flow-scroll {
+  padding: 0 4px 40vh;
+}
+:root[data-spacing='tight'] .flow-head {
+  padding: 4px 0;
+}
+:root[data-spacing='tight'] .sidebar,
+:root[data-spacing='tight'] .outline {
+  padding: 8px 6px;
+}
+/* Formatting bar hidden (Appearance). */
+:root[data-toolbar='off'] .pane .toolbar {
+  display: none;
+}
+
+/* Focus: one window fills the screen. */
+.focus-exit {
+  white-space: nowrap;
+}
+.row-inline.wrap {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+kbd {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.9em;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface-2);
 }
