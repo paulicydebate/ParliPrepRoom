@@ -3747,3 +3747,111 @@ kbd {
 .side-reset p {
   margin: 0 0 6px;
 }
+
+/* ---------- Tour ---------- */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.tour-block {
+  position: absolute;
+  inset: 0;
+}
+.tour-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 13, 0.55);
+}
+.tour-spot {
+  position: absolute;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(10, 14, 13, 0.55), 0 0 0 2px var(--accent);
+  pointer-events: none;
+  transition: left 0.18s, top 0.18s, width 0.18s, height 0.18s;
+}
+.tour-card {
+  position: absolute;
+  z-index: 1;
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+.tour-card h3 {
+  margin: 2px 0 6px;
+  font-size: 16px;
+}
+.tour-card p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tour-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.tour-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tour-offer {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  width: min(300px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.tour-offer .tour-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.help-menu {
+  position: relative;
+  flex: none;
+}
+.help-menu > summary {
+  list-style: none;
+}
+.help-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.help-pop {
+  min-width: 210px;
+  z-index: 40;
+}
+.help-pop a {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+.help-pop a:hover {
+  background: var(--surface-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot {
+    transition: none;
+  }
+}

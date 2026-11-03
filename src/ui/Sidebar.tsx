@@ -144,6 +144,7 @@ export function Sidebar({
   onImport,
   onReset,
   resetCount,
+  canCreateReference = true,
 }: {
   docs: DocMeta[];
   /** Team (or "My own docs") whose docs are listed, when signed in. */
@@ -160,6 +161,8 @@ export function Sidebar({
   onReset?: () => void;
   /** How many docs a reset would delete. */
   resetCount?: number;
+  /** False during Round Mode: only round docs exist then, and a new prep doc is a round doc. */
+  canCreateReference?: boolean;
 }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -243,9 +246,17 @@ export function Sidebar({
                 />
               </>
             )}
-            <button type="button" className="icon-btn small" title={`New ${title.toLowerCase()} doc`} aria-label={`New ${title.toLowerCase()} doc`} onClick={() => onCreate(kind)}>
-              <IconPlus />
-            </button>
+            {(kind === 'prep' || canCreateReference) && (
+              <button
+                type="button"
+                className="icon-btn small"
+                title={kind === 'prep' && !canCreateReference ? 'New round doc (Round Mode is on)' : `New ${title.toLowerCase()} doc`}
+                aria-label={`New ${title.toLowerCase()} doc`}
+                onClick={() => onCreate(kind)}
+              >
+                <IconPlus />
+              </button>
+            )}
           </span>
         </div>
         <p className="side-hint">{hint}</p>

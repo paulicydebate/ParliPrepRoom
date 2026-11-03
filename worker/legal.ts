@@ -5,7 +5,7 @@
 const CONTACT = 'parlipreproombot@mail.grokbot.com';
 const UPDATED = 'November 3, 2026';
 
-const page = (title: string, body: string) => `<!doctype html>
+export const page = (title: string, body: string) => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">

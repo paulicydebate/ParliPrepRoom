@@ -164,3 +164,10 @@ export const IconUpload = () => (
     <path d="M12 16V5M7 10l5-5 5 5M5 20h14" />
   </Svg>
 );
+export const IconHelp = () => (
+  <Svg>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2 1-1.2 1.9" />
+    <path d="M12 17h.01" />
+  </Svg>
+);

@@ -73,6 +73,8 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - **New round:** round, side, resolution, partner and tournament code in one step; opens the round doc and its flow side by side with the prep timer running (prep length can be changed there).
 - **Tab room:** set up a tournament (account menu → Tournaments), give teams its code, and give the tab room the director link: every round doc tagged with the tournament, flagged first, with full records.
 
+**Help:** the **?** button in the top bar retakes a one-minute tour; https://parlipreproom.paulicydebate.workers.dev/guide is the one-page "Start here" guide (keep it current when features change). A doc made while Round Mode is on is a round doc.
+
 ## Develop
 
 ```sh

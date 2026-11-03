@@ -3,6 +3,7 @@
 // sign-in, teams, docs, live sync and the public round-doc check page.
 
 import { renderCheckPage } from './checkPage';
+import { guidePage } from './guidePage';
 import { privacyPage } from './legal';
 import { summarizeRecord } from './summary';
 import { renderTabroomPage } from './tabroomPage';
@@ -101,6 +102,9 @@ export default {
     const googleOn = !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
     const devOn = env.DEV_LOGIN === '1' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
 
+    if (path === '/guide') {
+      return new Response(guidePage(), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });
+    }
     if (path === '/privacy') {
       return new Response(privacyPage(), { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });
     }

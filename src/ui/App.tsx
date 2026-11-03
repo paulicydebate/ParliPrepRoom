@@ -1,8 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
 import { clearPins } from '../store/pins';
+import { setRound } from '../store/roundDoc';
+import { startTour } from '../store/tour';
+import { HelpMenu, Tour } from './Tour';
 import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
-import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
+import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
 import { BlockFinder, PinBoard } from './RoundModeUI';
@@ -55,12 +58,14 @@ function loadLayout(): Layout {
   }
 }
 
-async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: string): Promise<DocMeta> {
+async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: string, round = false): Promise<DocMeta> {
   const meta = await createDoc({ title, kind, space });
   const { doc, ready } = acquireDoc(meta.id);
   await ready;
   writeLines(doc, lines);
+  if (round) setRound(doc, meta.id, true);
   releaseDoc(meta.id);
+  if (round) await setDocRound(meta.id, true);
   return meta;
 }
 
@@ -177,6 +182,18 @@ export function App() {
   }, []);
 
   const toggleSidebarRef = useRef(() => {});
+  // The guide links here with #tour to start the tour.
+  useEffect(() => {
+    const check = () => {
+      if (location.hash === '#tour') {
+        history.replaceState(null, '', location.pathname + location.search);
+        setTimeout(startTour, 800);
+      }
+    };
+    check();
+    window.addEventListener('hashchange', check);
+    return () => window.removeEventListener('hashchange', check);
+  }, []);
   // Ctrl/Cmd+K opens the block finder.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -321,7 +338,14 @@ export function App() {
     });
 
   const create = async (kind: DocKind, paneIndex?: number) => {
-    const meta = await makeDoc(kind === 'prep' ? 'Untitled prep' : 'Untitled reference', kind, STARTER_LINES);
+    // During Round Mode only round docs can be open, so a new doc is a round
+    // doc (paste off, typing recorded); reference docs can't be made then.
+    if (roundMode && kind === 'reference') {
+      toast('Reference docs can’t be made during Round Mode. Turn it off first.');
+      return;
+    }
+    const meta = await makeDoc(kind === 'prep' ? 'Untitled prep' : 'Untitled reference', kind, STARTER_LINES, undefined, roundMode);
+    if (roundMode) toast('New round doc: typed by hand, paste is off and the typing is recorded.');
     if (paneIndex === undefined) openInFocused(meta.id);
     else setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === paneIndex ? { ...x, docId: meta.id } : x)) }));
   };
@@ -529,6 +553,7 @@ export function App() {
           type="button"
           className="icon-btn"
           aria-label="Toggle document list"
+          data-tour="menu"
           title="Documents"
           onClick={toggleSidebar}
         >
@@ -553,7 +578,7 @@ export function App() {
             Show all windows
           </button>
         )}
-        <button type="button" className="btn ghost" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
+        <button type="button" className="btn ghost" data-tour="split" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
           <IconSplit /> <span className="hide-narrow">Split view</span>
         </button>
         <TimerHost docId={timerDocId} />
@@ -566,12 +591,13 @@ export function App() {
         <button type="button" className="icon-btn" aria-label="Search blocks" title="Find a block (Ctrl+K / ⌘K)" onClick={() => setFindOpen(true)}>
           <IconSearch />
         </button>
-        <button type="button" className={'icon-btn' + (pinsOpen ? ' is-on' : '')} aria-label="Pinned blocks" aria-pressed={pinsOpen} title="Pinned blocks for your speech" onClick={() => setPinsOpen((o) => !o)}>
+        <button type="button" className={'icon-btn' + (pinsOpen ? ' is-on' : '')} aria-label="Pinned blocks" data-tour="pins" aria-pressed={pinsOpen} title="Pinned blocks for your speech" onClick={() => setPinsOpen((o) => !o)}>
           <IconPin />
         </button>
         <button
           type="button"
           className={'round-mode-btn' + (roundMode ? ' is-on' : '')}
+          data-tour="round-mode"
           aria-pressed={roundMode}
           title={roundMode ? 'Leave Round Mode' : 'Round Mode: only round docs can be open during the round'}
           onClick={toggleRoundMode}
@@ -585,6 +611,7 @@ export function App() {
             })
           }
         />
+        <HelpMenu />
         <button type="button" className="icon-btn" aria-label="Appearance" title="Fonts and theme" onClick={() => setSettingsOpen(true)}>
           <IconSettings />
         </button>
@@ -594,7 +621,7 @@ export function App() {
         {showSidebar && docs && (
           <>
             {overlaySidebar && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
-            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} onReset={roundMode ? undefined : () => void resetWorkspace()} resetCount={myDocs.length} />
+            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} canCreateReference={!roundMode} onReset={roundMode ? undefined : () => void resetWorkspace()} resetCount={myDocs.length} />
             {!overlaySidebar && <PanelHandle panel={sideWidth} edge="right" label="Resize the doc list" onCollapse={() => setLayout((l) => ({ ...l, sidebar: false }))} />}
           </>
         )}
@@ -653,6 +680,7 @@ export function App() {
         <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+      <Tour />
       {acct.loaded && !acct.server && <NameDialog />}
       <div className="toast" role="status" aria-live="polite" hidden={!toastMsg}>
         {toastMsg}

@@ -513,7 +513,7 @@ export function Pane({
                 <h3>{kind === 'prep' ? 'Prep' : 'Reference'}</h3>
                 <ul>
                   {docs
-                    .filter((d) => d.kind === kind)
+                    .filter((d) => d.kind === kind && (!roundMode || d.round))
                     .map((d) => (
                       <li key={d.id}>
                         <button type="button" onClick={() => onChange({ ...pane, docId: d.id })}>
@@ -522,9 +522,11 @@ export function Pane({
                       </li>
                     ))}
                 </ul>
-                <button type="button" className="btn ghost small" onClick={() => onCreate(kind)}>
-                  + New {kind === 'prep' ? 'prep doc' : 'reference doc'}
-                </button>
+                {(kind === 'prep' || !roundMode) && (
+                  <button type="button" className="btn ghost small" onClick={() => onCreate(kind)}>
+                    + New {kind === 'prep' ? (roundMode ? 'round doc' : 'prep doc') : 'reference doc'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
