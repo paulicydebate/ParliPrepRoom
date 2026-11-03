@@ -32,7 +32,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - **Flow marks:** mark any argument Extend (→), Dropped (!), Answered (✓, crossed out) or Key (★) from the toolbar or Ctrl/Cmd+Shift+E / D / A / K.
 - Export: Word (.docx, using your fonts, with real headings) and an Excel flow (.xlsx, one worksheet per sheet, colored gov/opp columns).
 
-**Round docs (early part of Phase 4): done, on this device.**
+**Round docs (Phase 4): live.**
 
 - Any doc can be switched to a **Round doc** with the toggle at the top right of its pane. Team docs stay normal (copy and paste allowed).
 - Round docs get a thick purple border, a purple header and a "Round doc" label, so an opponent can see which windows are round docs. The sidebar marks them with a purple dot.
@@ -40,7 +40,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - Each device asks once for the typist's name; every log entry records the name and a device id.
 - Every local edit is logged with a timestamp and the exact text: typed text, deleted text, blocked pastes, large single edits (flagged), restores, time in other apps, and the switch being turned on or off. Turning it off needs a second click and is logged. A named version is saved whenever the switch flips.
 - The log is saved in batches chained by SHA-256, so editing it afterwards is detectable. History → **Typing log** shows a seal code, whether the log is intact, totals per person, the events worth checking, and everything typed and deleted in order.
-- Still to come in Phase 4: the server stamping the log (so it can't be rewritten on the device), a keystroke replay, and a share link anyone can open to check it.
+- On the live site the server keeps the record too (see the check page and History → Replay below), so it can't be rewritten on the device.
 
 **Live co-editing (Phase 3, part 1): live.**
 
@@ -65,7 +65,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - **Pinned blocks:** a side panel listing the claims you plan to read, in order. Tap one to jump to it. Pin a whole section (e.g. "A2 – T"), a claim with its warrants, or a single analytic; then pick which flow sheet each pin answers, and the panel shows the pins for the sheet you're on. In the flow, the pin button on a column header (e.g. LOC) opens a Pins column right next to it.
 - **Insert a block** (outside Round Mode only, and never into a round doc): pins and search results have an Insert button that puts a copy below the cursor, for coaches building docs in prep.
 
-**Rounds and tournaments: built, not deployed yet.**
+**Rounds and tournaments: live.**
 
 - **Timer** in the top bar: prep 20:00, PMC 7, LOC 8, MG 8, MO 8, LOR 4, PMR 5, flex 2:00 and 1:00, or any custom length. **Change times** sets your own lengths (e.g. 25 or 30-minute prep; saved on your device), and ±1:00 adjusts a running timer. Shared with your partner when a round doc is open.
 - **New round:** round, side, resolution, partner and tournament code in one step; opens the round doc and its flow side by side with the prep timer running (prep length can be changed there).

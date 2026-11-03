@@ -1,8 +1,13 @@
 # ParliPrepRoom — Plan
 
-Status: Phases 1 (editor core) and 2 (flow view) done, plus local round docs from Phase 4, 2026-11-02. See README.md for what works now.
+Status (2026-11-03): Phases 1–5 are built and live at https://parlipreproom.paulicydebate.workers.dev. Phase 6 (polish and a pilot with the owner's team) is next. HANDOFF.md has the detailed state and deploy history; README.md says what works.
 
-Decision (2026-11-02): instead of separate "Prep Mode", any doc can be marked a **round doc** with a toggle. Team docs allow copy/paste; round docs block paste, log typing, and get a clear colored border for opponents to see.
+Legend below: ✅ live · 🔜 planned / open · ✖ dropped or changed.
+
+Decisions that changed the original plan:
+- No separate "Prep Mode": any doc can be a **round doc** (toggle, or **New round**). Team docs allow copy and paste; round docs block paste, record every edit on the server, and have a purple border opponents can see.
+- Hosting is all Cloudflare (Workers + Durable Objects), not Hocuspocus/Supabase/Fly. One deploy, one bill.
+- History, replay and the check page are built from the **server's** record (everyone's edits, with names), which students can't rewrite.
 
 ## 1. The goal
 
@@ -52,88 +57,88 @@ Each block can also be tagged with a **speech** (PMC, LOC, MG, MO, LOR, PMR) and
 |---|---|---|
 | Who writes it | Coaches and students, any time before the round | Students, during the 20 minutes |
 | Where it comes from | Typed, pasted, imported (Google Docs, Word, Sheets) — anything goes | Typed by hand only |
-| During prep | Open in a side pane, read-only, searchable | Editable, logged |
+| During prep | Open in a side pane, searchable (read-only for students: planned) | Editable, logged |
 | In round | **Locked out** | Fully available in Round Mode |
 
-You can't copy, drag or link from the library into prep. Retyping by hand is the point, and the log shows it.
+You can't paste or drag from the library into a round doc. Retyping by hand is the point, and the record shows it.
 
-## 4. Features
+## 4. Features and status
 
 ### Writing
-- Named styles: Position title, Section title, Claim, Warrant, plus Analytic and Note. Keyboard shortcuts for each (e.g. Cmd+1…4) and a "promote/demote" key.
-- Per-style font, size, color. Ship 6–8 good fonts (Inter, Source Serif, IBM Plex, Atkinson Hyperlegible, etc.) plus themes (light, dark, Classic sheet).
-- Collapse/expand any heading. Outline sidebar for navigation.
+- ✅ Named styles: Position title, Section title, Claim, Warrant, Analytic, Note, with keys (Ctrl+1–6 on Mac, Alt+1–6 on Windows, F-key presets) and promote/demote.
+- ✅ Fonts, sizes, colors per style; themes; colorways for the flow.
+- ✅ Folding, outline sidebar, split view (up to 3 panes; 2 on tablets).
+- ✅ Flow marks: extend, dropped, answered, key.
+
+### Flow
+- ✅ Same doc as a flow: a sheet per position, a column per speech, 150 rows, column-only copy, alternating column shades.
+- ✅ Word and Excel export; Excel flows import back as flows.
 
 ### Reference library
-- Team library of coach-written docs (generic DAs, theory shells, topic briefs), organized in folders with tags.
-- Same styles and outline as prep, so it reads the same.
-- Fast search during prep. Opens in a pane next to your prep.
-- Import from Google Docs, Word, and Sheets, since paste is fine here.
-- Round Mode hides the library. Limit: we can't stop someone opening it in another browser tab, but the app won't show it and the log records leaving the app.
+- ✅ Reference docs beside prep; import Word, Excel, CSV, text, Markdown.
+- 🔜 Students can read but not edit coach briefs (owner to decide).
+- 🔜 Folders and tags (only if teams build big libraries).
+- 🔜 Flower's own file format (export from Flower as a spreadsheet for now).
 
 ### Co-prep
-- A **Prep Room** per round: resolution, side, partner(s), and a shared 20-min timer.
-- Live multi-cursor editing in both views (Google Docs-style), each person's text tinted by author if wanted.
-- Works offline and syncs when back online.
+- ✅ Accounts (Google sign-in), teams, student and coach invite links (resettable).
+- ✅ Live co-editing with name-labeled cursors; works offline and syncs back (offline catch-up is labeled in the record).
+- ✅ **New round**: round, side, resolution, partner, tournament code; opens doc and flow side by side.
+- ✅ Shared timer on round docs: speech times, 2- and 1-minute flex, any custom length, ±1:00.
+- 🔜 Emailed-link sign-in, if school Google accounts are blocked.
 
 ### Integrity (anti-paste)
-- **Prep Mode** starts with the timer. Paste, drop, and all insert-from-elsewhere paths are blocked; attempts are logged.
-- Every edit is already recorded by the sync engine with author and timestamp. We add:
-  - a **hash chain** over those edits, so a changed log is detectable;
-  - **server receipts**: the server stamps the chain every few seconds. This is stronger than CardMirror's local-only seal, because the student's own computer can't rewrite history the server already saw.
-  - a **seal code** at end of prep for the judge/opponent.
-- **Replay viewer:** scrub through prep keystroke by keystroke, with flags for bursts (e.g. 200 characters in under a second), long gaps, and time spent in other tabs.
-- **Anyone can check.** Each prep gets a verify link and QR code. A coach, opponent, tab room or the student can open it with no account and see the replay, the flags, and whether the log is intact. A PDF version exists for printing.
-- Limit to state plainly: it proves what happened inside the app. It can't stop someone retyping from a phone.
+- ✅ Round docs block paste and drag-in; leaving the app and switching off are logged.
+- ✅ Server record: every edit with time, name and exact text (including deleted text), hash-chained.
+- ✅ Check link + QR: anyone sees the summary; partners, coaches and the tab room see every character typed and deleted.
+- ✅ Coach view: every round doc, flagged first. Deleted team docs stay visible to coaches (Recently deleted, deletion log).
+- ✅ Tab room: tournament code for teams, private director link with full records. Tournament round docs can't be deleted.
+- ✅ History by person and Replay (scrub or play every edit).
+- Limit, stated plainly: it proves what happened in the app. It can't stop someone retyping from a phone.
 
 ### Round Mode (member speeches)
-- One tap ends prep and switches to Round Mode: prep stays editable (edits are logged), big readable type, library hidden. Internet is allowed, so it doesn't need to work offline, but it caches the prep in case wifi drops.
-- **Block finder:** a search box (Cmd+K) across everything prepped — by keyword, position, style, speech tag. Results show the claim line; Enter opens the block in a pane.
-- **Pin board:** pin blocks you expect to use (e.g. "MG: answers to the DA") into a side pane in speaking order.
-- The flow view stays live for flowing the round, with prepped blocks dropped into the right column by reference (a link to your own prep, not a paste).
+- ✅ Round Mode: only round docs open, purple top bar, logged on the check page.
+- ✅ Block finder (Ctrl/⌘K), pinned blocks grouped by flow sheet, pins column inside the flow.
+- ✅ Insert a prepped block (outside Round Mode, never into a round doc).
 
 ### Revision history
-Very doable. The sync engine already keeps every edit, so history comes almost free.
-- **Version list** like Google Docs: auto-saved points every few minutes, plus named versions ("before tournament", "coach edits").
-- See what changed between two versions, colored by author.
-- Restore an old version or copy a section back (outside prep; inside prep a restore only brings back text you typed in that same prep, and it's logged).
-- Works for both prep and library docs.
-- The prep version of this is the replay viewer above.
+- ✅ Server history with names and colors, restore to any point; per-device saved versions too.
 
-### Import/export
-- Export to .docx (styled) and .xlsx (your flow template layout), and PDF.
-- Import from Google Docs/Sheets/Word/Flower goes into the reference library only, never into prep.
+### Accounts and data
+- ✅ Privacy page, delete my account, download all docs as a zip of Word files.
 
-## 5. Proposed tech
+## 5. Tech as built
 
-| Piece | Choice | Why |
-|---|---|---|
-| App | Web app (PWA), TypeScript + React | Runs on Chromebooks, iPads, Macs, Windows from a link; installable; works offline |
-| Editor | TipTap (built on ProseMirror) | Same engine family you know from CardMirror; good for styled outline blocks |
-| Flow grid | Custom React grid on the same doc model | Spreadsheet libraries can't share the doc's data |
-| Live sync | Yjs (CRDT) | Mature, works offline, every edit has an author and order — the base of the log |
-| Sync server | Hocuspocus (Yjs server) | Stores edit history, issues the log receipts |
-| Accounts + data | Supabase (Postgres + auth, Google sign-in) | Students already have Google accounts. Teams, coaches and students are in the data model from day one so other schools can join later |
-| Hosting | Fly.io or Railway (sync server), Cloudflare/Vercel (app) | Cheap at team scale |
-| Desktop later | Tauri wrapper, if needed | Small, only if a lockdown-style desktop mode becomes important |
+| Piece | Choice |
+|---|---|
+| App | Vite + React + TypeScript, served from the Worker |
+| Editor | TipTap v3 (ProseMirror), one custom `block` node with stable ids |
+| Flow | Decorations and CSS grid over the same doc (`src/model/flow.ts`) |
+| Live sync | Yjs + y-websocket; IndexedDB copy for offline |
+| Server | Cloudflare Worker; Durable Objects with SQLite: `DocRoom` (one per doc: live sync, hash-chained record, events) and `Directory` (users, teams, docs, tournaments, deletion log) |
+| Sign-in | Google OIDC |
 
 ## 6. Build phases
 
-Each phase ends with something you can use and test with a student.
-
-1. **Editor core** (1–2 weeks of sessions): new repo scaffold, doc view, the six styles, fonts/themes, outline sidebar, local save, split view, revision history. *Test: prep a case solo with a reference doc open beside it.*
-2. **Flow view** (1–2 weeks): flow grid on the same model, tabs per position, speech columns, Prep column, colorways ported from Green, xlsx/docx export. *Test: prep in doc, flow in grid.*
-3. **Co-prep + library** (1–2 weeks): accounts, teams, coach library with import, Prep Rooms, live sync, presence cursors, timer. *Test: coach writes a brief; two partners prep one round from it.*
-4. **Integrity** (1–2 weeks): Prep Mode paste blocking, hash chain, server receipts, seal code, replay viewer, public verify link/QR. *Test: an opponent checks a prep log from a link.*
-5. **Round Mode** (1 week): library lockout, block finder, pin board, prepped blocks in the flow. *Test: an MG speech from prepped blocks.*
-6. **Polish + pilot** (ongoing): visual design pass, onboarding, your team pilots it, then open sign-up for other teams.
+1. ✅ **Editor core**
+2. ✅ **Flow view**
+3. ✅ **Co-prep**: accounts, teams, live sync, timer, New round
+4. ✅ **Integrity**: round docs, server record, check page, history, replay, coach view, tab room
+5. ✅ **Round Mode**: block finder, pins, pins column
+6. 🔜 **Polish and pilot** (now):
+   - Mock round with the team, including a school Google account.
+   - Owner decisions: read-only coach briefs, custom domain, emailed-link sign-in.
+   - Automated tests of the server's access and deletion rules.
+   - Keep a running summary per doc so the tab room page stays fast at big tournaments.
+   - Then open sign-up for other teams.
 
 ## 7. Decisions so far
 
 - Laptops and internet are allowed in round. Round Mode caches prep but doesn't need to be offline-first.
-- The log must be checkable by anyone: coaches, tab room, opponents, the student. Hence the no-account verify link.
-- One prep, two views: yes. Plus a reference library that coaches write in, readable during prep, hidden in round.
-- Web app first; desktop only if needed.
-- Students can consult anything during prep; only hand-typed prep is available in round.
-- Pilot with your team, built so many teams can use it later.
-- Revision history is in scope (Phase 1, with the prep replay in Phase 4).
+- The record must be checkable by anyone: coaches, tab room, opponents, the student. Hence the no-account check link.
+- One prep, two views (doc and flow) on one data model.
+- Round docs instead of a separate Prep Mode; team docs allow copy and paste.
+- Web app only; desktop only if needed.
+- Pilot with the owner's team, built so many teams can use it later.
+- Deleted team docs stay with the coaches; tournament round docs stay with the tab room.
+- Don't copy CardMirror code (PolyForm Noncommercial). Re-implementing ideas is fine.
