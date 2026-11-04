@@ -31,7 +31,7 @@ const STEPS: Step[] = [
   {
     target: ['.new-round-btn'],
     title: 'Start a round',
-    body: 'New round makes a round doc for you and your partner (paste off, typing recorded), opens its flow beside it, and starts the prep timer.',
+    body: 'New round makes a round doc (paste off, typing recorded), opens its flow beside it, and starts the prep timer. Your partner gets an invitation and shares the doc live once they accept.',
   },
   {
     target: ['.timer'],

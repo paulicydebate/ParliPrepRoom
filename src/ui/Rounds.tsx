@@ -112,7 +112,10 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
       if (startTimer && prepLen) doc.getMap('timer').set('state', choose('Prep', prepLen, true));
       releaseDoc(meta.id);
       onCreated(meta.id);
-      toast(startTimer && prepLen ? `Round doc ready. Prep timer started: ${format(prepLen * 60_000)}.` : 'Round doc ready.');
+      const invited = members.find((m) => m.userId === partner)?.name;
+      toast(
+        `Round doc ready.${startTimer && prepLen ? ` Prep timer started: ${format(prepLen * 60_000)}.` : ''}${invited ? ` Invitation sent to ${invited}: they have to accept before they can edit.` : ''}`,
+      );
       onClose();
     } catch (e) {
       toast((e as Error).message);
@@ -136,7 +139,7 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
             <IconClose />
           </button>
         </div>
-        <p className="muted">Makes a round doc for you{inTeam ? ' and your partner' : ''}: paste off, typing recorded, shared live. It opens as a doc and a flow side by side.</p>
+        <p className="muted">Makes a round doc: paste off, typing recorded. It opens as a doc and a flow side by side.{inTeam ? ' Your partner gets an invitation and shares it live once they accept.' : ''}</p>
 
         <div className="form-grid">
           <label>

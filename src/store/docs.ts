@@ -31,7 +31,11 @@ export interface DocMeta {
   teamId?: string | null;
   ownerId?: string;
   /** Round docs: teammates who can open it besides the owner and coaches. */
+  /** Partners who accepted (they can open it). */
   partners?: string[];
+  /** Invited but haven't answered / said no. */
+  pendingPartners?: string[];
+  declinedPartners?: string[];
   /** Round docs on the server: token for the public check page. */
   checkToken?: string | null;
   /** Round docs started with "New round": tournament and round, e.g. "Round 3". */
@@ -98,6 +102,8 @@ function fromServer(s: ServerDoc): Partial<DocMeta> {
     teamId: s.teamId,
     ownerId: s.ownerId,
     partners: s.partners,
+    pendingPartners: s.pendingPartners ?? [],
+    declinedPartners: s.declinedPartners ?? [],
     checkToken: s.checkToken,
     tournamentName: s.tournamentName ?? null,
     roundLabel: s.roundLabel ?? null,
@@ -169,8 +175,8 @@ export async function setDocAccess(id: string, access: 'team' | 'partners') {
   push(id, { access });
 }
 
+/** Who should be a partner on this doc. New names are invited and must accept. */
 export async function setDocPartners(id: string, partners: string[]) {
-  await update(id, { partners });
   push(id, { partners });
 }
 

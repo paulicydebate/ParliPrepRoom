@@ -3855,3 +3855,30 @@ kbd {
     transition: none;
   }
 }
+
+/* Invitations to co-edit */
+.invite-bars {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+.invite-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  font-size: 14px;
+}
+.invite-bar > span:first-child {
+  flex: 1 1 320px;
+}
+.partner-status {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.partner-status.is-declined {
+  color: var(--danger);
+}

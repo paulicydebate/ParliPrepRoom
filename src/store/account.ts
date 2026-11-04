@@ -48,6 +48,9 @@ export interface ServerDoc {
   roundLabel?: string | null;
   /** Who on the team can open it: everyone, or only the owner, partners and coaches. */
   access?: 'team' | 'partners';
+  /** Partners who accepted are in `partners`; these are invited or said no. */
+  pendingPartners?: string[];
+  declinedPartners?: string[];
   deletedAt?: number | null;
   deletedByName?: string | null;
 }
@@ -209,7 +212,42 @@ export const renameTeam = (id: string, name: string) => api<TeamDetails>(`/api/t
 export const updateMember = (teamId: string, userId: string, change: { role?: Role; remove?: boolean }) =>
   api<{ ok: true }>(`/api/teams/${teamId}/members/${userId}`, { method: 'POST', json: change });
 
-export const listServerDocs = (space: Space) => api<{ docs: ServerDoc[] }>(`/api/docs?team=${encodeURIComponent(space)}`).then((r) => r.docs);
+/** An invitation to co-edit someone's doc. */
+export interface Invite {
+  docId: string;
+  teamId: string;
+  title: string;
+  round: boolean;
+  roundLabel: string | null;
+  tournamentName: string | null;
+  ownerName: string;
+  teamName: string;
+  invitedAt: number;
+}
+
+let invites: Invite[] = [];
+const invitesChanged = createSignal();
+const setInvites = (next: Invite[]) => {
+  if (JSON.stringify(next) === JSON.stringify(invites)) return;
+  invites = next;
+  invitesChanged.emit();
+};
+
+/** Invitations waiting for me (refreshed with the doc list). */
+export function useInvites(): Invite[] {
+  return useSyncExternalStore(invitesChanged.subscribe, () => invites);
+}
+
+export const listServerDocs = (space: Space) =>
+  api<{ docs: ServerDoc[]; invites?: Invite[] }>(`/api/docs?team=${encodeURIComponent(space)}`).then((r) => {
+    if (r.invites) setInvites(r.invites);
+    return r.docs;
+  });
+
+/** Answer an invitation. Accepting returns the doc (now open to me). */
+export const respondToInvite = (docId: string, accept: boolean) =>
+  api<{ ok: true; accepted: boolean; doc: ServerDoc | null }>(`/api/docs/${docId}/respond`, { method: 'POST', json: { accept } });
+export const forgetInvite = (docId: string) => setInvites(invites.filter((i) => i.docId !== docId));
 export const getServerDoc = (id: string) => api<ServerDoc>(`/api/docs/${id}`);
 export const createServerDoc = (doc: {
   id: string;

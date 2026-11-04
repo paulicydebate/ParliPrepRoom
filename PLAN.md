@@ -141,4 +141,5 @@ You can't paste or drag from the library into a round doc. Retyping by hand is t
 - Web app only; desktop only if needed.
 - Pilot with the owner's team, built so many teams can use it later.
 - Deleted team docs stay with the coaches; tournament round docs stay with the tab room.
+- Partners are invited and must accept before they can open or edit a doc (coaches never need to).
 - Don't copy CardMirror code (PolyForm Noncommercial). Re-implementing ideas is fine.

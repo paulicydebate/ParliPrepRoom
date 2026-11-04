@@ -81,6 +81,8 @@ function publicDoc(d: DocRecord) {
     round: d.round,
     order: d.order,
     partners: d.partners,
+    pendingPartners: d.pendingPartners,
+    declinedPartners: d.declinedPartners,
     checkToken: d.round ? d.checkToken : null,
     createdAt: d.createdAt,
     tournamentName: d.tournamentName,
@@ -325,7 +327,8 @@ export default {
     // ---------- Docs ----------
     if (path === '/api/docs' && request.method === 'GET') {
       const team = url.searchParams.get('team');
-      return json({ docs: (await dir.docsFor(user!.id, team && team !== 'personal' ? team : null)).map(publicDoc) });
+      // Invitations to co-edit ride along, so the app needs no extra polling.
+      return json({ docs: (await dir.docsFor(user!.id, team && team !== 'personal' ? team : null)).map(publicDoc), invites: await dir.invitesFor(user!.id) });
     }
     if (path === '/api/docs' && request.method === 'POST') {
       const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string }>(request);
@@ -344,7 +347,7 @@ export default {
       });
       return d ? json(publicDoc(d)) : fail('That doc belongs to someone else', 403);
     }
-    const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record|\/state|\/log|\/restore)?$/.exec(path);
+    const docM = /^\/api\/docs\/([A-Za-z0-9-]{8,64})(\/events|\/record|\/state|\/log|\/restore|\/respond)?$/.exec(path);
     if (docM) {
       const [, id, sub] = docM;
       if (!sub && request.method === 'PATCH') {
@@ -369,6 +372,15 @@ export default {
         if (!r.ok) return fail(r.reason, 403);
         if (r.purged) await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(id)).wipe();
         return json({ ok: true, purged: r.purged });
+      }
+      // Answer an invitation to co-edit (the invited person has no access to the doc yet).
+      if (sub === '/respond' && request.method === 'POST') {
+        const b = await body<{ accept?: boolean }>(request);
+        const accept = b?.accept === true;
+        const r = await dir.respondToInvite(user!.id, id, accept);
+        if (!r.ok) return fail('There is no invitation to answer for this doc', 404);
+        if (!accept) await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(id)).kick([user!.id]);
+        return json({ ok: true, accepted: accept, doc: r.doc ? publicDoc(r.doc) : null });
       }
       if (sub === '/restore' && request.method === 'POST') {
         return (await dir.restoreDoc(user!.id, id)) ? json({ ok: true }) : fail('Only a coach can restore this doc', 403);

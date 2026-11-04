@@ -33,7 +33,12 @@ export interface DocRecord {
   kind: 'prep' | 'reference';
   round: boolean;
   order: number | null;
+  /** Partners who accepted: these can open and edit the doc. */
   partners: string[];
+  /** Invited, not answered yet. */
+  pendingPartners: string[];
+  /** Said no (kept so the owner can see it, and invite again). */
+  declinedPartners: string[];
   checkToken: string | null;
   createdAt: number;
   tournamentId: string | null;
@@ -61,6 +66,19 @@ export interface DeletionEntry {
   userId: string;
   userName: string;
   at: number;
+}
+
+/** An invitation to co-edit a doc, shown to the person invited. */
+export interface Invite {
+  docId: string;
+  teamId: string;
+  title: string;
+  round: boolean;
+  roundLabel: string | null;
+  tournamentName: string | null;
+  ownerName: string;
+  teamName: string;
+  invitedAt: number;
 }
 
 export interface Tournament {
@@ -117,13 +135,18 @@ export class Directory extends DurableObject {
           id TEXT PRIMARY KEY, team_id TEXT, owner_id TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL,
           round INTEGER NOT NULL DEFAULT 0, ord REAL, check_token TEXT UNIQUE, created_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS doc_partners (
-          doc_id TEXT NOT NULL, user_id TEXT NOT NULL, PRIMARY KEY (doc_id, user_id));
+          doc_id TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'accepted', invited_at INTEGER,
+          PRIMARY KEY (doc_id, user_id));
         CREATE TABLE IF NOT EXISTS tournaments (
           id TEXT PRIMARY KEY, name TEXT NOT NULL, code TEXT NOT NULL UNIQUE, director_secret TEXT NOT NULL UNIQUE,
           created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
       `);
       // Columns added after the first deploy.
       const cols = this.ctx.storage.sql.exec('PRAGMA table_info(docs)').toArray().map((r) => String(r.name));
+      // Partners added before invitations existed count as accepted.
+      const pcols = this.ctx.storage.sql.exec('PRAGMA table_info(doc_partners)').toArray().map((r) => String(r.name));
+      if (!pcols.includes('status')) this.ctx.storage.sql.exec("ALTER TABLE doc_partners ADD COLUMN status TEXT NOT NULL DEFAULT 'accepted'");
+      if (!pcols.includes('invited_at')) this.ctx.storage.sql.exec('ALTER TABLE doc_partners ADD COLUMN invited_at INTEGER');
       if (!cols.includes('tournament_id')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN tournament_id TEXT');
       if (!cols.includes('round_label')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN round_label TEXT');
       if (!cols.includes('access')) {
@@ -336,7 +359,7 @@ export class Directory extends DurableObject {
       kind: row.kind === 'reference' ? 'reference' : 'prep',
       round: Number(row.round) === 1,
       order: row.ord === null || row.ord === undefined ? null : Number(row.ord),
-      partners: this.all('SELECT user_id FROM doc_partners WHERE doc_id = ?', id).map((r) => String(r.user_id)),
+      ...this.partnerLists(id),
       checkToken: (row.check_token as string | null) ?? null,
       createdAt: Number(row.created_at),
       tournamentId: (row.tournament_id as string | null) ?? null,
@@ -347,6 +370,12 @@ export class Directory extends DurableObject {
       deletedBy: (row.deleted_by as string | null) ?? null,
       deletedByName: (row.deleted_by_name as string | null) ?? null,
     };
+  }
+
+  private partnerLists(docId: string) {
+    const rows = this.all('SELECT user_id, status FROM doc_partners WHERE doc_id = ?', docId);
+    const of = (status: string) => rows.filter((r) => r.status === status).map((r) => String(r.user_id));
+    return { partners: of('accepted'), pendingPartners: of('pending'), declinedPartners: of('declined') };
   }
 
   private canAccess(d: DocRecord, userId: string): boolean {
@@ -444,10 +473,16 @@ export class Directory extends DurableObject {
     }
     if (patch.round === true && manager) this.sql.exec("UPDATE docs SET access = 'partners' WHERE id = ?", docId);
     if (patch.partners !== undefined && manager) {
-      this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ?', docId);
+      // The list is who should be a partner. New names are invited (they must
+      // accept); people who already accepted stay; names left off are removed.
       const teamId = this.doc(this.one('SELECT * FROM docs WHERE id = ?', docId)!).teamId;
-      for (const p of patch.partners.slice(0, 6)) {
-        if (teamId && this.role(teamId, p)) this.sql.exec('INSERT OR IGNORE INTO doc_partners (doc_id, user_id) VALUES (?, ?)', docId, p);
+      const wanted = new Set(patch.partners.filter((p) => teamId && p !== doc.ownerId && this.role(teamId, p)).slice(0, 6));
+      const existing = new Map(this.all('SELECT user_id, status FROM doc_partners WHERE doc_id = ?', docId).map((r) => [String(r.user_id), String(r.status)]));
+      for (const user of existing.keys()) if (!wanted.has(user)) this.sql.exec('DELETE FROM doc_partners WHERE doc_id = ? AND user_id = ?', docId, user);
+      for (const user of wanted) {
+        const status = existing.get(user);
+        if (!status) this.sql.exec("INSERT INTO doc_partners (doc_id, user_id, status, invited_at) VALUES (?, ?, 'pending', ?)", docId, user, Date.now());
+        else if (status === 'declined') this.sql.exec("UPDATE doc_partners SET status = 'pending', invited_at = ? WHERE doc_id = ? AND user_id = ?", Date.now(), docId, user);
       }
     }
     return this.doc(this.one('SELECT * FROM docs WHERE id = ?', docId)!);
@@ -531,6 +566,50 @@ export class Directory extends DurableObject {
       at: Number(r.at),
     }));
     return { docs, log };
+  }
+
+  /**
+   * The invited person answers. Accepting needs a pending invite; saying no
+   * to an accepted doc means leaving it. Someone who declined needs a new invite.
+   */
+  respondToInvite(userId: string, docId: string, accept: boolean): { ok: boolean; doc: DocRecord | null } {
+    const row = this.one('SELECT status FROM doc_partners WHERE doc_id = ? AND user_id = ?', docId, userId);
+    const docRow = this.one('SELECT * FROM docs WHERE id = ?', docId);
+    if (!row || !docRow || docRow.deleted_at !== null && docRow.deleted_at !== undefined) return { ok: false, doc: null };
+    const d = this.doc(docRow);
+    if (!d.teamId || !this.role(d.teamId, userId)) return { ok: false, doc: null };
+    const status = String(row.status);
+    if (status === 'pending') this.sql.exec('UPDATE doc_partners SET status = ? WHERE doc_id = ? AND user_id = ?', accept ? 'accepted' : 'declined', docId, userId);
+    else if (status === 'accepted' && !accept) this.sql.exec("UPDATE doc_partners SET status = 'declined' WHERE doc_id = ? AND user_id = ?", docId, userId);
+    else if (status === 'accepted' && accept) return { ok: true, doc: d };
+    else return { ok: false, doc: null };
+    const fresh = this.doc(this.one('SELECT * FROM docs WHERE id = ?', docId)!);
+    return { ok: true, doc: this.canAccess(fresh, userId) ? fresh : null };
+  }
+
+  /** Invitations waiting for this person. */
+  invitesFor(userId: string): Invite[] {
+    const rows = this.all(
+      "SELECT d.*, p.invited_at AS invited_at FROM doc_partners p JOIN docs d ON d.id = p.doc_id WHERE p.user_id = ? AND p.status = 'pending' AND d.deleted_at IS NULL ORDER BY p.invited_at DESC",
+      userId,
+    );
+    const out: Invite[] = [];
+    for (const r of rows) {
+      const d = this.doc(r);
+      if (!d.teamId || !this.role(d.teamId, userId)) continue;
+      out.push({
+        docId: d.id,
+        teamId: d.teamId,
+        title: d.title,
+        round: d.round,
+        roundLabel: d.roundLabel,
+        tournamentName: d.tournamentName,
+        ownerName: this.names([d.ownerId])[d.ownerId] ?? '',
+        teamName: String(this.one('SELECT name FROM teams WHERE id = ?', d.teamId)?.name ?? ''),
+        invitedAt: Number(r.invited_at ?? 0),
+      });
+    }
+    return out;
   }
 
   /** Coach view: every round doc on a team (coaches only; null otherwise). */

@@ -2,8 +2,8 @@ import qrcode from 'qrcode-generator';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from '../editor/roundGuard';
-import { teamDetails, useAccount, type Member } from '../store/account';
-import { setDocAccess, setDocPartners, type DocMeta } from '../store/docs';
+import { respondToInvite, teamDetails, useAccount, type Member } from '../store/account';
+import { setDocAccess, setDocPartners, syncDocList, type DocMeta } from '../store/docs';
 import { IconClose } from './icons';
 
 /** "Partners" button on a team round doc: who besides the owner and coaches can open it. */
@@ -24,18 +24,25 @@ export function PartnersButton({ meta }: { meta: DocMeta }) {
   const [members, setMembers] = useState<Member[] | null>(null);
   useEffect(() => {
     if (!open || !meta.teamId) return;
+    void syncDocList(meta.teamId).catch(() => {}); // so "waiting" / "co-editing" is current
     void teamDetails(meta.teamId).then((t) => setMembers(t.members), () => setMembers([]));
   }, [open, meta.teamId]);
-  // Show the tick right away; the server catches up in the background.
-  const [partners, setPartners] = useState<string[]>(meta.partners ?? []);
-  useEffect(() => setPartners(meta.partners ?? []), [meta.partners]);
+  const accepted = meta.partners ?? [];
+  const pending = meta.pendingPartners ?? [];
+  const declined = meta.declinedPartners ?? [];
+  // Who should be a partner: those who accepted plus those invited. Show the tick right away; the server catches up.
+  const [partners, setPartners] = useState<string[]>([...accepted, ...pending]);
+  useEffect(() => setPartners([...(meta.partners ?? []), ...(meta.pendingPartners ?? [])]), [meta.partners, meta.pendingPartners]);
   if (!meta.teamId) return null;
   const canEdit = meta.ownerId === acct.user?.id || acct.teams.find((t) => t.id === meta.teamId)?.role === 'coach';
+  const iAmPartner = !!acct.user && accepted.includes(acct.user.id);
 
   const isRound = !!meta.round;
   const everyone = !isRound && meta.access === 'team';
   const students = members?.filter((m) => m.userId !== meta.ownerId && m.role === 'student') ?? [];
-  const label = isRound ? `Partners${partners.length ? ` (${partners.length})` : ''}` : everyone ? 'Whole team' : partners.length ? `Partners (${partners.length})` : 'Only me';
+  const partnerLabel = accepted.length && pending.length ? `Partners (${accepted.length} + ${pending.length} waiting)` : accepted.length ? `Partners (${accepted.length})` : pending.length ? 'Invite sent' : isRound ? 'Partners' : 'Only me';
+  const label = everyone ? 'Whole team' : partnerLabel;
+  const statusOf = (id: string) => (accepted.includes(id) ? 'co-editing' : pending.includes(id) ? 'invited, waiting for them' : declined.includes(id) ? 'declined' : '');
 
   return (
     <details
@@ -56,13 +63,13 @@ export function PartnersButton({ meta }: { meta: DocMeta }) {
       </summary>
       <div className="menu partners-pop" style={pos ? { position: 'fixed', top: pos.top, left: pos.left, right: 'auto' } : undefined}>
         {isRound ? (
-          <p className="muted small">Round docs open only to the owner, the partners checked here, and the team's coaches.</p>
+          <p className="muted small">Round docs open only to the owner, partners who accepted, and the team's coaches. Checking a name sends them an invitation they have to accept.</p>
         ) : (
           <>
             <p className="muted small">Who can open and edit this doc? Coaches can always open it.</p>
             <label className="check-row">
               <input type="radio" name={`access-${meta.id}`} disabled={!canEdit} checked={!everyone} onChange={() => void setDocAccess(meta.id, 'partners')} />
-              Just me and the partners I pick
+              Just me and partners who accept my invitation
             </label>
             <label className="check-row">
               <input type="radio" name={`access-${meta.id}`} disabled={!canEdit} checked={everyone} onChange={() => void setDocAccess(meta.id, 'team')} />
@@ -85,13 +92,29 @@ export function PartnersButton({ meta }: { meta: DocMeta }) {
                     void setDocPartners(meta.id, next);
                   }}
                 />
-                {m.name}
+                <span>
+                  {m.name}
+                  {statusOf(m.userId) && <span className={'partner-status ' + (declined.includes(m.userId) ? 'is-declined' : '')}> · {statusOf(m.userId)}</span>}
+                </span>
               </label>
             ))}
             {members && students.length === 0 && <p className="muted small">No other students on the team yet.</p>}
           </>
         )}
         {!canEdit && <p className="muted small">Only the doc's owner or a coach can change this.</p>}
+        {iAmPartner && !canEdit && (
+          <button
+            type="button"
+            className="btn ghost small"
+            onClick={() => {
+              void respondToInvite(meta.id, false)
+                .then(() => syncDocList(meta.teamId!))
+                .catch((e: Error) => toast(e.message));
+            }}
+          >
+            Leave this doc
+          </button>
+        )}
       </div>
     </details>
   );

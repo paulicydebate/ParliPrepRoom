@@ -3,6 +3,7 @@ import { toast } from '../editor/roundGuard';
 import { clearPins } from '../store/pins';
 import { setRound } from '../store/roundDoc';
 import { startTour } from '../store/tour';
+import { InviteBanner } from './Invites';
 import { HelpMenu, Tour } from './Tour';
 import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
 import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
@@ -270,13 +271,18 @@ export function App() {
   // Keep the sidebar in step with the server (on switching teams, every 30 s, on returning to the tab).
   useEffect(() => {
     if (!acct.user) return;
-    const refresh = () => void syncDocList(acct.space).catch(() => {});
+    // Skip the background refresh while the tab is hidden (it refreshes when you come back).
+    const refresh = () => {
+      if (!document.hidden) void syncDocList(acct.space).catch(() => {});
+    };
     refresh();
     const t = setInterval(refresh, 30_000);
     window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       clearInterval(t);
       window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [acct.user, acct.space]);
 
@@ -616,6 +622,8 @@ export function App() {
           <IconSettings />
         </button>
       </header>
+
+      <InviteBanner onOpenDoc={(id) => void addSharedDoc(id).then((m) => m && openInFocused(m.id))} />
 
       <div className="workspace" style={{ ['--side-w' as string]: `${sideWidth.width}px`, ['--pins-w' as string]: `${pinsWidth.width}px` }}>
         {showSidebar && docs && (
