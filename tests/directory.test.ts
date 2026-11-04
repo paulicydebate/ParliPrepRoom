@@ -273,3 +273,24 @@ describe('removing someone from the team', () => {
     expect(dir.access(back, ids.owner).ok).toBe(true);
   });
 });
+
+describe('the regular refresh', () => {
+  it('returns who I am, my docs and my invitations in one call', async () => {
+    const id = uid();
+    dir.createDoc(ids.owner, { id, teamId: team, title: 'Round', kind: 'prep', round: true, partners: [ids.pat] });
+    const token = await dir.signIn({ provider: 'test', subject: 'Pat', email: 'Pat@example.test', name: 'Pat' });
+    const r = (await dir.docList(token, team))!;
+    expect(r.user.id).toBe(ids.pat);
+    expect(r.docs).toEqual([]); // not accepted yet
+    expect(r.invites.map((i) => i.docId)).toEqual([id]);
+    dir.respondToInvite(ids.pat, id, true);
+    const after = (await dir.docList(token, team))!;
+    expect(after.docs.map((d) => d.id)).toEqual([id]);
+    expect(after.invites).toEqual([]);
+  });
+
+  it('says nobody is signed in for a missing or wrong session', async () => {
+    expect(await dir.docList(null, team)).toBeNull();
+    expect(await dir.docList('not-a-session', team)).toBeNull();
+  });
+});

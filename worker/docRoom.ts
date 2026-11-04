@@ -87,6 +87,9 @@ export class DocRoom extends DurableObject {
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
+    // Keep-alive: Cloudflare's edge answers the app's "ping" with "pong" itself,
+    // without waking this room or billing a request (see EFFICIENCY.md).
+    if (typeof WebSocketRequestResponsePair !== 'undefined') ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     ctx.blockConcurrencyWhile(async () => {
       this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS updates (
         seq INTEGER PRIMARY KEY AUTOINCREMENT,

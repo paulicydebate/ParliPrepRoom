@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
 import { clearPins } from '../store/pins';
+import { nextDelay, wasIdle } from '../store/poll';
 import { setRound } from '../store/roundDoc';
 import { startTour } from '../store/tour';
 import { InviteBanner } from './Invites';
@@ -275,17 +276,46 @@ export function App() {
   useEffect(() => {
     if (!acct.user) return;
     // Skip the background refresh while the tab is hidden (it refreshes when you come back).
+    let lastActivity = Date.now();
+    let lastRefresh = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => {
-      if (!document.hidden) void syncDocList(acct.space).catch(() => {});
+      if (document.hidden) return;
+      lastRefresh = Date.now();
+      void syncDocList(acct.space).catch(() => {});
+    };
+    // Quick while the person is using the app, slow while the tab just sits open.
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        refresh();
+        schedule();
+      }, nextDelay(Date.now() - lastActivity));
+    };
+    const activity = () => {
+      const idle = wasIdle(Date.now() - lastActivity);
+      lastActivity = Date.now();
+      if (idle) {
+        refresh();
+        schedule();
+      }
+    };
+    // Coming back to the tab or window: refresh now, unless we just did.
+    const comeBack = () => {
+      if (Date.now() - lastRefresh > 10_000) refresh();
     };
     refresh();
-    const t = setInterval(refresh, 30_000);
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refresh);
+    schedule();
+    window.addEventListener('pointerdown', activity, { passive: true });
+    window.addEventListener('keydown', activity, { passive: true });
+    window.addEventListener('focus', comeBack);
+    document.addEventListener('visibilitychange', comeBack);
     return () => {
-      clearInterval(t);
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', refresh);
+      clearTimeout(timer);
+      window.removeEventListener('pointerdown', activity);
+      window.removeEventListener('keydown', activity);
+      window.removeEventListener('focus', comeBack);
+      document.removeEventListener('visibilitychange', comeBack);
     };
   }, [acct.user, acct.space]);
 

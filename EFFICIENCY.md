@@ -1,6 +1,6 @@
 # Server efficiency plan
 
-Written 2026-11-04 by Claude. Goal: keep what the app does (live co-editing with cursors, the typed-by-hand record, check pages, history and replay, coach view, invitations) while sending the server far less. Nothing here is implemented yet. Figures marked **measured** come from `scripts/measure-traffic.cjs` (real browsers against a local server); figures marked **projected** are estimates from those measurements and need re-measuring after each change.
+Written 2026-11-04 by Claude. Goal: keep what the app does (live co-editing with cursors, the typed-by-hand record, check pages, history and replay, coach view, invitations) while sending the server far less. **Step 1 is built and measured (2026-11-04, not yet deployed); steps 2 and 3 are not.** Figures marked **measured** come from `scripts/measure-traffic.cjs` (real browsers against a local server); figures marked **projected** are estimates from those measurements and need re-measuring after each change.
 
 ## Short version
 
@@ -40,7 +40,10 @@ Two students in one round doc. Ann types 200 characters at 5 a second; Bea only 
 
 ## What to do, in order
 
-### Step 1: small, safe, mostly on the client (about a day, no change to what users see)
+### Step 1: small, safe, mostly on the client (BUILT 2026-11-04; deployment pending)
+
+**Measured result** (same script, same two-student test; before to after): messages reaching the doc **per typed character 3.08 to 1.41 (-54%)**; an **idle open doc 33 to 4 messages a minute (-88%)**, plus 12 free keep-alive pings a minute that Cloudflare answers without waking the doc; **HTTP requests per idle minute 4 to 1 (-75%)**. Partner still sees text and the cursor label; 100 s idle had no reconnects or page errors; invitations, live typing both ways and the flood protection were re-checked. Code: `src/store/presence.ts` (A, B, C), `docList` in `worker/directory.ts` and `worker/index.ts` (D), `src/store/poll.ts` and the refresh effect in `src/ui/App.tsx` (E); tests in `tests/presence.test.ts`, `tests/poll.test.ts`, `tests/docroom.test.ts`, `tests/directory.test.ts`. A lesson worth keeping: the first version of the echo fix was wired in the wrong order (server updates went through the throttle first and were later sent as if local), which the unit tests with fake pieces missed and only a real-browser measurement caught; `tests/presence.test.ts` now has a test against the real sync library that fails with the wrong order. Not done from the original step 1 list: pausing presence while a tab is hidden (not needed once presence renews only once a minute) and the "unchanged" empty reply for polling (saves bytes, not requests).
+
 
 | Change | Saves | Efficacy impact | Notes |
 |---|---|---|---|

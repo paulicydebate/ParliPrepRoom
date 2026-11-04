@@ -184,6 +184,14 @@ export default {
       return new Response(null, { status: 204, headers: { 'set-cookie': setCookie(COOKIE, '', 0, secure) } });
     }
 
+    // The app's regular refresh: one directory call for session, docs and invitations.
+    if (path === '/api/docs' && request.method === 'GET') {
+      const team = url.searchParams.get('team');
+      const r = await dir.docList(cookie(request, COOKIE), team && team !== 'personal' ? team : null);
+      if (!r) return fail('Sign in first', 401);
+      return json({ docs: r.docs.map(publicDoc), invites: r.invites });
+    }
+
     const user = await dir.userForSession(cookie(request, COOKIE));
     const tz = typeof request.cf?.timezone === 'string' ? request.cf.timezone : 'America/Los_Angeles';
 
@@ -325,11 +333,6 @@ export default {
     }
 
     // ---------- Docs ----------
-    if (path === '/api/docs' && request.method === 'GET') {
-      const team = url.searchParams.get('team');
-      // Invitations to co-edit ride along, so the app needs no extra polling.
-      return json({ docs: (await dir.docsFor(user!.id, team && team !== 'personal' ? team : null)).map(publicDoc), invites: await dir.invitesFor(user!.id) });
-    }
     if (path === '/api/docs' && request.method === 'POST') {
       const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string }>(request);
       if (!b?.id || !DOC_ID.test(b.id)) return fail('Bad document id', 400);

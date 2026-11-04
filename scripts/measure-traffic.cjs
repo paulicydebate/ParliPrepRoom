@@ -9,7 +9,7 @@ const { chromium } = require('playwright');
 
 
 const BASE = 'http://127.0.0.1:8793';
-const kindOf = (b) => (b[0] === 1 ? 'awareness' : b[0] === 0 ? 'sync-' + (['step1', 'step2', 'update'][b[1]] ?? b[1]) : b[0] === 99 ? 'keepalive' : 'type' + b[0]);
+const kindOf = (b) => (typeof b === 'string' ? 'text-' + b : b[0] === 1 ? 'awareness' : b[0] === 0 ? 'sync-' + (['step1', 'step2', 'update'][b[1]] ?? b[1]) : b[0] === 99 ? 'keepalive' : 'type' + b[0]);
 
 (async () => {
   const n = Date.now() % 100000;
@@ -35,8 +35,8 @@ const kindOf = (b) => (b[0] === 1 ? 'awareness' : b[0] === 0 ? 'sync-' + (['step
   const watch = (page, who) => {
     page.on('request', (r) => r.url().includes('/api/') && stats[who].http++);
     page.on('websocket', (ws) => {
-      ws.on('framesent', (f) => { const k = kindOf(Buffer.from(f.payload)); stats[who].sent[k] = (stats[who].sent[k] || 0) + 1; });
-      ws.on('framereceived', (f) => { const k = kindOf(Buffer.from(f.payload)); stats[who].recv[k] = (stats[who].recv[k] || 0) + 1; });
+      ws.on('framesent', (f) => { const k = kindOf(typeof f.payload === 'string' ? f.payload : Buffer.from(f.payload)); stats[who].sent[k] = (stats[who].sent[k] || 0) + 1; });
+      ws.on('framereceived', (f) => { const k = kindOf(typeof f.payload === 'string' ? f.payload : Buffer.from(f.payload)); stats[who].recv[k] = (stats[who].recv[k] || 0) + 1; });
     });
   };
   watch(ann, 'ann'); watch(bea, 'bea');
@@ -49,21 +49,27 @@ const kindOf = (b) => (b[0] === 1 ? 'awareness' : b[0] === 0 ? 'sync-' + (['step
   await ann.locator('.pane').nth(pane).locator('.pp-doc').click();
   const reset = () => { for (const w of ['ann', 'bea']) stats[w] = { sent: {}, recv: {}, http: 0 }; };
   const total = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+  // Text "ping" frames are answered by Cloudflare's edge without waking the doc, so they are not billed.
+  const billed = (o) => Object.entries(o).filter(([k]) => !k.startsWith('text-')).reduce((a, [, v]) => a + v, 0);
 
   reset();
   const CHARS = 200;
   await ann.keyboard.type('x'.repeat(CHARS), { delay: 200 }); // 5 characters a second
   await ann.waitForTimeout(1500);
-  const toServer = total(stats.ann.sent) + total(stats.bea.sent);
+  const toServer = billed(stats.ann.sent) + billed(stats.bea.sent);
   console.log(`TYPING ${CHARS} characters (Ann types, Bea only watches)`);
-  console.log('  messages sent TO the server, per character:', (toServer / CHARS).toFixed(2), '| by kind: Ann', JSON.stringify(stats.ann.sent), 'Bea', JSON.stringify(stats.bea.sent));
+  console.log('  messages that reach the doc (free keep-alive pings not counted), per character:', (toServer / CHARS).toFixed(2), '| by kind: Ann', JSON.stringify(stats.ann.sent), 'Bea', JSON.stringify(stats.bea.sent));
+  const carets = await bea.locator('.collaboration-carets__label').allInnerTexts();
+  console.log('  partner still sees Ann\'s cursor label:', carets.some((t) => t.startsWith('Ann')), '| and Ann\'s text:', (await bea.locator('.pane').nth(pane).locator('.pp-doc').innerText()).includes('xxxxxxxxxx'));
   console.log('  messages the server relays OUT, per character:', ((total(stats.ann.recv) + total(stats.bea.recv)) / CHARS).toFixed(2));
 
+  // Let the 2-minute "recently used" window pass so the tabs count as idle.
+  await ann.waitForTimeout(125_000);
   reset();
   const SECS = 60;
   await ann.waitForTimeout(SECS * 1000);
   console.log(`IDLE ${SECS} s, both tabs visible, nobody typing`);
-  console.log('  messages sent to the server per minute (both tabs):', total(stats.ann.sent) + total(stats.bea.sent), '| by kind:', JSON.stringify(stats.ann.sent));
+  console.log('  messages that reach the doc per minute (both tabs):', billed(stats.ann.sent) + billed(stats.bea.sent), '| free keep-alive pings:', total(stats.ann.sent) + total(stats.bea.sent) - billed(stats.ann.sent) - billed(stats.bea.sent), '| by kind (Ann):', JSON.stringify(stats.ann.sent));
   console.log('  HTTP requests per minute (both tabs):', stats.ann.http + stats.bea.http);
   await browser.close();
 })();

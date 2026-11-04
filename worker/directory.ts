@@ -214,6 +214,16 @@ export class Directory extends DurableObject {
     return row ? this.user(row) : null;
   }
 
+  /**
+   * The app's regular refresh in ONE call: who I am, my docs and my
+   * invitations (this used to be three calls, billed as three requests).
+   */
+  async docList(token: string | null, team: string | null): Promise<{ user: User; docs: DocRecord[]; invites: Invite[] } | null> {
+    const user = await this.userForSession(token);
+    if (!user) return null;
+    return { user, docs: this.docsFor(user.id, team), invites: this.invitesFor(user.id) };
+  }
+
   async signOut(token: string): Promise<void> {
     this.sql.exec('DELETE FROM sessions WHERE token_hash = ?', await sha256(token));
   }

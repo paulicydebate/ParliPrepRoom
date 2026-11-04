@@ -35,5 +35,10 @@ export function newContext() {
     blockConcurrencyWhile: (fn: () => Promise<void> | void) => void fn(),
     getWebSockets: () => [] as unknown[],
     acceptWebSocket: () => {},
+    /** What the room asked the edge to answer by itself. */
+    autoResponses: [] as unknown[],
+    setWebSocketAutoResponse(pair: unknown) {
+      this.autoResponses.push(pair);
+    },
   };
 }

@@ -5,6 +5,7 @@ import { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';
 import { createSignal } from './emitter';
 import { getProfile } from '../settings/profile';
+import { slimTraffic } from './presence';
 
 // Live sync with the ParliPrepRoom server (Cloudflare). Only used when the
 // page is served by that server and someone is signed in (see account.ts);
@@ -22,6 +23,7 @@ export function connect(docId: string, doc: Y.Doc): WebsocketProvider {
   const base = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/sync`;
   const provider = new WebsocketProvider(base, docId, doc);
   provider.awareness.setLocalStateField('user', { name: who.name || 'Unnamed', color: colorFor(who.deviceId) });
+  slimTraffic(provider as never, doc);
   watchConnection(provider, doc);
   guardReconnects(provider, docId, doc);
   return provider;
@@ -147,12 +149,6 @@ function watchConnection(provider: WebsocketProvider, doc: Y.Doc) {
     st.local++;
     st.changed.emit();
   });
-  // Keep-alive. y-websocket decides a connection is dead after 30 seconds of
-  // hearing nothing and closes and reopens it; our server is silent when
-  // nobody is typing, so an idle open doc used to reconnect twice a minute,
-  // all day. A ping every 20 seconds (echoed by the server) prevents that.
-  const keepAlive = setInterval(() => ping(provider), 20_000);
-  doc.on('destroy', () => clearInterval(keepAlive));
   provider.messageHandlers[MSG_PING] = (_enc, dec) => {
     const nonce = decoding.readVarUint(dec);
     const sent = st.waiting.get(nonce);

@@ -94,3 +94,16 @@ describe('small messages', () => {
     expect(rows()).toBe(2);
   });
 });
+
+describe('keep-alive', () => {
+  it('asks the edge to answer "ping" with "pong" without waking the room', () => {
+    class Pair {
+      constructor(public request: string, public response: string) {}
+    }
+    (globalThis as unknown as { WebSocketRequestResponsePair: unknown }).WebSocketRequestResponsePair = Pair;
+    const c = newContext();
+    new DocRoom(c as never, {} as never);
+    expect(c.autoResponses).toEqual([new Pair('ping', 'pong')]);
+    delete (globalThis as unknown as { WebSocketRequestResponsePair?: unknown }).WebSocketRequestResponsePair;
+  });
+});
