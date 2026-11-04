@@ -15,5 +15,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DocRoom", "Directory"] }],
   "workers_dev": true,
   "preview_urls": false,
-  "observability": { "enabled": true }
+  // Keep one in ten log events: the free plan stops recording logs after 200,000 events a day,
+  // and every live-editing message is an event. Raise it while hunting a bug.
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 }
 }

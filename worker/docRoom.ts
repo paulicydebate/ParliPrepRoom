@@ -23,6 +23,17 @@ const MSG_AWARENESS = 1;
 /** Not part of y-websocket: the app's connection check (echoed back). */
 const MSG_PING = 99;
 
+/**
+ * Safety valve against a runaway client (a bug once made two editors fight
+ * over the cursor at ~450 messages a second and used up Cloudflare's daily
+ * allowance in minutes). Normal use, even fast typing, stays far below this.
+ */
+const MAX_AWARENESS_PER_SEC = 12;
+const CUT_OFF_PER_SEC = 100;
+const CUT_OFF_AFTER_SECONDS = 5;
+/** Close code the app understands as "back off for a minute". */
+export const TOO_MANY = 4429;
+
 /** Who is on a connection. Set by the worker from the signed-in session. */
 export interface Who {
   id: string;
@@ -165,10 +176,42 @@ export class DocRoom extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  /** Message counts per connection for the current second (kept in memory only). */
+  private rate = new Map<WebSocket, { second: number; n: number; aware: number; hot: number }>();
+
+  /** Count this message; returns 'ok', 'drop' (skip it) or 'cut' (close the connection). */
+  private throttle(ws: WebSocket, awareness: boolean): 'ok' | 'drop' | 'cut' {
+    const second = Math.floor(Date.now() / 1000);
+    let r = this.rate.get(ws);
+    if (!r) this.rate.set(ws, (r = { second, n: 0, aware: 0, hot: 0 }));
+    if (r.second !== second) {
+      r.hot = r.n > CUT_OFF_PER_SEC ? r.hot + 1 : 0;
+      r.second = second;
+      r.n = 0;
+      r.aware = 0;
+    }
+    r.n++;
+    if (r.hot >= CUT_OFF_AFTER_SECONDS) return 'cut';
+    if (awareness && ++r.aware > MAX_AWARENESS_PER_SEC) return 'drop';
+    return 'ok';
+  }
+
   async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
     if (typeof message === 'string') return;
     if ((ws.deserializeAttachment() as Who | null)?.revoked) return;
     const data = new Uint8Array(message);
+    const verdict = this.throttle(ws, data[0] === MSG_AWARENESS);
+    if (verdict === 'cut') {
+      console.warn('Closing a connection that sent more than', CUT_OFF_PER_SEC, 'messages a second');
+      this.rate.delete(ws);
+      try {
+        ws.close(TOO_MANY, 'too many messages');
+      } catch {
+        // already closed
+      }
+      return;
+    }
+    if (verdict === 'drop') return;
     const doc = this.loadDoc();
     const dec = decoding.createDecoder(data);
     const type = decoding.readVarUint(dec);
@@ -195,6 +238,7 @@ export class DocRoom extends DurableObject {
   }
 
   async webSocketClose(ws: WebSocket, code: number) {
+    this.rate.delete(ws);
     try {
       ws.close(code === 1005 ? 1000 : code, 'closing');
     } catch {

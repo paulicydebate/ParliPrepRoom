@@ -23,6 +23,14 @@ export function connect(docId: string, doc: Y.Doc): WebsocketProvider {
   const provider = new WebsocketProvider(base, docId, doc);
   provider.awareness.setLocalStateField('user', { name: who.name || 'Unnamed', color: colorFor(who.deviceId) });
   watchConnection(provider, doc);
+  // The server cut this connection for sending far too many messages (a
+  // runaway): stop retrying for a minute instead of reconnecting at once.
+  provider.on('connection-close', (event: CloseEvent | null) => {
+    if (event?.code === 4429) {
+      provider.disconnect();
+      setTimeout(() => provider.connect(), 60_000);
+    }
+  });
   return provider;
 }
 
@@ -57,6 +65,12 @@ function watchConnection(provider: WebsocketProvider, doc: Y.Doc) {
     st.local++;
     st.changed.emit();
   });
+  // Keep-alive. y-websocket decides a connection is dead after 30 seconds of
+  // hearing nothing and closes and reopens it; our server is silent when
+  // nobody is typing, so an idle open doc used to reconnect twice a minute,
+  // all day. A ping every 20 seconds (echoed by the server) prevents that.
+  const keepAlive = setInterval(() => ping(provider), 20_000);
+  doc.on('destroy', () => clearInterval(keepAlive));
   provider.messageHandlers[MSG_PING] = (_enc, dec) => {
     const nonce = decoding.readVarUint(dec);
     const sent = st.waiting.get(nonce);

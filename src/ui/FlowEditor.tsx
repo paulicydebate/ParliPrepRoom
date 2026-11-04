@@ -25,11 +25,14 @@ export function FlowEditor({
   provider,
   docId,
   space,
+  carets,
   onEditor,
 }: {
   ydoc: Y.Doc;
   provider: WebsocketProvider | null;
   docId: string;
+  /** See DocEditor: only one editor per document shares its cursor. */
+  carets: boolean;
   /** Current team (or 'personal'), for pins. */
   space: string;
   onEditor: (e: Editor | null) => void;
@@ -42,7 +45,7 @@ export function FlowEditor({
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
         RoundGuard.configure({ ydoc, docId }),
-        ...(provider ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
+        ...(provider && carets ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
         FlowView.configure({ pinPanel }),
         Placeholder.configure({
           placeholder: ({ node }) => `${KIND_INFO[asKind(node.attrs.kind)].label}…`,
@@ -50,7 +53,7 @@ export function FlowEditor({
       ],
       editorProps: { attributes: { spellcheck: 'true' } },
     },
-    [ydoc, docId, provider],
+    [ydoc, docId, provider, carets],
   );
 
   useEffect(() => {

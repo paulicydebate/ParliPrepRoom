@@ -305,6 +305,7 @@ export function Pane({
   onCreate,
   focusMode,
   onFocusMode,
+  showCarets,
 }: {
   pane: PaneState;
   docs: DocMeta[];
@@ -324,6 +325,8 @@ export function Pane({
   /** One window fills the screen. */
   focusMode: boolean;
   onFocusMode: () => void;
+  /** This is the first window showing this doc, so it's the one that shares the cursor (see DocEditor). */
+  showCarets: boolean;
 }) {
   const meta = docs.find((d) => d.id === pane.docId) ?? null;
   const opened = useYDoc(meta && !(roundMode && !meta.round) ? meta.id : null);
@@ -557,7 +560,7 @@ export function Pane({
                 <PanelHandle panel={outlineWidth} edge="right" label="Resize the outline" onCollapse={() => onChange({ ...pane, outline: false })} />
               </>
             )}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} onEditor={onEditor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} onEditor={onEditor} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
         </>

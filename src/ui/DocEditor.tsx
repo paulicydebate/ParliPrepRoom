@@ -23,14 +23,20 @@ import {
   IconUnfold,
 } from './icons';
 
-export function DocEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; provider: WebsocketProvider | null; docId: string; onEditor: (e: Editor | null) => void }) {
+/**
+ * `carets`: share this editor's cursor and show partners' cursors. Only ONE
+ * editor per document may do this: two editors on the same document share one
+ * awareness record, and each deletes the other's cursor as "not mine", forever
+ * (about 450 messages a second). Extra windows on the same doc pass false.
+ */
+export function DocEditor({ ydoc, provider, docId, carets, onEditor }: { ydoc: Y.Doc; provider: WebsocketProvider | null; docId: string; carets: boolean; onEditor: (e: Editor | null) => void }) {
   const editor = useEditor(
     {
       extensions: [
         ...contentExtensions(),
         Collaboration.configure({ document: ydoc, field: BODY_FIELD }),
         RoundGuard.configure({ ydoc, docId }),
-        ...(provider ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
+        ...(provider && carets ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
         Collapse,
         SpeechTags,
         Placeholder.configure({
@@ -39,7 +45,7 @@ export function DocEditor({ ydoc, provider, docId, onEditor }: { ydoc: Y.Doc; pr
       ],
       editorProps: { attributes: { class: 'pp-doc', spellcheck: 'true' } },
     },
-    [ydoc, docId, provider],
+    [ydoc, docId, provider, carets],
   );
 
   useEffect(() => {

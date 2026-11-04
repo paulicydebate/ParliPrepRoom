@@ -650,6 +650,7 @@ export function App() {
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
                     onCreate={(k) => void create(k, i)}
+                    showCarets={layout.panes.findIndex((x) => x.docId === p.docId) === i}
                     focusMode={focusMode}
                     onFocusMode={() => {
                       setLayout((l) => ({ ...l, focused: i }));
