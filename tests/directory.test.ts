@@ -249,3 +249,15 @@ describe('partner invitations', () => {
     expect(ctx.storage.sql.exec('SELECT status FROM doc_partners').toArray()).toEqual([{ status: 'accepted' }]);
   });
 });
+
+describe('known bugs (see BUGS.md)', () => {
+  // BUG: canAccess() lets a doc's owner in before checking they are still on the team.
+  // This test states the right behaviour; remove `.fails` when the bug is fixed.
+  it.fails('a student removed from the team can no longer open docs they own there', () => {
+    const id = uid();
+    dir.createDoc(ids.owner, { id, teamId: team, title: 'Mine', kind: 'prep' });
+    dir.updateMember(team, ids.coach, ids.owner, { remove: true });
+    expect(dir.access(id, ids.owner).ok).toBe(false);
+    expect(dir.docsFor(ids.owner, team)).toEqual([]);
+  });
+});
