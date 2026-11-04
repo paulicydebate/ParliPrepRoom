@@ -2,7 +2,7 @@
 
 Written 2026-11-04 by Claude after reading the server and the riskiest app code and testing the suspicious parts. The goal: find bugs we haven't hit yet, because so far only a few people have tested with almost no real prep.
 
-How to read this: **Confirmed** = reproduced or measured here. **Code** = the code can only behave this way (read it; no run needed). **Estimate** = a calculation or a likely scenario that should be checked against real numbers. Nothing in this file is fixed yet unless it says so. When you fix one, change its line here and add a test (`tests/directory.test.ts` runs the real server rules on an in-memory database).
+How to read this: **Confirmed** = reproduced or measured here. **Code** = the code can only behave this way (read it; no run needed). **Estimate** = a calculation or a likely scenario that should be checked against real numbers. Items marked **FIXED** were fixed on 2026-11-04; the rest are open. When you fix one, change its line here and add a test (`tests/directory.test.ts` runs the real server rules on an in-memory database).
 
 Cloudflare limits below are from memory of the Free plan (a documentation page could not be opened from this session); check them in the Cloudflare dashboard before relying on them.
 
@@ -23,25 +23,25 @@ The Workers **Free plan will break the app at real prep volume**, in ways that l
 - **Also:** `GET /api/docs/<id>/log` (History and Replay) returns every edit base64-encoded in one JSON response; same scaling problem.
 - **Fix:** Workers Paid (30 s CPU) removes the limit. Separately, make the page cheaper: group edits into bursts before building HTML and cap the detailed list; page the log endpoint. Effort: paid plan is a setting; optimizing is medium.
 
-### 3. Database limits will be hit, and the failure silently loses the record — Code + Estimate
+### 3. Database limits will be hit, and the failure silently loses the record — Code + Estimate (parts (a) and (b) FIXED 2026-11-04)
 - **Rows written:** every saved edit is one database row (`updates` table). Free plan: about 100,000 rows written per day. One student typing for a 20-minute prep is about 4,000 rows. A team doing a few prep sessions a day gets close; a tournament weekend exceeds it. (Measured so far: about 4,200 rows written on the busiest test day.)
 - **Failure mode (Code):** `worker/docRoom.ts` chains writes as `this.writes = this.writes.then(async () => { …INSERT… })`. If one INSERT throws (limit reached, row too large), the chain becomes a rejected promise and **every later write is skipped, silently, until the room restarts**, while edits are still relayed to partners. The hash-chained record then has a hole, and `await this.writes` in message handlers starts throwing.
 - **Rows read (Code):** `webSocketMessage` calls `loadDoc()` before looking at the message type, so even the small 15–20 second keep-alives and cursor updates make a woken room re-read and re-apply the **whole history** from storage. With hibernation that can happen every 15–20 seconds per open doc. A doc with 4,000 edits left open in one idle tab could read up to about 17 million rows a day against a Free limit of about 5 million. (Cloudflare analytics show only about 28,000 rows read on the busiest day so far because the docs are tiny.)
-- **Fix:** (a) catch errors inside the write chain and surface them; (b) do not call `loadDoc()` for awareness and ping messages; (c) save one row per second per person (merge updates with `Y.mergeUpdates`, keeping attribution) instead of one per key press; (d) periodically store a snapshot so loading reads one row; (e) Workers Paid. (a) and (b) are small.
+- **Fix:** (a) **FIXED**: errors are caught inside the write chain, later saves continue, and the failure is recorded as a `save-failed` event that shows as a red flag in Coach view, the tab room and the check page (`tests/docroom.test.ts`); (b) **FIXED**: `loadDoc()` now runs only for edits, not for cursor updates and keep-alives (tested); still open: (c) save one row per second per person (merge updates with `Y.mergeUpdates`, keeping attribution) instead of one per key press; (d) periodically store a snapshot so loading reads one row; (e) Workers Paid. (a) and (b) are small.
 
 ### 4. Undo and Redo get flagged as "large single edits" — Confirmed
 - **What:** deleting a paragraph and pressing Undo re-inserts it in one edit. The server counts it as 116 typed characters in a single edit (over the 40-character limit), so an honest student gets a red "large edit" flag in Coach view and on the check page.
 - **Reproduced:** typed about 115 characters in a round doc, Ctrl+A, Delete, Ctrl+Z, then read `/api/docs/<id>/record`: one live update inserting 116. (Splitting a line with Enter and rejoining it with Backspace did *not* trigger it.)
 - **Fix:** treat an insert as a restore when its text equals text that same person deleted earlier in that doc (the server already tracks deleted text by item id in `worker/measure.ts`). Effort: small to medium.
 
-### 5. A student removed from the team keeps access to their docs there — Confirmed
+### 5. A student removed from the team keeps access to their docs there — Confirmed — FIXED 2026-11-04
 - **What:** `canAccess` in `worker/directory.ts` returns true for the doc's owner before checking that the owner is still on the team. A removed student can still open, edit and sync the docs they own in that team, including round docs.
 - **Reproduced:** `tests/directory.test.ts`, test marked `it.fails` under "known bugs".
-- **Fix:** for team docs, require current membership for the owner too. One line plus remove `.fails`.
+- **Fixed:** team docs now require current membership for the owner too (`canAccess` and `deleteDoc` in `worker/directory.ts`); tests in `tests/directory.test.ts` ("removing someone from the team"). Coaches keep access; the person can still use docs outside the team and rejoin with the invite link.
 
-### 6. A refused connection retries forever — Confirmed in the library; Code in the app
+### 6. A refused connection retries forever — Confirmed in the library; Code in the app — FIXED 2026-11-04
 - **What:** y-websocket reconnects every 2.5 seconds with no limit (`maxBackoffTime`). When the server refuses (student removed, partner left, doc deleted or made private, expired session), the open tab keeps trying: about 34,000 refused requests a day per tab against the Free plan's 100,000 requests a day for the whole app. Observed in testing as repeated `403` lines for the same doc.
-- **Fix:** in `src/store/sync.ts`, stop for good on close code 4403 (the server already sends it) and after a few failed attempts in a row stop and re-check access through the normal API before trying again. Small.
+- **Fixed:** `guardReconnects` in `src/store/sync.ts`: stops on "no access" (close code 4403) and after 5 attempts in a row that never connect, then checks `/api/docs/<id>` before reconnecting; if refused it stays stopped and shows a message; an ordinary dropped connection still reconnects by itself. Tests in `tests/reconnect.test.ts`. Not testable in the local dev server (it does not deliver the server's disconnect), so worth watching after deploy.
 
 ## Medium priority
 
@@ -95,7 +95,7 @@ Safari clears website storage for sites not used for about 7 days. On iPads that
 - **Access rules:** 26 automated tests cover team docs, private docs, invitations, deleting, restoring and tournament locks.
 
 ## Suggested order
-1. Item 5 (one line), item 6 and the write-chain catch and `loadDoc` reorder from item 3 (small, protect the live system).
+1. ~~Item 5, item 6, and parts (a) and (b) of item 3~~ done 2026-11-04.
 2. Item 1 (shared-computer leak).
 3. Decide on Workers Paid; then item 2 (check page cost) and the batching in item 3.
 4. Item 4 (undo false flags) and item 7 (blank screen).

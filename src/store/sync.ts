@@ -23,15 +23,97 @@ export function connect(docId: string, doc: Y.Doc): WebsocketProvider {
   const provider = new WebsocketProvider(base, docId, doc);
   provider.awareness.setLocalStateField('user', { name: who.name || 'Unnamed', color: colorFor(who.deviceId) });
   watchConnection(provider, doc);
-  // The server cut this connection for sending far too many messages (a
-  // runaway): stop retrying for a minute instead of reconnecting at once.
-  provider.on('connection-close', (event: CloseEvent | null) => {
-    if (event?.code === 4429) {
-      provider.disconnect();
-      setTimeout(() => provider.connect(), 60_000);
-    }
-  });
+  guardReconnects(provider, docId, doc);
   return provider;
+}
+
+// ---------- Reconnecting ----------
+// y-websocket retries every 2.5 seconds forever. That is right for a dropped
+// wifi connection but wrong when the server says no (removed from the team,
+// doc deleted or made private, session ended): an open tab would send about
+// 34,000 refused requests a day. So: stop on "no access", stop after a few
+// attempts in a row that never connected and check access before trying
+// again, and back off for a minute when the server cut us off for flooding.
+
+/** Close codes the server uses (worker/docRoom.ts). */
+const NO_ACCESS = 4403;
+const TOO_MANY_MESSAGES = 4429;
+export const MAX_FAILED_ATTEMPTS = 5;
+
+interface Reconnecting {
+  on(event: string, fn: (...args: never[]) => void): void;
+  connect(): void;
+  disconnect(): void;
+}
+export interface GuardDeps {
+  fetch: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>;
+  setTimeout: (fn: () => void, ms: number) => unknown;
+  notify: (message: string) => void;
+}
+const realDeps: GuardDeps = {
+  fetch: (url, init) => fetch(url, init),
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  notify: (message) => {
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('pp-toast', { detail: message }));
+  },
+};
+
+export function guardReconnects(provider: Reconnecting, docId: string, doc: Y.Doc | null, deps: GuardDeps = realDeps) {
+  let wasConnected = false;
+  let failures = 0;
+  let paused = false; // we stopped it ourselves: ignore the close events that causes
+  let timer: unknown = null;
+  let notified = false;
+
+  const pause = (waitMs: number, then: () => void) => {
+    paused = true;
+    provider.disconnect();
+    timer = deps.setTimeout(then, waitMs);
+  };
+  const resume = () => {
+    paused = false;
+    failures = 0;
+    provider.connect();
+  };
+  /** Still allowed? Then reconnect; refused for good? stay stopped; no answer? try again later. */
+  const recheck = async (): Promise<void> => {
+    try {
+      const r = await deps.fetch(`/api/docs/${docId}`, { cache: 'no-store' });
+      if (r.ok) return resume();
+      if (r.status === 401 || r.status === 403 || r.status === 404) {
+        if (!notified) deps.notify('You no longer have access to this doc. Your copy on this device is kept, but it is not syncing.');
+        notified = true;
+        return;
+      }
+    } catch {
+      // offline or server down: try again below
+    }
+    timer = deps.setTimeout(() => void recheck(), 60_000);
+  };
+
+  provider.on('status', ((e: { status: string }) => {
+    if (e.status === 'connected') {
+      wasConnected = true;
+      failures = 0;
+    }
+  }) as never);
+  provider.on('connection-close', ((event: { code?: number } | null) => {
+    if (paused) return;
+    const code = event?.code;
+    if (code === TOO_MANY_MESSAGES) return pause(60_000, resume);
+    if (code === NO_ACCESS) return pause(30_000, () => void recheck());
+    if (wasConnected) {
+      // An ordinary drop after working: let y-websocket reconnect as usual.
+      wasConnected = false;
+      failures = 0;
+      return;
+    }
+    if (++failures >= MAX_FAILED_ATTEMPTS) pause(30_000, () => void recheck());
+  }) as never);
+  doc?.on('destroy', () => {
+    paused = true;
+    if (timer !== null) clearTimeout(timer as number);
+  });
 }
 
 // ---------- Connection check ----------

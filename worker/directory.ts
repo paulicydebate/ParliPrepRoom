@@ -381,10 +381,12 @@ export class Directory extends DurableObject {
   private canAccess(d: DocRecord, userId: string): boolean {
     // A deleted doc: only the team's coaches can still open it.
     if (d.deletedAt !== null) return !!d.teamId && this.role(d.teamId, userId) === 'coach';
-    if (d.ownerId === userId) return true;
-    if (!d.teamId) return false;
+    // A doc outside any team is its owner's alone.
+    if (!d.teamId) return d.ownerId === userId;
+    // A team doc needs current membership, owner or not: someone removed from the team loses their docs there.
     const role = this.role(d.teamId, userId);
     if (!role) return false;
+    if (d.ownerId === userId) return true;
     if (d.access === 'team') return true;
     return role === 'coach' || d.partners.includes(userId);
   }
@@ -528,7 +530,8 @@ export class Directory extends DurableObject {
       this.purge(docId);
       return { ok: true, purged: true };
     }
-    if (d.ownerId !== userId && !coach) return { ok: false, reason: 'Only the owner or a coach can delete this doc' };
+    const member = !d.teamId || !!this.role(d.teamId, userId);
+    if (!member || (d.ownerId !== userId && !coach)) return { ok: false, reason: 'Only the owner or a coach can delete this doc' };
     if (d.teamId || d.tournamentId) {
       if (d.teamId) this.logDeletion(d, 'deleted', userId);
       this.hide(d, userId);

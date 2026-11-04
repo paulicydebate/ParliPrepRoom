@@ -23,6 +23,7 @@ function Flags({ s, row }: { s: RoundRow['summary']; row: RoundRow }) {
   const chips: { text: string; bad?: boolean }[] = [];
   if (row.deletedAt) chips.push({ text: `Deleted${row.deletedByName ? ` by ${row.deletedByName}` : ''} ${when(row.deletedAt)}`, bad: true });
   if (!s.intact) chips.push({ text: 'Record does not check out', bad: true });
+  if (s.saveFailed) chips.push({ text: `${s.saveFailed} edit${s.saveFailed > 1 ? 's' : ''} could not be saved`, bad: true });
   if (s.blocked) chips.push({ text: `${s.blocked} blocked paste${s.blocked > 1 ? 's' : ''}`, bad: true });
   if (s.large) chips.push({ text: `${s.large} large edit${s.large > 1 ? 's' : ''}`, bad: true });
   if (s.roundOff) chips.push({ text: 'Round doc turned off', bad: true });

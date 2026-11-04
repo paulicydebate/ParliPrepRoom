@@ -250,14 +250,26 @@ describe('partner invitations', () => {
   });
 });
 
-describe('known bugs (see BUGS.md)', () => {
-  // BUG: canAccess() lets a doc's owner in before checking they are still on the team.
-  // This test states the right behaviour; remove `.fails` when the bug is fixed.
-  it.fails('a student removed from the team can no longer open docs they own there', () => {
+describe('removing someone from the team', () => {
+  it('a student removed from the team can no longer open or delete docs they own there', () => {
     const id = uid();
     dir.createDoc(ids.owner, { id, teamId: team, title: 'Mine', kind: 'prep' });
     dir.updateMember(team, ids.coach, ids.owner, { remove: true });
     expect(dir.access(id, ids.owner).ok).toBe(false);
     expect(dir.docsFor(ids.owner, team)).toEqual([]);
+    expect(dir.deleteDoc(ids.owner, id).ok).toBe(false);
+    expect(dir.access(id, ids.coach).ok).toBe(true); // coaches keep it
+  });
+
+  it('they can still use docs of their own outside the team, and rejoin with the invite link', () => {
+    const mine = uid();
+    dir.createDoc(ids.owner, { id: mine, teamId: null, title: 'Solo', kind: 'prep' });
+    dir.updateMember(team, ids.coach, ids.owner, { remove: true });
+    expect(dir.access(mine, ids.owner).ok).toBe(true);
+    const code = dir.team(team, ids.coach)!.invites!.student;
+    dir.joinTeam(ids.owner, code);
+    const back = uid();
+    dir.createDoc(ids.owner, { id: back, teamId: team, title: 'Back', kind: 'prep' });
+    expect(dir.access(back, ids.owner).ok).toBe(true);
   });
 });

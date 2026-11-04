@@ -15,6 +15,8 @@ export interface RecordSummary {
   blocked: number;
   roundOff: number;
   roundModeOff: number;
+  /** Edits the server could not save (the record has gaps). */
+  saveFailed: number;
   awayMs: number;
   intact: boolean;
   seal: string | null;
@@ -57,10 +59,11 @@ export function summarizeRecord(r: { updates: RecordUpdate[]; events: RecordEven
     blocked,
     roundOff,
     roundModeOff: r.events.filter((e) => e.kind === 'roundmode-off').length,
+    saveFailed: r.events.filter((e) => e.kind === 'save-failed').reduce((n, e) => n + (e.n ?? 1), 0),
     awayMs,
     intact: r.intact,
     seal: r.seal,
     people: [...people.values()].sort((a, b) => b.typed - a.typed),
-    flags: large + blocked + roundOff + (r.intact ? 0 : 1),
+    flags: large + blocked + roundOff + (r.intact ? 0 : 1) + (r.events.some((e) => e.kind === 'save-failed') ? 1 : 0),
   };
 }

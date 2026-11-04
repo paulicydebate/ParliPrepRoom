@@ -243,6 +243,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
     <div class="stat"><dt>Characters typed live</dt><dd>${live.reduce((n, u) => n + u.inserted, 0).toLocaleString()}</dd></div>
     <div class="stat"><dt>Large single edits</dt><dd class="${large.length ? 'warn' : ''}">${large.length}</dd></div>
     <div class="stat"><dt>Blocked pastes</dt><dd class="${blocked.length ? 'warn' : ''}">${blocked.length}</dd></div>
+    ${record.events.some((e) => e.kind === 'save-failed') ? `<div class="stat"><dt>Edits the server could not save</dt><dd class="warn">${record.events.filter((e) => e.kind === 'save-failed').reduce((n, e) => n + (e.n ?? 1), 0)}</dd></div>` : ''}
     <div class="stat"><dt>Round doc turned off</dt><dd class="${roundOff.length ? 'warn' : ''}">${roundOff.length}</dd></div>
     <div class="stat"><dt>Time in other apps</dt><dd>${minutes(awayMs)}</dd></div>
   </dl>

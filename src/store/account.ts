@@ -302,6 +302,7 @@ export interface RoundRow {
     large: number;
     blocked: number;
     roundOff: number;
+    saveFailed?: number;
     roundModeOff: number;
     awayMs: number;
     intact: boolean;

@@ -15,6 +15,7 @@ export interface TabroomRow {
 function chips(s: RecordSummary) {
   const out: string[] = [];
   if (!s.intact) out.push('<span class="chip bad">Record does not check out</span>');
+  if (s.saveFailed) out.push(`<span class="chip bad">${s.saveFailed} edit${s.saveFailed > 1 ? 's' : ''} could not be saved</span>`);
   if (s.blocked) out.push(`<span class="chip bad">${s.blocked} blocked paste${s.blocked > 1 ? 's' : ''}</span>`);
   if (s.large) out.push(`<span class="chip bad">${s.large} large edit${s.large > 1 ? 's' : ''}</span>`);
   if (s.roundOff) out.push('<span class="chip bad">Round doc turned off</span>');

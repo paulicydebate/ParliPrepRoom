@@ -82,6 +82,8 @@ export class DocRoom extends DurableObject {
   private via = 'live';
   private lastHash = '0'.repeat(64);
   private writes: Promise<void> = Promise.resolve();
+  /** Edits that could not be saved and could not even be noted in the database (kept until the room restarts). */
+  private unnotedFailures = 0;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -144,7 +146,18 @@ export class DocRoom extends DurableObject {
         hash,
       );
       this.lastHash = hash;
-    });
+    })
+      // One failed save must not stop every later one (a rejected promise in
+      // this chain would skip all the saves after it). Say so in the record
+      // instead, so the check page shows that something could not be saved.
+      .catch((e: unknown) => {
+        console.error('Could not save an edit:', String(e));
+        try {
+          this.ctx.storage.sql.exec("INSERT INTO events (at, client_at, user_id, user, kind, n) VALUES (?, ?, 'server', 'server', 'save-failed', 1)", Date.now(), Date.now());
+        } catch {
+          this.unnotedFailures++;
+        }
+      });
     // Pass the change on to everyone else in the room.
     const enc = encoding.createEncoder();
     encoding.writeVarUint(enc, MSG_SYNC);
@@ -212,10 +225,12 @@ export class DocRoom extends DurableObject {
       return;
     }
     if (verdict === 'drop') return;
-    const doc = this.loadDoc();
     const dec = decoding.createDecoder(data);
     const type = decoding.readVarUint(dec);
     if (type === MSG_SYNC) {
+      // Only edits need the document in memory. Loading it re-reads the whole
+      // history, which cursor updates and keep-alives must not trigger.
+      const doc = this.loadDoc();
       // Sync step 2 = catching up after (re)connecting; update = typed live.
       this.via = data[1] === syncProtocol.messageYjsSyncStep2 ? 'catchup' : 'live';
       const enc = encoding.createEncoder();
@@ -366,6 +381,7 @@ export class DocRoom extends DurableObject {
       .exec('SELECT * FROM events ORDER BY id')
       .toArray()
       .map((r) => ({ at: Number(r.at), clientAt: Number(r.client_at), userId: String(r.user_id), name: String(r.user), kind: String(r.kind), n: r.n === null ? null : Number(r.n) }));
+    if (this.unnotedFailures) events.push({ at: Date.now(), clientAt: Date.now(), userId: 'server', name: 'server', kind: 'save-failed', n: this.unnotedFailures });
     const seal = updates.length ? `${prev.slice(0, 4)}-${prev.slice(4, 8)}`.toUpperCase() : null;
     return { updates, events, intact, seal };
   }
