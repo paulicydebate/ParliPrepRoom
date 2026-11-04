@@ -213,12 +213,27 @@ export const PrepBlock = Node.create({
 
   addKeyboardShortcuts() {
     const shortcuts: Record<string, () => boolean> = {
-      // Enter just starts a new line in the same style: no automatic formatting.
-      // Changing the style is Shift+Enter (next) and Ctrl/Cmd+Shift+Enter (back).
+      // Enter just starts a new line, with no automatic formatting: the same style as this
+      // line, except that after a position or section title (you rarely stack titles) the new
+      // line is a claim, the usual starting point. Shift+Enter (next style) and
+      // Ctrl/Cmd+Shift+Enter (previous style) change the style.
       Enter: () => {
         const { $from, empty } = this.editor.state.selection;
-        if ($from.parent.type.name !== 'block' || !empty) return false;
-        return this.editor.commands.splitBlock();
+        const node = $from.parent;
+        if (node.type.name !== 'block' || !empty) return false;
+        const afterTitle = $from.parentOffset === node.content.size && (node.attrs.kind === 'position' || node.attrs.kind === 'section');
+        return this.editor
+          .chain()
+          .splitBlock()
+          .command(({ tr }) => {
+            if (afterTitle) {
+              const pos = tr.selection.$from.before();
+              const created = tr.doc.nodeAt(pos);
+              if (created) tr.setNodeMarkup(pos, undefined, { ...created.attrs, kind: 'claim' });
+            }
+            return true;
+          })
+          .run();
       },
       'Shift-Enter': () => this.editor.commands.cycleBlockKind(1),
       'Mod-Shift-Enter': () => this.editor.commands.cycleBlockKind(-1),

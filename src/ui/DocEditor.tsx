@@ -105,7 +105,7 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
 
   return (
     <div className="toolbar" role="toolbar">
-      <label className="style-select" data-kind={s.kind} title="This line's style. Shift+Enter switches to the next style; Enter starts a new line in the same style.">
+      <label className="style-select" data-kind={s.kind} title="This line's style. Shift+Enter switches to the next style; Enter starts a new line (a claim after a title, otherwise the same style).">
         <span className="sr-only">Style</span>
         <select
           value={s.kind}

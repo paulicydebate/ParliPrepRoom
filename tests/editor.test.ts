@@ -48,21 +48,41 @@ function caretAtEnd(e: Editor, index: number) {
 }
 
 describe('prep editor keys', () => {
-  it('Enter just starts a new line in the same style (no automatic formatting)', () => {
+  it('Enter after a position or section title starts a claim (the default line)', () => {
+    const p = make([['position', 'Gov']]);
+    caretAtEnd(p, 0);
+    press(p, 'Enter');
+    expect(kinds(p)).toEqual(['position', 'claim']);
+    const s = make([['section', 'Advantage 1']]);
+    caretAtEnd(s, 0);
+    press(s, 'Enter');
+    expect(kinds(s)).toEqual(['section', 'claim']);
+  });
+
+  it('Enter after a claim, warrant, analytic or note keeps the same style (no automatic formatting)', () => {
+    for (const kind of ['claim', 'warrant', 'analytic', 'note'] as const) {
+      const e = make([[kind, 'Text']]);
+      caretAtEnd(e, 0);
+      press(e, 'Enter');
+      e.commands.insertContent('More');
+      press(e, 'Enter');
+      expect(kinds(e)).toEqual([kind, kind, kind]);
+    }
+  });
+
+  it('a claim line made after a title can then be restyled with Shift+Enter', () => {
     const e = make([['position', 'Gov']]);
     caretAtEnd(e, 0);
     press(e, 'Enter');
-    e.commands.insertContent('More');
+    press(e, 'Shift-Enter');
+    expect(kinds(e)).toEqual(['position', 'warrant']);
+  });
+
+  it('Enter in the middle of a title splits it and both halves stay titles', () => {
+    const e = make([['position', 'Gov case']]);
+    e.commands.setTextSelection(1 + 3);
     press(e, 'Enter');
-    expect(kinds(e)).toEqual(['position', 'position', 'position']);
-    const c = make([['claim', 'C']]);
-    caretAtEnd(c, 0);
-    press(c, 'Enter');
-    expect(kinds(c)).toEqual(['claim', 'claim']);
-    const w = make([['warrant', 'W']]);
-    caretAtEnd(w, 0);
-    press(w, 'Enter');
-    expect(kinds(w)).toEqual(['warrant', 'warrant']);
+    expect(kinds(e)).toEqual(['position', 'position']);
   });
 
   it('Enter in the middle of a line splits it and both halves keep the style', () => {
