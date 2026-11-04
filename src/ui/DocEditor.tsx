@@ -105,7 +105,7 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
 
   return (
     <div className="toolbar" role="toolbar">
-      <label className="style-select" data-kind={s.kind}>
+      <label className="style-select" data-kind={s.kind} title="This line's style. Shift+Enter switches to the next style; Enter starts a new line in the same style.">
         <span className="sr-only">Style</span>
         <select
           value={s.kind}
@@ -163,7 +163,7 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
       {view === 'flow' && (
         <>
           <span className="tb-sep" />
-          <span className="tb-hint">Tab: next speech · {MOD}+Enter: new row</span>
+          <span className="tb-hint">Tab: next speech · {MOD}+Enter: new row · Shift+Enter: next style</span>
         </>
       )}
       {extra}

@@ -9,7 +9,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 **Phase 1 (editor core): done.**
 
 - Doc view with six named styles: Position title, Section title, Claim, Warrant, Analytic, Note.
-- Keys: Enter starts the next style down (position → section → claim → warrant). Enter on an empty line moves it up a level. Tab / Shift+Tab change level. Ctrl+1–6 on Mac, Alt+1–6 on Windows pick a style (other key sets, including Verbatim-style F4–F9, in Appearance).
+- Keys: Enter starts a new line in the same style (no automatic formatting). **Shift+Enter** switches the line to the next style (position → section → claim → warrant → analytic → note, then around again); **Ctrl/Cmd+Shift+Enter** goes back. Tab / Shift+Tab change level. Ctrl+1–6 on Mac, Alt+1–6 on Windows pick a style (other key sets, including Verbatim-style F4–F9, in Appearance).
 - Fonts, sizes, colors per style, and Light / Dark / Sepia themes (Appearance button, saved per browser).
 - Gov/Opp colorways (Teal & Orange, Purple & Gold, Green & Pink and more, or pick your own) from the Colors button on the flow or in Appearance.
 - Fold any heading; "collapse to claims" button; outline sidebar to jump around.

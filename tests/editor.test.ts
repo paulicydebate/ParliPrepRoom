@@ -48,22 +48,69 @@ function caretAtEnd(e: Editor, index: number) {
 }
 
 describe('prep editor keys', () => {
-  it('Enter at the end of a style starts the next style down', () => {
+  it('Enter just starts a new line in the same style (no automatic formatting)', () => {
     const e = make([['position', 'Gov']]);
     caretAtEnd(e, 0);
     press(e, 'Enter');
-    e.commands.insertContent('Adv 1');
+    e.commands.insertContent('More');
     press(e, 'Enter');
-    e.commands.insertContent('Claim');
-    press(e, 'Enter');
-    expect(kinds(e)).toEqual(['position', 'section', 'claim', 'warrant']);
+    expect(kinds(e)).toEqual(['position', 'position', 'position']);
+    const c = make([['claim', 'C']]);
+    caretAtEnd(c, 0);
+    press(c, 'Enter');
+    expect(kinds(c)).toEqual(['claim', 'claim']);
+    const w = make([['warrant', 'W']]);
+    caretAtEnd(w, 0);
+    press(w, 'Enter');
+    expect(kinds(w)).toEqual(['warrant', 'warrant']);
   });
 
-  it('Enter on an empty block moves it up a level', () => {
+  it('Enter in the middle of a line splits it and both halves keep the style', () => {
+    const e = make([['claim', 'Hello world']]);
+    e.commands.setTextSelection(1 + 5); // after "Hello"
+    press(e, 'Enter');
+    expect(kinds(e)).toEqual(['claim', 'claim']);
+    expect(e.state.doc.child(0).textContent).toBe('Hello');
+    expect(e.state.doc.child(1).textContent).toBe(' world');
+  });
+
+  it('Enter on an empty line does not change its style', () => {
     const e = make([['claim', 'C'], ['warrant', '']]);
     caretAtEnd(e, 1);
     press(e, 'Enter');
-    expect(kinds(e)).toEqual(['claim', 'claim']);
+    expect(kinds(e)).toEqual(['claim', 'warrant', 'warrant']);
+  });
+
+  it('Shift+Enter changes this line to the next style, without adding a line or a line break', () => {
+    const e = make([['warrant', 'Some text']]);
+    caretAtEnd(e, 0);
+    const seen: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      press(e, 'Shift-Enter');
+      seen.push(kinds(e)[0]);
+    }
+    expect(seen).toEqual(['analytic', 'note', 'position', 'section', 'claim', 'warrant', 'analytic']);
+    expect(e.state.doc.childCount).toBe(1);
+    expect(e.state.doc.child(0).textContent).toBe('Some text');
+    expect(JSON.stringify(e.getJSON())).not.toContain('hardBreak');
+  });
+
+  it('Ctrl/Cmd+Shift+Enter goes back through the styles', () => {
+    const e = make([['warrant', 'T']]);
+    caretAtEnd(e, 0);
+    const seen: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      press(e, 'Mod-Shift-Enter');
+      seen.push(kinds(e)[0]);
+    }
+    expect(seen).toEqual(['claim', 'section', 'position', 'note', 'analytic']);
+  });
+
+  it('Shift+Enter on several selected lines gives them all the same next style', () => {
+    const e = make([['claim', 'A'], ['warrant', 'B'], ['claim', 'C']]);
+    e.commands.selectAll();
+    press(e, 'Shift-Enter');
+    expect(kinds(e)).toEqual(['warrant', 'warrant', 'warrant']); // based on the first line (claim -> warrant)
   });
 
   it('Tab and Shift-Tab change level', () => {

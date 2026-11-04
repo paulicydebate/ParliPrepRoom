@@ -9,19 +9,17 @@ export interface KindInfo {
   level: 1 | 2 | 3 | 4;
   /** Digit used with Mod-Alt to apply this style. */
   key: string;
-  /** Style given to the new block when you press Enter at the end of this one. */
-  next: BlockKind;
 }
 
 export const BLOCK_KINDS: BlockKind[] = ['position', 'section', 'claim', 'warrant', 'analytic', 'note'];
 
 export const KIND_INFO: Record<BlockKind, KindInfo> = {
-  position: { label: 'Position title', level: 1, key: '1', next: 'section' },
-  section: { label: 'Section title', level: 2, key: '2', next: 'claim' },
-  claim: { label: 'Claim', level: 3, key: '3', next: 'warrant' },
-  warrant: { label: 'Warrant', level: 4, key: '4', next: 'warrant' },
-  analytic: { label: 'Analytic', level: 4, key: '5', next: 'analytic' },
-  note: { label: 'Note', level: 4, key: '6', next: 'note' },
+  position: { label: 'Position title', level: 1, key: '1' },
+  section: { label: 'Section title', level: 2, key: '2' },
+  claim: { label: 'Claim', level: 3, key: '3' },
+  warrant: { label: 'Warrant', level: 4, key: '4' },
+  analytic: { label: 'Analytic', level: 4, key: '5' },
+  note: { label: 'Note', level: 4, key: '6' },
 };
 
 export const DEFAULT_KIND: BlockKind = 'warrant';
@@ -41,6 +39,12 @@ export function levelOf(kind: unknown): number {
 /** Headings can be collapsed and appear in the outline. */
 export function isHeading(kind: unknown): boolean {
   return levelOf(kind) < 4;
+}
+
+/** Shift+Enter: the next style in the list (wraps around); Ctrl/Cmd+Shift+Enter goes back. */
+export function cycleKind(kind: BlockKind, direction: 1 | -1 = 1): BlockKind {
+  const i = BLOCK_KINDS.indexOf(kind);
+  return BLOCK_KINDS[(i + direction + BLOCK_KINDS.length) % BLOCK_KINDS.length];
 }
 
 /** Tab: one level deeper. Body styles stay as they are. */

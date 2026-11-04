@@ -4,7 +4,7 @@ import { ySyncPluginKey } from '@tiptap/y-tiptap';
 import { isSpeech, type Speech } from '../model/speeches';
 import { isFlowMark, type FlowMark } from '../model/marks';
 import { styleForKey } from './shortcuts';
-import { KIND_INFO, asKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
+import { asKind, cycleKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -17,6 +17,8 @@ declare module '@tiptap/core' {
       setBlockSpeech: (speech: Speech | null) => ReturnType;
       /** Tab / Shift-Tab: move every selected block one level down or up. */
       shiftBlockLevel: (direction: 'in' | 'out') => ReturnType;
+      /** Shift+Enter: give every selected block the style after (or before) the first one's in the style list. */
+      cycleBlockKind: (direction: 1 | -1) => ReturnType;
     };
   }
 }
@@ -177,6 +179,21 @@ export const PrepBlock = Node.create({
           }
           return true;
         },
+      cycleBlockKind:
+        (direction) =>
+        ({ state, tr, dispatch }) => {
+          const blocks = selectedBlocks(state);
+          if (!blocks.length) return false;
+          // One target for the whole selection (based on the first line), so they stay uniform.
+          const kind = cycleKind(blocks[0].kind, direction);
+          if (dispatch) {
+            for (const b of blocks) {
+              const node = tr.doc.nodeAt(b.pos);
+              if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, kind });
+            }
+          }
+          return true;
+        },
       shiftBlockLevel:
         (direction) =>
         ({ state, tr, dispatch }) => {
@@ -196,32 +213,15 @@ export const PrepBlock = Node.create({
 
   addKeyboardShortcuts() {
     const shortcuts: Record<string, () => boolean> = {
+      // Enter just starts a new line in the same style: no automatic formatting.
+      // Changing the style is Shift+Enter (next) and Ctrl/Cmd+Shift+Enter (back).
       Enter: () => {
-        const { state } = this.editor;
-        const { $from, empty } = state.selection;
-        const node = $from.parent;
-        if (node.type.name !== 'block' || !empty) return false;
-        const kind = asKind(node.attrs.kind);
-
-        // Enter on an empty block moves it up a level, like outlines and lists.
-        if (node.content.size === 0 && kind !== 'position') {
-          return this.editor.commands.setBlockKind(promote(kind));
-        }
-
-        const atEnd = $from.parentOffset === node.content.size;
-        return this.editor
-          .chain()
-          .splitBlock()
-          .command(({ tr }) => {
-            if (atEnd) {
-              const pos = tr.selection.$from.before();
-              const created = tr.doc.nodeAt(pos);
-              if (created) tr.setNodeMarkup(pos, undefined, { ...created.attrs, kind: KIND_INFO[kind].next });
-            }
-            return true;
-          })
-          .run();
+        const { $from, empty } = this.editor.state.selection;
+        if ($from.parent.type.name !== 'block' || !empty) return false;
+        return this.editor.commands.splitBlock();
       },
+      'Shift-Enter': () => this.editor.commands.cycleBlockKind(1),
+      'Mod-Shift-Enter': () => this.editor.commands.cycleBlockKind(-1),
       Tab: () => {
         this.editor.commands.shiftBlockLevel('in');
         return true;

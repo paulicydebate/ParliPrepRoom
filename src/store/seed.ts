@@ -40,7 +40,7 @@ export const SAMPLE_REFERENCE: Line[] = [
 ];
 
 export const SAMPLE_PREP: Line[] = [
-  ['note', 'Sample prep doc. Enter gives the next style, Tab / Shift+Tab move a level, and the style menu shows each style’s key. Switch this pane to Flow (top right) to see the same prep as a flow.'],
+  ['note', 'Sample prep doc. Enter starts a new line in the same style, Shift+Enter switches the line to the next style, Tab / Shift+Tab move a level, and the style menu shows each style’s key. Switch this pane to Flow (top right) to see the same prep as a flow.'],
   ['position', 'Gov: Ban police facial recognition', { side: 'gov' }],
   ['section', 'Advantage 1 — Wrongful arrests'],
   ['claim', 'The tech misidentifies people at very different rates'],

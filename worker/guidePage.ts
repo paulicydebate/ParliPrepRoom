@@ -41,7 +41,7 @@ export function guidePage(): string {
 </ol>
 
 <h2 id="styles">The styles</h2>
-<p>Every line has a style. The style decides how it looks in the doc <em>and</em> where it goes in the flow. Pick one from the style menu in the toolbar or with the keys (<kbd>Ctrl</kbd>+1–6 on a Mac, <kbd>Alt</kbd>+1–6 on Windows).</p>
+<p>Every line has a style. The style decides how it looks in the doc <em>and</em> where it goes in the flow. Pick one from the style menu in the toolbar, with the keys (<kbd>Ctrl</kbd>+1–6 on a Mac, <kbd>Alt</kbd>+1–6 on Windows), or press <kbd>Shift</kbd>+<kbd>Enter</kbd> to switch the line to the next style. <kbd>Enter</kbd> just starts a new line in the same style.</p>
 <table>
   <tr><th>Style</th><th>Use it for</th></tr>
   <tr><td><strong>Position title</strong></td><td>One case or position, e.g. “Gov: Ban facial recognition”. Each one becomes a <em>sheet</em> (tab) in the flow.</td></tr>
@@ -96,7 +96,9 @@ export function guidePage(): string {
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd></td><td>Find a block (and pin it)</td></tr>
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>\\</kbd></td><td>Show or hide the doc list</td></tr>
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>\\</kbd></td><td>One window fills the screen</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+1–6 (Mac) · <kbd>Alt</kbd>+1–6 (Windows)</td><td>Set the line's style</td></tr>
+  <tr><td><kbd>Enter</kbd></td><td>New line in the same style</td></tr>
+  <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd> · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Switch the line to the next · previous style (position, section, claim, warrant, analytic, note, then around)</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+1–6 (Mac) · <kbd>Alt</kbd>+1–6 (Windows)</td><td>Set the line's style directly</td></tr>
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> / <kbd>D</kbd> / <kbd>A</kbd> / <kbd>K</kbd></td><td>Mark extended / dropped / answered / key</td></tr>
   <tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>In the flow: next / previous speech. In the doc: demote / promote a line</td></tr>
 </table>

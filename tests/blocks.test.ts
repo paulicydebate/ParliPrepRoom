@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KIND_INFO, demote, promote, newBlockId } from '../src/model/blocks';
+import { cycleKind, demote, promote, newBlockId } from '../src/model/blocks';
 
 describe('block styles', () => {
   it('Tab moves down the outline and stops at body text', () => {
@@ -17,11 +17,12 @@ describe('block styles', () => {
     expect(promote('position')).toBe('position');
   });
 
-  it('Enter follows the outline order', () => {
-    expect(KIND_INFO.position.next).toBe('section');
-    expect(KIND_INFO.section.next).toBe('claim');
-    expect(KIND_INFO.claim.next).toBe('warrant');
-    expect(KIND_INFO.warrant.next).toBe('warrant');
+  it('Shift+Enter cycles through every style in order and wraps around', () => {
+    const order = ['position', 'section', 'claim', 'warrant', 'analytic', 'note'] as const;
+    for (let i = 0; i < order.length; i++) {
+      expect(cycleKind(order[i])).toBe(order[(i + 1) % order.length]);
+      expect(cycleKind(order[i], -1)).toBe(order[(i + order.length - 1) % order.length]);
+    }
   });
 
   it('makes distinct ids', () => {
