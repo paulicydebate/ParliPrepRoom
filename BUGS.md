@@ -12,11 +12,12 @@ The Workers **Free plan will break the app at real prep volume**, in ways that l
 
 ## High priority (fix before the pilot)
 
-### 1. A signed-out visitor can read the last user's docs (shared computers) — Confirmed
+### 1. A signed-out visitor can read the last user's docs (shared computers) — Confirmed — FIXED 2026-11-04
 - **What:** documents are cached in the browser (IndexedDB). Signing out does not clear them. After one student signs out, the next person on that browser, even signed out, sees the sidebar list and can open and read the private doc. Local version history, typing logs, pins and layout also stay. Signing in as someone else hides the docs from the list but leaves the data on the device.
 - **Why it matters:** school Chromebooks are shared.
 - **Reproduced:** sign in as Alice, type text, sign out, reload: the doc is listed and its text is readable. Script: scratchpad `shared-device.cjs`.
-- **Fix:** on sign-out (and when a different user signs in) delete all local doc data, versions, logs, pins and layout; when signed out on the live site, show no local docs. Better: key local data by user id. Effort: small to medium.
+- **Fixed** (`src/store/device.ts`, `src/store/idb.ts`, `tests/device.test.ts`): the device remembers whose data it holds (`pp-data-owner`). **Sign out** deletes this person's docs, versions, typing logs, pins and layout (asks first if a doc has changes that haven't reached the server). **A different person signing in** wipes the last person's data first and reloads. **A session that ended without signing out** hides account docs from the next (signed-out) visitor and keeps them for the same person to return to. Appearance and other preferences are kept. Deleting an account also wipes the device.
+- **Limits still true:** data created before this fix has no owner mark, so the first person to sign in after the deploy claims it; docs made while signed out stay visible to the next signed-out visitor (that is local-only mode); and someone with developer tools could still read a hidden session-ended person's data from the browser's storage until the next sign-in or sign-out.
 
 ### 2. Check page and tab-room pages are too slow for the Free plan's CPU limit — Estimate from a measurement
 - **What:** building the check page takes about 80 µs per saved edit: **about 108 ms for 1,000 edits, 411 ms for 5,000, 1.5 s for 20,000** (measured in Node, linear). Free-plan Workers get about 10 ms of CPU per request. A real prep session is thousands of edits (one per key press), so these pages will fail (Cloudflare error 1102) for any real round doc. Today's test docs are tiny, which is why nothing has failed.

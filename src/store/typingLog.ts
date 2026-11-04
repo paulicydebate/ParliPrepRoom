@@ -1,4 +1,5 @@
-import { createStore, get, set } from 'idb-keyval';
+import { get, set } from 'idb-keyval';
+import { createStore } from './idb';
 import { getProfile } from '../settings/profile';
 import { createSignal } from './emitter';
 

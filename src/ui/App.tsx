@@ -126,7 +126,7 @@ const useNarrow = () => useMedia('(max-width: 760px)');
 const useCompact = () => useMedia('(max-width: 1180px)');
 
 export function App() {
-  const docs = useDocs();
+  const allDocs = useDocs();
   const [layout, setLayout] = useState<Layout>(loadLayout);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -155,6 +155,9 @@ export function App() {
   const panesRef = useRef<HTMLDivElement>(null);
 
   const acct = useAccount();
+  // Docs that belong to an account are hidden until the app knows who is signed in, and while nobody is
+  // (a session that ended on a shared computer): they come back when the same person signs in again.
+  const docs = useMemo(() => (allDocs && (!acct.loaded || (acct.server && !acct.user)) ? allDocs.filter((d) => !onServer(d)) : allDocs), [allDocs, acct.loaded, acct.server, acct.user]);
   const roundMode = useRoundMode();
   const [findOpen, setFindOpen] = useState(false);
   const [pinsOpen, setPinsOpen] = useState(() => {

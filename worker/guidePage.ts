@@ -108,6 +108,7 @@ export function guidePage(): string {
   <li><strong>My partner can't see the doc:</strong> they must be on the team (they used the Students invite link), be invited on the doc (the Partners button in the purple strip), and <strong>accept</strong> the invitation in the bar at the top of their screen. It appears within about 30 seconds, or right away if they reload. If they declined, check their name again on the Partners button to invite them again. A partner can leave a doc from the same button.</li>
   <li><strong>The dot next to a doc's title:</strong> green means saved to the server. Tap it to see the round trip time and whether your edits have reached the server. Red means offline: your edits are kept on your device and sync when you're back.</li>
   <li><strong>Paste doesn't work in a round doc:</strong> that's on purpose. Retype it, or work in a team doc outside the round.</li>
+  <li><strong>Shared computer:</strong> press <strong>Sign out</strong> when you're done. It removes your docs from that computer (they stay safe on the server for when you sign in again). If a doc has changes that haven't reached the server yet, you'll be asked before they're lost.</li>
   <li><strong>I want a clean slate:</strong> <strong>Reset: start fresh</strong> at the bottom of the doc list deletes your own docs there and closes every window.</li>
   <li>Anything else: <a href="mailto:${CONTACT}">${CONTACT}</a></li>
 </ul>

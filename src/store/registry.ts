@@ -109,3 +109,22 @@ export async function destroyDocData(docId: string) {
     req.onsuccess = req.onerror = req.onblocked = () => resolve();
   });
 }
+
+/** Close every open document without touching what is stored (before wiping the device). */
+export function closeAllDocs() {
+  for (const entry of open.values()) {
+    clearInterval(entry.timer);
+    if (entry.closeTimer) clearTimeout(entry.closeTimer);
+    entry.provider?.destroy();
+    void entry.persistence.destroy();
+    entry.doc.destroy();
+  }
+  open.clear();
+}
+
+/** How many open docs have changes that may not have reached the server (offline or still connecting). */
+export function unsyncedOpenDocs(): number {
+  let n = 0;
+  for (const e of open.values()) if (e.provider && (!e.provider.wsconnected || !e.provider.synced)) n++;
+  return n;
+}

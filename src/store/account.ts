@@ -144,6 +144,11 @@ export function loadAccount(): Promise<void> {
         const health2 = health as { time?: string };
         if (health2.time) serverOffset = Date.parse(health2.time) - Date.now();
         const me = await api<{ user: User | null; teams: TeamSummary[] }>('/api/me');
+        // Local data belongs to one account: a different person signing in on this device wipes the last person's first.
+        if (me.user) {
+          const { claimDevice } = await import('./device');
+          if ((await claimDevice(me.user.id)) === 'wiped') return new Promise<void>(() => {}); // the page is reloading
+        }
         let space = state.space;
         if (space !== PERSONAL && !me.teams.some((t) => t.id === space)) space = me.teams[0]?.id ?? PERSONAL;
         set({ loaded: true, server: true, signIn: health.auth ?? { google: false, dev: false }, user: me.user, teams: me.teams, space });
@@ -177,9 +182,18 @@ export function devSignInUrl(name: string): string {
   return `/api/auth/dev?name=${encodeURIComponent(name)}&next=${encodeURIComponent(location.pathname + location.hash)}`;
 }
 
+/**
+ * Sign out and remove this person's work from the device (shared computers).
+ * Anything still waiting to reach the server would be lost, so ask first.
+ */
 export async function signOut() {
+  const { unsyncedOpenDocs } = await import('./registry');
+  const waiting = unsyncedOpenDocs();
+  if (waiting && !confirm(`${waiting === 1 ? 'A doc has' : `${waiting} docs have`} changes that have not reached the server yet. Signing out deletes this device's copy, so those changes would be lost.\n\nSign out anyway?`)) return;
   await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-  location.reload();
+  const { wipeLocalData } = await import('./device');
+  await wipeLocalData();
+  location.assign('/');
 }
 
 export async function renameMe(name: string) {
@@ -321,6 +335,8 @@ export const resetInvite = (teamId: string, which: 'student' | 'coach') => api<{
 /** Delete the signed-in account (see the privacy page for what goes). */
 export async function deleteAccount() {
   await api<{ ok: true }>('/api/me', { method: 'DELETE' });
+  const { wipeLocalData } = await import('./device');
+  await wipeLocalData();
 }
 
 /** A doc's current contents (or as of update `seq`) as one Yjs update. */
