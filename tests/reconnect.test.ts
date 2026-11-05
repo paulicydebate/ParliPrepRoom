@@ -83,4 +83,12 @@ describe('reconnecting', () => {
     for (let i = 0; i < 10; i++) t.fire('connection-close', { code: 1005 });
     expect(t.calls).toEqual(['disconnect']);
   });
+
+  it('stops for a while when the server closed this tab because too many are open', () => {
+    const t = setup(async () => ({ ok: true, status: 200 }));
+    t.fire('status', { status: 'connected' });
+    t.fire('connection-close', { code: 4408 });
+    expect(t.calls).toEqual(['disconnect']);
+    expect(t.toasts.length).toBe(1);
+  });
 });

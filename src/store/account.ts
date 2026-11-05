@@ -77,6 +77,8 @@ export interface AccountState {
   user: User | null;
   teams: TeamSummary[];
   space: Space;
+  /** Set by the server's pause switch. */
+  notice?: string;
 }
 
 const SPACE_KEY = 'pp-space-v1';
@@ -138,7 +140,7 @@ export function loadAccount(): Promise<void> {
     loading = (async () => {
       try {
         const res = await fetch('/api/health', { cache: 'no-store' });
-        const health = res.ok ? ((await res.json()) as { sync?: boolean; auth?: { google: boolean; dev: boolean } }) : null;
+        const health = res.ok ? ((await res.json()) as { sync?: boolean; auth?: { google: boolean; dev: boolean }; notice?: string }) : null;
         if (!health?.sync) {
           set({ loaded: true, server: false });
           return;
@@ -153,7 +155,7 @@ export function loadAccount(): Promise<void> {
         }
         let space = state.space;
         if (space !== PERSONAL && !me.teams.some((t) => t.id === space)) space = me.teams[0]?.id ?? PERSONAL;
-        set({ loaded: true, server: true, signIn: health.auth ?? { google: false, dev: false }, user: me.user, teams: me.teams, space });
+        set({ loaded: true, server: true, signIn: health.auth ?? { google: false, dev: false }, user: me.user, teams: me.teams, space, notice: health.notice });
         if (me.user) setProfileName(me.user.name);
       } catch {
         set({ loaded: true, server: false });

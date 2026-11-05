@@ -3,10 +3,11 @@
 // sign-in, teams, docs, live sync and the public round-doc check page.
 
 import { renderCheckPage } from './checkPage';
+import { adminPage } from './adminPage';
 import { guidePage } from './guidePage';
 import { privacyPage } from './legal';
 import { renderTabroomPage } from './tabroomPage';
-import type { DocRecord, Role } from './directory';
+import { DEFAULT_PAUSE_NOTICE, type DocRecord, type Role } from './directory';
 import { FILES } from './static.gen';
 
 export { DocRoom } from './docRoom';
@@ -20,7 +21,14 @@ interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   /** Local testing only: `wrangler dev --var DEV_LOGIN:1` allows sign-in without Google. Never set in production. */
   DEV_LOGIN?: string;
+  /** Comma-separated emails allowed to use /admin (set as a Worker secret). */
+  ADMIN_EMAILS?: string;
+  /** Emergency pause that needs no sign-in: deploy with `--var PAUSED:1`. */
+  PAUSED?: string;
 }
+
+const isAdmin = (env: Env, email: string | undefined) =>
+  !!email && (env.ADMIN_EMAILS ?? '').toLowerCase().split(',').map((x) => x.trim()).filter(Boolean).includes(email.toLowerCase());
 
 const DOC_ID = /^[A-Za-z0-9-]{8,64}$/;
 const COOKIE = 'pp_session';
@@ -112,7 +120,8 @@ export default {
     }
 
     if (path === '/api/health') {
-      return json({ ok: true, app: 'parlipreproom', sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString() });
+      const pause = env.PAUSED === '1' ? { paused: true, notice: DEFAULT_PAUSE_NOTICE } : await dir.pauseState();
+      return json({ ok: true, app: 'parlipreproom', sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString(), ...(pause.paused ? { notice: pause.notice } : {}) });
     }
 
     // Changes must come from this site's own pages (no cross-site form posts).
@@ -187,6 +196,8 @@ export default {
     // The app's regular refresh: one directory call for session, docs and invitations.
     if (path === '/api/docs' && request.method === 'GET') {
       const team = url.searchParams.get('team');
+      const ip = request.headers.get('cf-connecting-ip') ?? 'x';
+      if (!(await dir.allow(`docs:${cookie(request, COOKIE) ?? ip}`, 60))) return fail('Too many requests; wait a minute', 429);
       const r = await dir.docList(cookie(request, COOKIE), team && team !== 'personal' ? team : null);
       if (!r) return fail('Sign in first', 401);
       return json({ docs: r.docs.map(publicDoc), invites: r.invites });
@@ -406,6 +417,17 @@ export default {
       if (sub === '/log') return json({ updates: await room.log(Number(url.searchParams.get('since')) || 0) });
     }
 
+    // ---------- Admin: the pause switch ----------
+    if (path === '/admin') return html(adminPage());
+    if (path === '/api/admin/pause') {
+      if (!isAdmin(env, user?.email)) return fail('Admins only', 403);
+      if (request.method === 'POST') {
+        const b = await body<{ on?: boolean; notice?: string }>(request);
+        await dir.setPause(!!b?.on, b?.notice ?? '');
+      }
+      return json({ ...(await dir.pauseState()), envPaused: env.PAUSED === '1' });
+    }
+
     // ---------- Live sync ----------
     const syncM = /^\/api\/sync\/([^/]+)$/.exec(path);
     if (syncM) {
@@ -413,6 +435,8 @@ export default {
       if (!user) return fail('Sign in first', 401);
       const origin = request.headers.get('origin');
       if (origin && origin !== url.origin) return fail('Cross-site request refused', 403);
+      const pause = env.PAUSED === '1' ? { paused: true, notice: DEFAULT_PAUSE_NOTICE } : await dir.pauseState();
+      if (pause.paused && !isAdmin(env, user.email)) return fail(pause.notice, 503);
       const { ok } = await dir.access(syncM[1], user.id);
       if (!ok) return fail('No access to this doc', 403);
       const headers = new Headers(request.headers);

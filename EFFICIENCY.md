@@ -82,13 +82,13 @@ The surprises so far were all "something loops or is left open". Defence in dept
 |---|---|---|
 | A client floods messages (like the 450/s cursor loop) | Server drops cursor floods and cuts a connection above 100 messages a second for 5 seconds; app backs off a minute | Done (2026-11-04) |
 | Refused connection retries forever | App stops after 5 failed attempts and checks access | Done |
-| Many tabs or devices per person | Cap sockets per person per doc (for example 4) and cap docs open at once | To add (small) |
+| Many tabs or devices per person | Cap sockets per person per doc (for example 4) and cap docs open at once | Sockets capped at 4 (built 2026-11-05); docs open at once still to add |
 | Poll storms | Jitter, adaptive interval, hidden-tab skip, per-person rate limit in the directory (for example 60 calls a minute) | Step 1E plus a small rate limiter |
 | Reconnect storms after a deploy (everyone reconnects at once) | Random 0 to 5 s delay before reconnecting | To add (tiny) |
 | The record or events growing without limit | Cap events per doc per hour; step 2G/H | To add |
 | Logs filling up | Logs sampled at 10% | Done |
-| Not noticing in time | A daily usage check using the analytics the deploy token can read (requests, Durable Object requests, rows read and written, WebSocket messages), warning above 50% of any monthly allowance; Cloudflare billing alerts in the dashboard | To add: the queries are in HANDOFF.md |
-| Needing to stop it fast | A kill switch (a setting that makes the server refuse new sync connections and show a notice) | To add (small) |
+| Not noticing in time | A daily usage check using the analytics the deploy token can read (requests, Durable Object requests, rows read and written, WebSocket messages), warning above 50% of any monthly allowance; Cloudflare billing alerts in the dashboard | Built 2026-11-05: `scripts/usage-check.cjs`, run daily |
+| Needing to stop it fast | A kill switch (a setting that makes the server refuse new sync connections and show a notice) | Built 2026-11-05 (`/admin`, needs `ADMIN_EMAILS`) |
 
 ## How to know it worked
 

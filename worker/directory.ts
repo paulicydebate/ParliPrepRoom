@@ -119,6 +119,8 @@ async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(d), (x) => x.toString(16).padStart(2, '0')).join('');
 }
 
+export const DEFAULT_PAUSE_NOTICE = 'ParliPrepRoom is paused for a moment. Your work on this device is safe and will sync when it is back.';
+
 type Row = Record<string, SqlStorageValue>;
 
 export class Directory extends DurableObject {
@@ -126,6 +128,7 @@ export class Directory extends DurableObject {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
       this.ctx.storage.sql.exec(`
+        CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY, provider TEXT NOT NULL, subject TEXT NOT NULL,
           email TEXT NOT NULL, name TEXT NOT NULL, picture TEXT, created_at INTEGER NOT NULL,
@@ -215,6 +218,36 @@ export class Directory extends DurableObject {
     const now = Date.now();
     this.sql.exec('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)', await sha256(token), String(row.id), now, now + SESSION_DAYS * DAY);
     return token;
+  }
+
+  /** Kill switch: while on, new live-sync connections are refused and the app shows the notice. */
+  pauseState(): { paused: boolean; notice: string } {
+    const row = this.one("SELECT value FROM settings WHERE key = 'pause'");
+    if (!row) return { paused: false, notice: '' };
+    try {
+      const v = JSON.parse(String(row.value)) as { notice?: string };
+      return { paused: true, notice: v.notice || DEFAULT_PAUSE_NOTICE };
+    } catch {
+      return { paused: true, notice: DEFAULT_PAUSE_NOTICE };
+    }
+  }
+
+  setPause(on: boolean, notice = ''): void {
+    if (on) this.ctx.storage.sql.exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('pause', ?)", JSON.stringify({ notice: notice.slice(0, 300) }));
+    else this.ctx.storage.sql.exec("DELETE FROM settings WHERE key = 'pause'");
+  }
+
+  /** Per-person call limit (in memory, per minute). True means: allowed. */
+  private hits = new Map<string, { at: number; n: number }>();
+  allow(key: string, perMinute: number, now = Date.now()): boolean {
+    const h = this.hits.get(key);
+    if (!h || now - h.at >= 60_000) {
+      if (this.hits.size > 5000) this.hits.clear();
+      this.hits.set(key, { at: now, n: 1 });
+      return true;
+    }
+    h.n++;
+    return h.n <= perMinute;
   }
 
   async userForSession(token: string | null): Promise<User | null> {

@@ -33,6 +33,7 @@ const MAX_AWARENESS_PER_SEC = 12;
 const CUT_OFF_PER_SEC = 100;
 const CUT_OFF_AFTER_SECONDS = 5;
 /** Edits from one person are saved together as one row, this often (EFFICIENCY.md step 2). */
+export const MAX_SOCKETS_PER_PERSON = 4;
 const FLUSH_MS = 1_000;
 /** ...or sooner if this many pile up. */
 const MAX_BATCH = 200;
@@ -282,6 +283,16 @@ export class DocRoom extends DurableObject {
     const header = request.headers.get('x-pp-user');
     if (!header) return new Response('Not signed in', { status: 401 });
     const who = JSON.parse(header) as Who;
+
+    // At most MAX_SOCKETS_PER_PERSON open tabs per person per doc: the oldest ones are closed.
+    const mine = this.ctx.getWebSockets().filter((w) => (w.deserializeAttachment() as Who | null)?.id === who.id);
+    for (const old of mine.slice(0, Math.max(0, mine.length - (MAX_SOCKETS_PER_PERSON - 1)))) {
+      try {
+        old.close(4408, 'too many open tabs');
+      } catch {
+        /* already closed */
+      }
+    }
 
     const pair = new WebSocketPair();
     const [client, server] = [pair[0], pair[1]];

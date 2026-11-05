@@ -584,6 +584,11 @@ export function App() {
 
   return (
     <div className={'app' + (narrow ? ' is-narrow' : compact ? ' is-compact' : '') + (roundMode ? ' is-round-mode' : '')}>
+      {acct.notice && (
+        <div className="pause-banner" role="status">
+          {acct.notice}
+        </div>
+      )}
       <header className="topbar">
         <button
           type="button"

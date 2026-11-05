@@ -15,5 +15,5 @@
   },
   "include": ["src", "tests", "vite.config.ts"],
   // The server test and its stand-in need Cloudflare/Node types, so only vitest runs them.
-  "exclude": ["tests/directory.test.ts", "tests/docroom.test.ts", "tests/docroom-batching.test.ts", "tests/stubs"]
+  "exclude": ["tests/directory.test.ts", "tests/docroom.test.ts", "tests/docroom-batching.test.ts", "tests/guardrails.test.ts", "tests/stubs"]
 }

@@ -41,6 +41,7 @@ export function connect(docId: string, doc: Y.Doc): WebsocketProvider {
 /** Close codes the server uses (worker/docRoom.ts). */
 const NO_ACCESS = 4403;
 const TOO_MANY_MESSAGES = 4429;
+const TOO_MANY_TABS = 4408;
 export const MAX_FAILED_ATTEMPTS = 5;
 
 interface Reconnecting {
@@ -49,7 +50,7 @@ interface Reconnecting {
   disconnect(): void;
 }
 export interface GuardDeps {
-  fetch: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>;
+  fetch: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number; json?: () => Promise<{ notice?: string }> }>;
   setTimeout: (fn: () => void, ms: number) => unknown;
   notify: (message: string) => void;
 }
@@ -82,7 +83,15 @@ export function guardReconnects(provider: Reconnecting, docId: string, doc: Y.Do
   const recheck = async (): Promise<void> => {
     try {
       const r = await deps.fetch(`/api/docs/${docId}`, { cache: 'no-store' });
-      if (r.ok) return resume();
+      if (r.ok) {
+        // Paused by the server's kill switch? Wait a minute and ask again instead of hammering it.
+        const h = await deps.fetch('/api/health', { cache: 'no-store' }).then((x) => x.json?.()).catch(() => undefined);
+        if (h?.notice) {
+          timer = deps.setTimeout(() => void recheck(), 60_000);
+          return;
+        }
+        return resume();
+      }
       if (r.status === 401 || r.status === 403 || r.status === 404) {
         if (!notified) deps.notify('You no longer have access to this doc. Your copy on this device is kept, but it is not syncing.');
         notified = true;
@@ -105,6 +114,10 @@ export function guardReconnects(provider: Reconnecting, docId: string, doc: Y.Do
     const code = event?.code;
     if (code === TOO_MANY_MESSAGES) return pause(60_000, resume);
     if (code === NO_ACCESS) return pause(30_000, () => void recheck());
+    if (code === TOO_MANY_TABS) {
+      deps.notify('This doc is open in too many tabs. This tab stopped syncing; reload it to take over.');
+      return pause(10 * 60_000, resume);
+    }
     if (wasConnected) {
       // An ordinary drop after working: let y-websocket reconnect as usual.
       wasConnected = false;

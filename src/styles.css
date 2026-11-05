@@ -3913,3 +3913,11 @@ kbd {
   background: color-mix(in srgb, var(--accent) 14%, var(--surface));
   color: var(--accent);
 }
+
+.pause-banner {
+  background: #b45309;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 13px;
+  text-align: center;
+}
