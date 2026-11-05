@@ -10,7 +10,7 @@ import {
   type Member,
   type Tournament,
 } from '../store/account';
-import { createRoundDoc } from '../store/docs';
+import { createRoundDoc, type DocFormat } from '../store/docs';
 import { acquireDoc, releaseDoc } from '../store/registry';
 import { setRound } from '../store/roundDoc';
 import { writeLines, type Line } from '../store/seed';
@@ -40,7 +40,7 @@ const remembered = () => {
  * "New round": one step to a round doc for you and your partner, tagged with
  * the tournament and round, with the prep timer started.
  */
-export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: string) => void; onClose: () => void }) {
+export function NewRoundDialog({ onCreated, onClose }: { onCreated: (made: { doc?: string; flow?: string }) => void; onClose: () => void }) {
   const modal = useModal(onClose);
   const acct = useAccount();
   const inTeam = acct.space !== PERSONAL;
@@ -52,6 +52,7 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
   const [code, setCode] = useState(remembered);
   const [tournament, setTournament] = useState<{ name: string } | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
+  const [make, setMake] = useState<'both' | 'doc' | 'flow'>('both');
   const [startTimer, setStartTimer] = useState(true);
   const [prep, setPrep] = useState(() => formatMinutes(prepMinutes()));
   const prepLen = parseMinutes(prep);
@@ -82,40 +83,49 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
     try {
       const label = round.trim() || 'Round';
       const res = resolution.trim();
-      const title = `${label} · ${side === 'gov' ? 'Gov' : 'Opp'}${res ? ` · ${res.slice(0, 48)}${res.length > 48 ? '…' : ''}` : ''}`;
-      const meta = await createRoundDoc({
-        title,
-        space: acct.space,
-        partners: partner ? [partner] : [],
-        tournamentCode: tournament ? code.trim() : null,
-        roundLabel: label,
-      });
+      const base = `${label} · ${side === 'gov' ? 'Gov' : 'Opp'}${res ? ` · ${res.slice(0, 48)}${res.length > 48 ? '…' : ''}` : ''}`;
+      const formats: DocFormat[] = make === 'both' ? ['doc', 'flow'] : [make];
+      const lines: Line[] = [];
+      if (res) lines.push(['note', `Resolution: ${res}`]);
+      lines.push(['position', side === 'gov' ? 'Gov case' : 'Opp case', { side }], ['claim', '']);
+      // A doc and a flow are two separate documents: whatever is typed in one is not copied into the other.
+      // The prep timer lives in the flow if there is one (so both partners see the same one), else in the doc.
+      const timerFormat: DocFormat = formats.includes('flow') ? 'flow' : 'doc';
+      const made: { doc?: string; flow?: string } = {};
+      for (const f of formats) {
+        const title = f === 'flow' ? `${base} · flow` : formats.length > 1 ? `${base} · prep` : base;
+        const meta = await createRoundDoc({
+          title,
+          space: acct.space,
+          partners: partner ? [partner] : [],
+          tournamentCode: tournament ? code.trim() : null,
+          roundLabel: label,
+          format: f,
+        });
+        // Starting content, the round-doc switch and the prep timer live inside the doc.
+        const { doc, ready } = acquireDoc(meta.id);
+        await ready;
+        writeLines(doc, lines);
+        setRound(doc, meta.id, true);
+        if (startTimer && prepLen && f === timerFormat) doc.getMap('timer').set('state', choose('Prep', prepLen, true));
+        releaseDoc(meta.id);
+        made[f] = meta.id;
+      }
       try {
         if (tournament) localStorage.setItem(LAST_TOURNAMENT, code.trim().toUpperCase());
       } catch {
         // ignore
       }
-      // Starting content, the round-doc switch and the prep timer live inside the doc.
-      const { doc, ready } = acquireDoc(meta.id);
-      await ready;
-      const lines: Line[] = [];
-      if (res) lines.push(['note', `Resolution: ${res}`]);
-      lines.push(['position', side === 'gov' ? 'Gov case' : 'Opp case', { side }], ['claim', '']);
-      writeLines(doc, lines);
-      setRound(doc, meta.id, true);
       // Remember this prep length as the Prep button's time on this device.
       if (startTimer && prepLen && prepLen !== prepMinutes()) {
         const presets = loadPresets();
         const has = presets.some((p) => p.label.toLowerCase() === 'prep');
         savePresets(has ? presets.map((p) => (p.label.toLowerCase() === 'prep' ? { ...p, minutes: prepLen } : p)) : [{ label: 'Prep', minutes: prepLen }, ...presets]);
       }
-      if (startTimer && prepLen) doc.getMap('timer').set('state', choose('Prep', prepLen, true));
-      releaseDoc(meta.id);
-      onCreated(meta.id);
+      onCreated(made);
       const invited = members.find((m) => m.userId === partner)?.name;
-      toast(
-        `Round doc ready.${startTimer && prepLen ? ` Prep timer started: ${format(prepLen * 60_000)}.` : ''}${invited ? ` Invitation sent to ${invited}: they have to accept before they can edit.` : ''}`,
-      );
+      const what = make === 'both' ? 'Round doc and flow ready.' : make === 'flow' ? 'Round flow ready.' : 'Round doc ready.';
+      toast(`${what}${startTimer && prepLen ? ` Prep timer started: ${format(prepLen * 60_000)}.` : ''}${invited ? ` Invitation sent to ${invited}: they have to accept before they can edit.` : ''}`);
       onClose();
     } catch (e) {
       toast((e as Error).message);
@@ -139,7 +149,23 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (docId: stri
             <IconClose />
           </button>
         </div>
-        <p className="muted">Makes a round doc: paste off, typing recorded. It opens as a doc and a flow side by side.{inTeam ? ' Your partner gets an invitation and shares it live once they accept.' : ''}</p>
+        <p className="muted">Makes round docs: paste off, typing recorded.{inTeam ? ' Your partner gets an invitation and shares them live once they accept.' : ''}</p>
+
+        <div className="form-row">
+          <span className="form-label">What to make</span>
+          <div className="seg" role="group" aria-label="What to make">
+            <button type="button" className={make === 'both' ? 'is-on' : ''} onClick={() => setMake('both')}>
+              Prep doc + flow
+            </button>
+            <button type="button" className={make === 'flow' ? 'is-on' : ''} onClick={() => setMake('flow')}>
+              Flow only
+            </button>
+            <button type="button" className={make === 'doc' ? 'is-on' : ''} onClick={() => setMake('doc')}>
+              Prep doc only
+            </button>
+          </div>
+          <span className="muted small">A doc and a flow are separate documents, side by side: what you type in one is not copied into the other.</span>
+        </div>
 
         <div className="form-grid">
           <label>

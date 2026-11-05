@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useAccount } from '../store/account';
-import { deleteEffect, moveDoc, renameDoc, setDocTeam, sortDocs, type DocKind, type DocMeta } from '../store/docs';
-import { IconBook, IconDoc, IconGrip, IconPlus, IconUpload } from './icons';
+import { deleteEffect, formatOf, moveDoc, renameDoc, setDocTeam, sortDocs, type DocFormat, type DocKind, type DocMeta } from '../store/docs';
+import { IconBook, IconDoc, IconFlowGrid, IconGrip, IconPlus, IconUpload } from './icons';
 
 const coarsePointer = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
@@ -77,7 +77,7 @@ function DocRow({
         onClick={(e) => (e.detail >= 2 ? setEditing(true) : onOpen())}
         title="Click to open, double-click to rename, drag to reorder"
       >
-        {doc.kind === 'prep' ? <IconDoc /> : <IconBook />}
+        {formatOf(doc) === 'flow' ? <IconFlowGrid /> : doc.kind === 'prep' ? <IconDoc /> : <IconBook />}
         <span>{doc.title}</span>
         {doc.round && <span className="round-dot" title="Round doc" />}
       </button>
@@ -153,7 +153,7 @@ export function Sidebar({
   signedOutOnServer: boolean;
   openIds: Set<string>;
   onOpen: (id: string) => void;
-  onCreate: (kind: DocKind) => void;
+  onCreate: (kind: DocKind, format?: DocFormat) => void;
   onDelete: (doc: DocMeta) => void;
   /** Import a file as a new reference doc (hidden when not allowed, e.g. Round Mode). */
   onImport?: (file: File) => void;
@@ -246,16 +246,41 @@ export function Sidebar({
                 />
               </>
             )}
-            {(kind === 'prep' || canCreateReference) && (
-              <button
-                type="button"
-                className="icon-btn small"
-                title={kind === 'prep' && !canCreateReference ? 'New round doc (Round Mode is on)' : `New ${title.toLowerCase()} doc`}
-                aria-label={`New ${title.toLowerCase()} doc`}
-                onClick={() => onCreate(kind)}
-              >
-                <IconPlus />
-              </button>
+            {kind === 'prep' ? (
+              // Prep is either a doc (text) or a flow (the grid); you choose when you make it and it stays that way.
+              <details className="new-menu">
+                <summary className="icon-btn small" title={canCreateReference ? 'New doc or flow' : 'New round doc or flow (Round Mode is on)'} aria-label="New prep doc or flow">
+                  <IconPlus />
+                </summary>
+                <div className="menu">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+                      onCreate('prep', 'doc');
+                    }}
+                  >
+                    <IconDoc /> New {canCreateReference ? 'prep doc' : 'round doc'}
+                    <span className="menu-sub">Written as text</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      (e.currentTarget.closest('details') as HTMLDetailsElement).open = false;
+                      onCreate('prep', 'flow');
+                    }}
+                  >
+                    <IconFlowGrid /> New {canCreateReference ? 'flow' : 'round flow'}
+                    <span className="menu-sub">Written in the grid</span>
+                  </button>
+                </div>
+              </details>
+            ) : (
+              canCreateReference && (
+                <button type="button" className="icon-btn small" title="New reference doc" aria-label="New reference doc" onClick={() => onCreate(kind)}>
+                  <IconPlus />
+                </button>
+              )
             )}
           </span>
         </div>

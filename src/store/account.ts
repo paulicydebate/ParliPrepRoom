@@ -48,6 +48,8 @@ export interface ServerDoc {
   roundLabel?: string | null;
   /** Who on the team can open it: everyone, or only the owner, partners and coaches. */
   access?: 'team' | 'partners';
+  /** A doc (written as text) or a flow (written in the grid): fixed when it is made. */
+  format?: 'doc' | 'flow';
   /** Partners who accepted are in `partners`; these are invited or said no. */
   pendingPartners?: string[];
   declinedPartners?: string[];
@@ -237,6 +239,7 @@ export interface Invite {
   ownerName: string;
   teamName: string;
   invitedAt: number;
+  format?: 'doc' | 'flow';
 }
 
 let invites: Invite[] = [];
@@ -274,6 +277,7 @@ export const createServerDoc = (doc: {
   tournamentCode?: string | null;
   roundLabel?: string | null;
   access?: 'team' | 'partners';
+  format?: 'doc' | 'flow';
 }) =>
   api<ServerDoc>('/api/docs', { method: 'POST', json: doc });
 export const patchServerDoc = (id: string, patch: Partial<Pick<ServerDoc, 'title' | 'kind' | 'round' | 'order' | 'partners' | 'teamId' | 'access'>>) =>

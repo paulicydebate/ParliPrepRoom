@@ -23,7 +23,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 
 **Phase 2 (flow view): done.**
 
-- Every pane has a **Doc / Flow** switch. Both views edit the same document, so the same prep can be open as a doc on one side and a flow on the other.
+- **A document is a doc or a flow, fixed when it is made** (the + next to Prep, or New round). There is no Doc/Flow switch: a doc is never shown as a flow and a flow never as a doc, so whatever is typed exists in only one place (the "no copy and paste" rule). Put a prep doc and a flow side by side with Split view.
 - Each Position title is a **sheet** (tab), marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR, PMR columns; Opp sheets start at the LOC.
 - A claim starts a row. Lines tagged with a later speech (toolbar speech menu, or by typing in that column) are answers and sit beside it. Warrants follow their claim. Section titles are label rows: the text stays in the first column (long ones wrap there) and a divider line runs across every column. Long sheet names are shortened with “…” in the tabs (hover for the full name).
 - Every sheet shows 150 rows. Click any empty cell in any row to type there; the rows above stay blank (stored as a blank-row count on the line, so the doc view has no empty lines).
@@ -70,7 +70,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 **Rounds and tournaments: live.**
 
 - **Timer** in the top bar: prep 20:00, PMC 7, LOC 8, MG 8, MO 8, LOR 4, PMR 5, flex 2:00 and 1:00, or any custom length. **Change times** sets your own lengths (e.g. 25 or 30-minute prep; saved on your device), and ±1:00 adjusts a running timer. Shared with your partner when a round doc is open.
-- **New round:** round, side, resolution, partner and tournament code in one step; opens the round doc and its flow side by side with the prep timer running (prep length can be changed there).
+- **New round:** round, side, resolution, partner and tournament code in one step; you choose what to make (a prep doc and a flow side by side, just a flow, or just a doc; they are separate documents) and the prep timer starts (prep length can be changed there).
 - **Tab room:** set up a tournament (account menu → Tournaments), give teams its code, and give the tab room the director link: every round doc tagged with the tournament, flagged first, with full records.
 
 **Help:** the **?** button in the top bar retakes a one-minute tour; https://parlipreproom.paulicydebate.workers.dev/guide is the one-page "Start here" guide (keep it current when features change). A doc made while Round Mode is on is a round doc.

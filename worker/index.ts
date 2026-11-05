@@ -87,6 +87,7 @@ function publicDoc(d: DocRecord) {
     createdAt: d.createdAt,
     tournamentName: d.tournamentName,
     access: d.access,
+    format: d.format,
     deletedAt: d.deletedAt,
     deletedByName: d.deletedByName,
     roundLabel: d.roundLabel,
@@ -334,7 +335,7 @@ export default {
 
     // ---------- Docs ----------
     if (path === '/api/docs' && request.method === 'POST') {
-      const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string }>(request);
+      const b = await body<{ id?: string; teamId?: string | null; title?: string; kind?: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string; format?: string }>(request);
       if (!b?.id || !DOC_ID.test(b.id)) return fail('Bad document id', 400);
       const d = await dir.createDoc(user!.id, {
         id: b.id,
@@ -347,6 +348,7 @@ export default {
         tournamentCode: b.tournamentCode ?? null,
         roundLabel: b.roundLabel ?? null,
         access: b.access,
+        format: b.format,
       });
       return d ? json(publicDoc(d)) : fail('That doc belongs to someone else', 403);
     }

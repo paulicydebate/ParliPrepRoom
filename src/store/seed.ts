@@ -24,6 +24,9 @@ export function writeLines(doc: Y.Doc, lines: Line[]) {
 
 export const STARTER_LINES: Line[] = [['position', '']];
 
+/** A new flow starts with a Gov sheet and its first row; "+ Opp" adds the other side. */
+export const STARTER_FLOW_LINES: Line[] = [['position', 'Gov', { side: 'gov' }], ['claim', '']];
+
 export const SAMPLE_REFERENCE: Line[] = [
   ['note', 'Sample reference doc. Coaches write briefs like this before tournaments; during prep it sits beside your prep for you to read and retype from.'],
   ['position', 'Brief: Police facial recognition'],
@@ -40,7 +43,7 @@ export const SAMPLE_REFERENCE: Line[] = [
 ];
 
 export const SAMPLE_PREP: Line[] = [
-  ['note', 'Sample prep doc. Enter starts a new line (a claim after a title, otherwise the same style), Shift+Enter switches the line to the next style, Tab / Shift+Tab move a level, and the style menu shows each style’s key. Switch this pane to Flow (top right) to see the same prep as a flow.'],
+  ['note', 'Sample prep doc. Enter starts a new line (a claim after a title, otherwise the same style), Shift+Enter switches the line to the next style, Tab / Shift+Tab move a level, and the style menu shows each style’s key. A doc stays a doc: to flow a round, make a flow with the + next to Prep.'],
   ['position', 'Gov: Ban police facial recognition', { side: 'gov' }],
   ['section', 'Advantage 1 — Wrongful arrests'],
   ['claim', 'The tech misidentifies people at very different rates'],
@@ -60,3 +63,9 @@ export const SAMPLE_PREP: Line[] = [
 export function writeJSON(doc: Y.Doc, json: JSONContent) {
   prosemirrorJSONToYXmlFragment(schema, json, doc.getXmlFragment(BODY_FIELD));
 }
+
+/** The sample flow: the same arguments, written in the grid (a flow is its own document, not a view of the doc). */
+export const SAMPLE_FLOW: Line[] = [
+  ['note', 'Sample flow. Each position title is a tab; a claim starts a row; click any cell and type. Tab moves to the next speech, and Ctrl/Cmd+Enter starts a new row. A flow stays a flow: it is not a view of a doc.'],
+  ...SAMPLE_PREP.slice(1),
+];

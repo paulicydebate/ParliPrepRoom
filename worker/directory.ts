@@ -50,6 +50,12 @@ export interface DocRecord {
    * are always 'partners'.
    */
   access: 'team' | 'partners';
+  /**
+   * What the document is, fixed when it is made: a 'doc' (written as text) or a
+   * 'flow' (written in the grid). It is never shown the other way, so the text
+   * is only ever kept in one form.
+   */
+  format: 'doc' | 'flow';
   /** In Recently deleted (or hidden from its owner): when, and by whom. */
   deletedAt: number | null;
   deletedBy: string | null;
@@ -79,6 +85,7 @@ export interface Invite {
   ownerName: string;
   teamName: string;
   invitedAt: number;
+  format: 'doc' | 'flow';
 }
 
 export interface Tournament {
@@ -154,6 +161,11 @@ export class Directory extends DurableObject {
         // First run of this change: prep docs become private to their owner,
         // partners and coaches; reference docs (coach briefs) stay team-wide.
         this.ctx.storage.sql.exec("UPDATE docs SET access = CASE WHEN kind = 'reference' AND round = 0 THEN 'team' ELSE 'partners' END");
+      }
+      if (!cols.includes('format')) {
+        this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN format TEXT');
+        // Docs from before this change can only be docs, except the built-in sample flow.
+        this.ctx.storage.sql.exec("UPDATE docs SET format = CASE WHEN title LIKE 'Sample flow:%' THEN 'flow' ELSE 'doc' END");
       }
       if (!cols.includes('deleted_at')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_at INTEGER');
       if (!cols.includes('deleted_by')) this.ctx.storage.sql.exec('ALTER TABLE docs ADD COLUMN deleted_by TEXT');
@@ -376,6 +388,7 @@ export class Directory extends DurableObject {
       tournamentName: row.tournament_id ? String(this.one('SELECT name FROM tournaments WHERE id = ?', String(row.tournament_id))?.name ?? '') || null : null,
       roundLabel: (row.round_label as string | null) ?? null,
       access: Number(row.round) === 1 || row.access === 'partners' ? 'partners' : row.access === 'team' ? 'team' : row.kind === 'reference' ? 'team' : 'partners',
+      format: row.format === 'flow' ? 'flow' : 'doc',
       deletedAt: row.deleted_at === null || row.deleted_at === undefined ? null : Number(row.deleted_at),
       deletedBy: (row.deleted_by as string | null) ?? null,
       deletedByName: (row.deleted_by_name as string | null) ?? null,
@@ -425,7 +438,7 @@ export class Directory extends DurableObject {
    */
   createDoc(
     userId: string,
-    input: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string },
+    input: { id: string; teamId: string | null; title: string; kind: string; round?: boolean; order?: number | null; partners?: string[]; tournamentCode?: string | null; roundLabel?: string | null; access?: string; format?: string },
   ): DocRecord | null {
     const existing = this.one('SELECT * FROM docs WHERE id = ?', input.id);
     if (existing) {
@@ -434,11 +447,12 @@ export class Directory extends DurableObject {
     }
     if (input.teamId && !this.role(input.teamId, userId)) return null;
     this.sql.exec(
-      'INSERT INTO docs (id, team_id, owner_id, title, kind, round, ord, check_token, created_at, access) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO docs (id, team_id, owner_id, title, kind, round, ord, check_token, created_at, access, format) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       input.id, input.teamId, userId, input.title.slice(0, 200) || 'Untitled', input.kind === 'reference' ? 'reference' : 'prep',
       input.round ? 1 : 0, input.order ?? null, input.round ? randomToken(12) : null, Date.now(),
       // New docs: prep is private to its owner, partners and coaches; coach briefs are team-wide.
       !input.round && (input.access === 'team' || (input.access === undefined && input.kind === 'reference')) ? 'team' : 'partners',
+      input.format === 'flow' ? 'flow' : 'doc',
     );
     const t = input.tournamentCode ? this.tournamentByCode(input.tournamentCode) : null;
     if (t || input.roundLabel) {
@@ -620,6 +634,7 @@ export class Directory extends DurableObject {
         ownerName: this.names([d.ownerId])[d.ownerId] ?? '',
         teamName: String(this.one('SELECT name FROM teams WHERE id = ?', d.teamId)?.name ?? ''),
         invitedAt: Number(r.invited_at ?? 0),
+        format: d.format,
       });
     }
     return out;

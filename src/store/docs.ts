@@ -44,7 +44,15 @@ export interface DocMeta {
   roundLabel?: string | null;
   /** Team docs: who can open it (see ServerDoc.access). */
   access?: 'team' | 'partners';
+  /** A doc or a flow. Fixed when it is made; never shown the other way. Missing means a doc. */
+  format?: DocFormat;
 }
+
+export type DocFormat = 'doc' | 'flow';
+
+/** What a document is. Docs saved before this existed are docs, except the built-in sample flow. */
+export const formatOf = (d: Pick<DocMeta, 'format' | 'title'> | null | undefined): DocFormat =>
+  d?.format ?? (d?.title?.startsWith('Sample flow:') ? 'flow' : 'doc');
 
 const store = createStore('pp-meta', 'meta');
 const KEY = 'docs';
@@ -109,6 +117,7 @@ function fromServer(s: ServerDoc): Partial<DocMeta> {
     tournamentName: s.tournamentName ?? null,
     roundLabel: s.roundLabel ?? null,
     access: s.access,
+    format: s.format,
   };
 }
 
@@ -140,17 +149,17 @@ export function newDocId(): string {
  * Create a doc in the current space. When signed in it's registered on the
  * server first, so it syncs from the first keystroke.
  */
-export async function createDoc(input: { title: string; kind: DocKind; id?: string; space?: Space }): Promise<DocMeta> {
+export async function createDoc(input: { title: string; kind: DocKind; id?: string; space?: Space; format?: DocFormat }): Promise<DocMeta> {
   const docs = await listDocs();
   const space = input.space ?? getAccount().space;
   // New docs go to the top of their section. A section that was never
   // reordered sorts newest first, so the new doc needs no number there.
   const ordered = docs.filter((d) => d.kind === input.kind && d.order !== undefined && spaceOf(d) === space).map((d) => d.order!);
   const order = ordered.length ? Math.min(...ordered) - 1 : undefined;
-  let meta: DocMeta = { id: input.id ?? newDocId(), title: input.title, kind: input.kind, createdAt: Date.now(), order };
+  let meta: DocMeta = { id: input.id ?? newDocId(), title: input.title, kind: input.kind, createdAt: Date.now(), order, format: input.format ?? 'doc' };
   if (syncing()) {
     const teamId = space === PERSONAL ? null : space;
-    const s = await createServerDoc({ id: meta.id, teamId, title: meta.title, kind: meta.kind, order: order ?? null });
+    const s = await createServerDoc({ id: meta.id, teamId, title: meta.title, kind: meta.kind, order: order ?? null, format: meta.format });
     meta = { ...meta, ...fromServer(s), order: s.order ?? order };
   }
   await save([...docs, meta]);
@@ -221,6 +230,7 @@ export async function createRoundDoc(input: {
   partners: string[];
   tournamentCode: string | null;
   roundLabel: string;
+  format?: DocFormat;
 }): Promise<DocMeta> {
   const docs = await listDocs();
   const id = newDocId();
@@ -233,6 +243,7 @@ export async function createRoundDoc(input: {
     partners: input.partners,
     tournamentCode: input.tournamentCode,
     roundLabel: input.roundLabel,
+    format: input.format ?? 'doc',
   });
   const meta = { id, createdAt: s.createdAt, ...fromServer(s) } as DocMeta;
   await save([...docs, meta]);
@@ -245,7 +256,7 @@ export async function ensureOnServer(id: string): Promise<boolean> {
   if (!d || !syncing()) return false;
   if (onServer(d)) return true;
   try {
-    const s = await createServerDoc({ id, teamId: null, title: d.title, kind: d.kind, round: d.round, order: d.order ?? null });
+    const s = await createServerDoc({ id, teamId: null, title: d.title, kind: d.kind, round: d.round, order: d.order ?? null, format: formatOf(d) });
     await update(id, fromServer(s));
     return true;
   } catch {

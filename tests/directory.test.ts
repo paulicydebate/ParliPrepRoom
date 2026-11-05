@@ -294,3 +294,50 @@ describe('the regular refresh', () => {
     expect(await dir.docList('not-a-session', team)).toBeNull();
   });
 });
+
+describe('a document is a doc or a flow, fixed when it is made', () => {
+  it('defaults to a doc and remembers a flow', () => {
+    const a = uid();
+    const b = uid();
+    expect(dir.createDoc(ids.owner, { id: a, teamId: team, title: 'Prep', kind: 'prep' })!.format).toBe('doc');
+    expect(dir.createDoc(ids.owner, { id: b, teamId: team, title: 'Round flow', kind: 'prep', format: 'flow' })!.format).toBe('flow');
+    expect(dir.docsFor(ids.owner, team).map((d) => [d.title, d.format]).sort()).toEqual([['Prep', 'doc'], ['Round flow', 'flow']]);
+  });
+
+  it('can never be changed afterwards', () => {
+    const id = uid();
+    dir.createDoc(ids.owner, { id, teamId: team, title: 'Flow', kind: 'prep', format: 'flow' });
+    expect(dir.updateDoc(ids.owner, id, { format: 'doc' } as never)!.format).toBe('flow');
+    const doc = uid();
+    dir.createDoc(ids.owner, { id: doc, teamId: team, title: 'Doc', kind: 'prep' });
+    expect(dir.updateDoc(ids.owner, doc, { format: 'flow' } as never)!.format).toBe('doc');
+    expect(dir.updateDoc(ids.coach, doc, { format: 'flow' } as never)!.format).toBe('doc');
+  });
+
+  it('works for round docs and reference docs too', () => {
+    const r = dir.createDoc(ids.owner, { id: uid(), teamId: team, title: 'R1 flow', kind: 'prep', round: true, format: 'flow' })!;
+    expect([r.round, r.format]).toEqual([true, 'flow']);
+    const ref = dir.createDoc(ids.coach, { id: uid(), teamId: team, title: 'Example flow', kind: 'reference', format: 'flow' })!;
+    expect([ref.kind, ref.format]).toEqual(['reference', 'flow']);
+  });
+
+  it('ignores anything that is not "flow"', () => {
+    const d = dir.createDoc(ids.owner, { id: uid(), teamId: team, title: 'X', kind: 'prep', format: 'spreadsheet' as never })!;
+    expect(d.format).toBe('doc');
+  });
+
+  it('existing docs become docs, except the built-in sample flow', () => {
+    const ctx = newContext();
+    const first = new Directory(ctx as never, {} as never);
+    void first;
+    // Simulate a database from before this change: no format column.
+    const old = newContext();
+    old.storage.sql.exec(`CREATE TABLE docs (id TEXT PRIMARY KEY, team_id TEXT, owner_id TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL, round INTEGER NOT NULL DEFAULT 0, ord REAL, check_token TEXT UNIQUE, created_at INTEGER NOT NULL)`);
+    old.storage.sql.exec("INSERT INTO docs (id, owner_id, title, kind, created_at) VALUES ('a', 'u', 'My prep', 'prep', 1), ('b', 'u', 'Sample flow: facial recognition', 'prep', 2)");
+    new Directory(old as never, {} as never);
+    expect(old.storage.sql.exec('SELECT title, format FROM docs ORDER BY id').toArray()).toEqual([
+      { title: 'My prep', format: 'doc' },
+      { title: 'Sample flow: facial recognition', format: 'flow' },
+    ]);
+  });
+});

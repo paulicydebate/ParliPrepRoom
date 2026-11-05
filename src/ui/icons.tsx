@@ -171,3 +171,9 @@ export const IconHelp = () => (
     <path d="M12 17h.01" />
   </Svg>
 );
+export const IconFlowGrid = () => (
+  <Svg size={16}>
+    <rect x="3.5" y="4" width="17" height="16" rx="2" />
+    <path d="M9.5 4v16M15 4v16M3.5 10h17M3.5 15h17" />
+  </Svg>
+);

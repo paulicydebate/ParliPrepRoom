@@ -232,7 +232,7 @@ function InviteRow({ label, hint, code, onReset }: { label: string; hint: string
   );
 }
 
-/** Download every doc you can see in a space as Word files in a .zip. */
+/** Download every doc you can see in a space as Word files (docs) and Excel files (flows) in a .zip. */
 function DownloadAllButton({ space, name }: { space: string; name: string }) {
   const [progress, setProgress] = useState<string | null>(null);
   return (
@@ -405,7 +405,7 @@ export function TeamDialog({ teamId, onClose }: { teamId: string; onClose: () =>
           </ul>
           {!coach && <p className="muted small">Only coaches can invite people or change roles.</p>}
           <h3>Backup</h3>
-          <p className="muted small">Every doc you can see on this team, as Word files in one .zip.</p>
+          <p className="muted small">Every doc you can see on this team in one .zip: docs as Word files, flows as Excel files.</p>
           <DownloadAllButton space={teamId} name={team.name} />
         </>
       )}

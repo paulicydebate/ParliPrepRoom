@@ -7,7 +7,7 @@ import { startTour } from '../store/tour';
 import { InviteBanner } from './Invites';
 import { HelpMenu, Tour } from './Tour';
 import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
-import { addSharedDoc, createDoc, deleteDoc, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocKind, type DocMeta } from '../store/docs';
+import { addSharedDoc, createDoc, deleteDoc, formatOf, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocFormat, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
 import { BlockFinder, PinBoard } from './RoundModeUI';
@@ -20,7 +20,7 @@ import { activeSheet, flowKey } from '../editor/flowView';
 import { baseSpeech } from '../model/speeches';
 import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
-import { SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
+import { SAMPLE_FLOW, SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
 import { IconMenu, IconPin, IconSearch, IconSettings, IconSplit } from './icons';
@@ -60,8 +60,8 @@ function loadLayout(): Layout {
   }
 }
 
-async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: string, round = false): Promise<DocMeta> {
-  const meta = await createDoc({ title, kind, space });
+async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: string, round = false, format: DocFormat = 'doc'): Promise<DocMeta> {
+  const meta = await createDoc({ title, kind, space, format });
   const { doc, ready } = acquireDoc(meta.id);
   await ready;
   writeLines(doc, lines);
@@ -78,16 +78,8 @@ async function seedFirstRun(): Promise<Layout | null> {
       // Browsers that saw the first preview get the flow sample once.
       if (!localStorage.getItem('pp-seeded-flow')) {
         localStorage.setItem('pp-seeded-flow', '1');
-        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_PREP, PERSONAL);
-        return {
-          panes: [
-            { key: paneKey(), docId: flow.id, outline: false, view: 'doc' },
-            { key: paneKey(), docId: flow.id, outline: false, view: 'flow' },
-          ],
-          weights: [1, 1.4],
-          focused: 1,
-          sidebar: true,
-        };
+        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_FLOW, PERSONAL, false, 'flow');
+        return { panes: [{ key: paneKey(), docId: flow.id, outline: false }], weights: [1], focused: 0, sidebar: true };
       }
       return null;
     }
@@ -99,6 +91,7 @@ async function seedFirstRun(): Promise<Layout | null> {
   if ((await listDocs()).length) return null;
   const ref = await makeDoc('Sample brief: facial recognition', 'reference', SAMPLE_REFERENCE, PERSONAL);
   const prep = await makeDoc('Sample prep: facial recognition', 'prep', SAMPLE_PREP, PERSONAL);
+  await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_FLOW, PERSONAL, false, 'flow');
   return {
     panes: [
       { key: paneKey(), docId: ref.id, outline: false },
@@ -376,15 +369,16 @@ export function App() {
       return { ...l, panes, weights, focused: Math.min(l.focused, panes.length - 1) };
     });
 
-  const create = async (kind: DocKind, paneIndex?: number) => {
+  const create = async (kind: DocKind, paneIndex?: number, format: DocFormat = 'doc') => {
     // During Round Mode only round docs can be open, so a new doc is a round
     // doc (paste off, typing recorded); reference docs can't be made then.
     if (roundMode && kind === 'reference') {
       toast('Reference docs can’t be made during Round Mode. Turn it off first.');
       return;
     }
-    const meta = await makeDoc(kind === 'prep' ? 'Untitled prep' : 'Untitled reference', kind, STARTER_LINES, undefined, roundMode);
-    if (roundMode) toast('New round doc: typed by hand, paste is off and the typing is recorded.');
+    const flow = format === 'flow';
+    const meta = await makeDoc(kind === 'prep' ? (flow ? 'Untitled flow' : 'Untitled prep') : 'Untitled reference', kind, flow ? STARTER_FLOW_LINES : STARTER_LINES, undefined, roundMode, format);
+    if (roundMode) toast(`New round ${flow ? 'flow' : 'doc'}: typed by hand, paste is off and the typing is recorded.`);
     if (paneIndex === undefined) openInFocused(meta.id);
     else setLayout((l) => ({ ...l, panes: l.panes.map((x, j) => (j === paneIndex ? { ...x, docId: meta.id } : x)) }));
   };
@@ -394,13 +388,15 @@ export function App() {
     try {
       const { importFile } = await import('../import/importFile');
       const { title, json } = await importFile(file);
-      const meta = await createDoc({ title, kind: 'reference' });
+      // A spreadsheet is a flow and stays a flow; Word, text and Markdown are docs.
+      const format: DocFormat = /\.(xlsx|csv)$/i.test(file.name) ? 'flow' : 'doc';
+      const meta = await createDoc({ title, kind: 'reference', format });
       const { doc, ready } = acquireDoc(meta.id);
       await ready;
       writeJSON(doc, json);
       releaseDoc(meta.id);
       openInFocused(meta.id);
-      toast(`Imported “${title}” as a reference doc.`);
+      toast(`Imported “${title}” as a reference ${format === 'flow' ? 'flow' : 'doc'}.`);
     } catch (e) {
       toast((e as Error).message);
     }
@@ -567,19 +563,20 @@ export function App() {
   const jumpRef = useRef(jumpTo);
   jumpRef.current = jumpTo;
 
-  // The timer follows the round doc on screen (shared with the partner), else it's per device.
-  const roundIdOf = (id: string | null | undefined) => (id && docs?.find((d) => d.id === id)?.round ? id : null);
-  const timerDocId = roundIdOf(focusedPane?.docId) ?? layout.panes.map((p) => roundIdOf(p.docId)).find(Boolean) ?? null;
+  // The timer lives in one round doc, shared with the partner: the round's flow if one is open
+  // (the same for both partners), else the first round doc on screen. It does not follow focus.
+  const openRounds = [...new Set(layout.panes.map((p) => p.docId).filter((x): x is string => !!x))]
+    .map((id) => docs?.find((d) => d.id === id))
+    .filter((d): d is DocMeta => !!d?.round);
+  const timerDocId = (openRounds.find((d) => formatOf(d) === 'flow') ?? openRounds[0])?.id ?? null;
   const [newRoundOpen, setNewRoundOpen] = useState(false);
-  /** After "New round": the doc on the left, the same doc as a flow on the right. */
-  const openNewRound = (docId: string) =>
+  /** After "New round": the prep doc on the left and the flow on the right (whichever were made). */
+  const openNewRound = (made: { doc?: string; flow?: string }) =>
     setLayout((l) => {
-      const n = Date.now();
-      const left = { key: l.panes[0]?.key ?? paneKey(), docId, outline: false, view: 'doc' as const, focus: undefined };
-      const right = { key: l.panes[1]?.key ?? paneKey(), docId, outline: false, view: 'flow' as const, focus: undefined };
-      void n;
-      if (narrow || maxPanes < 2) return { ...l, panes: [left], weights: [1], focused: 0 };
-      return { ...l, panes: [left, right], weights: [1, 1.3], focused: 0 };
+      const mk = (docId: string, i: number) => ({ key: l.panes[i]?.key ?? paneKey(), docId, outline: false, focus: undefined });
+      const ids = [made.doc, made.flow].filter((x): x is string => !!x);
+      if (narrow || maxPanes < 2 || ids.length < 2) return { ...l, panes: [mk(ids[0], 0)], weights: [1], focused: 0 };
+      return { ...l, panes: [mk(ids[0], 0), mk(ids[1], 1)], weights: [1, 1.3], focused: 1 };
     });
 
   const toggleRoundMode = () => setRoundMode(!roundMode, (spaceDocs ?? []).filter((d) => d.round).map((d) => d.id));
@@ -656,13 +653,20 @@ export function App() {
         </button>
       </header>
 
-      <InviteBanner onOpenDoc={(id) => void addSharedDoc(id).then((m) => m && openInFocused(m.id))} />
+      <InviteBanner
+        onOpen={(list) => {
+          const doc = list.find((d) => d.format === 'doc')?.id;
+          const flow = list.find((d) => d.format === 'flow')?.id;
+          if (doc && flow) openNewRound({ doc, flow });
+          else void addSharedDoc(list[0].id).then((m) => m && openInFocused(m.id));
+        }}
+      />
 
       <div className="workspace" style={{ ['--side-w' as string]: `${sideWidth.width}px`, ['--pins-w' as string]: `${pinsWidth.width}px` }}>
         {showSidebar && docs && (
           <>
             {overlaySidebar && <div className="scrim" onClick={() => setSidebarOverlay(false)} />}
-            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k) => void create(k)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} canCreateReference={!roundMode} onReset={roundMode ? undefined : () => void resetWorkspace()} resetCount={myDocs.length} />
+            <Sidebar docs={visibleDocs!} spaceName={spaceName} signedOutOnServer={acct.server && acct.loaded && !acct.user} openIds={openIds} onOpen={openInFocused} onCreate={(k, f) => void create(k, undefined, f)} onDelete={(d) => void remove(d)} onImport={roundMode ? undefined : (f) => void importReference(f)} canCreateReference={!roundMode} onReset={roundMode ? undefined : () => void resetWorkspace()} resetCount={myDocs.length} />
             {!overlaySidebar && <PanelHandle panel={sideWidth} edge="right" label="Resize the doc list" onCollapse={() => setLayout((l) => ({ ...l, sidebar: false }))} />}
           </>
         )}
@@ -690,7 +694,7 @@ export function App() {
                     onFocus={() => layout.focused !== i && setLayout((l) => ({ ...l, focused: i }))}
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
-                    onCreate={(k) => void create(k, i)}
+                    onCreate={(k, f) => void create(k, i, f)}
                     showCarets={layout.panes.findIndex((x) => x.docId === p.docId) === i}
                     focusMode={focusMode}
                     onFocusMode={() => {

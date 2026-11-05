@@ -31,7 +31,7 @@ const STEPS: Step[] = [
   {
     target: ['.new-round-btn'],
     title: 'Start a round',
-    body: 'New round makes a round doc (paste off, typing recorded), opens its flow beside it, and starts the prep timer. Your partner gets an invitation and shares the doc live once they accept.',
+    body: 'New round makes round docs (paste off, typing recorded): a prep doc and a flow side by side, just one, or the other. It starts the prep timer. Your partner gets an invitation and shares them live once they accept.',
   },
   {
     target: ['.timer'],
@@ -41,12 +41,12 @@ const STEPS: Step[] = [
   {
     target: ['[data-tour="split"]'],
     title: 'Side by side',
-    body: 'Split view puts two or three windows next to each other: the reference doc beside your prep, or your doc beside its flow. Retype what you need; paste is blocked in round docs on purpose.',
+    body: 'Split view puts two or three windows next to each other: the reference doc beside your prep, or your prep doc beside your flow. Retype what you need; paste is blocked in round docs on purpose.',
   },
   {
-    target: ['.pane .view-toggle'],
-    title: 'Doc or flow',
-    body: 'Every window switches between Doc and Flow. They are the same document, so typing in one changes the other. A claim starts a row; tag a line LOC or MG and it sits in that column.',
+    target: ['.new-menu', '.side-section .icon-btn'],
+    title: 'Docs and flows',
+    body: 'Prep is either a doc (written as text) or a flow (written in the grid). You choose when you make it with the + next to Prep, and it stays that way, so there is only ever one copy of what you type. In a flow, a claim starts a row and you click any cell to type.',
   },
   {
     target: ['.pane .pin-btn'],

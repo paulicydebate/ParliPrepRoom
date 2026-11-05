@@ -30,7 +30,7 @@ A prep app for NPDA/NPTE parli students that:
 
 What we keep is the **design work**, not the code: the flow layout (LOR/PMR columns, Prep column, colorways, Classic sheet), the list of everything that counts as paste, and the hash-chained typing log with a seal code. We re-implement those cleanly.
 
-## 3. The core idea: one prep, two views
+## 3. The core idea: one block model, a doc or a flow (superseded: it was "one prep, two views"; see Decisions)
 
 The docs-vs-flow tradeoff exists because they're stored differently. Here, there's one data model and two ways to look at it.
 
@@ -136,7 +136,7 @@ You can't paste or drag from the library into a round doc. Retyping by hand is t
 
 - Laptops and internet are allowed in round. Round Mode caches prep but doesn't need to be offline-first.
 - The record must be checkable by anyone: coaches, tab room, opponents, the student. Hence the no-account check link.
-- One prep, two views (doc and flow) on one data model.
+- One block model (styled outline blocks), but **each document is a doc or a flow, fixed when it is made** (owner's decision 2026-11-05, the "no copy and paste" rule): there is no Doc/Flow switch and nothing is ever shown in two forms, so there is only one copy of anything typed. A round gets a prep doc and a flow as two separate documents.
 - Round docs instead of a separate Prep Mode; team docs allow copy and paste.
 - Web app only; desktop only if needed.
 - Pilot with the owner's team, built so many teams can use it later.

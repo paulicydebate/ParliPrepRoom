@@ -24,7 +24,7 @@ export function guidePage(): string {
 <p class="muted">ParliPrepRoom · a prep app for parliamentary debate: write prep like a doc, flow it like a spreadsheet, prep live with your partner, and keep a record that it was typed, not pasted.</p>
 <p><a class="go" href="/#tour">Take the 1-minute tour</a><a class="go alt" href="/">Open the app</a></p>
 <nav class="toc" aria-label="On this page">
-  <a href="#quick">Quick start</a> <a href="#styles">Styles</a> <a href="#flow">The flow</a> <a href="#pins">Pins</a> <a href="#roundmode">Round Mode</a>
+  <a href="#quick">Quick start</a> <a href="#styles">Styles</a> <a href="#flow">Docs and flows</a> <a href="#pins">Pins</a> <a href="#roundmode">Round Mode</a>
   <a href="#coaches">Coaches</a> <a href="#keys">Shortcuts</a> <a href="#help">If something's wrong</a>
 </nav>
 
@@ -34,17 +34,17 @@ export function guidePage(): string {
   <li><strong>Sign in.</strong> Open the app and click <strong>Sign in with Google</strong>. Use the same account every time.</li>
   <li><strong>Make or join a team.</strong> A coach (or captain) creates the team from the account menu, opens <strong>Team</strong>, and sends the <strong>Students</strong> invite link. Everyone else opens that link and signs in. Use the <strong>Coaches</strong> link only for other coaches.</li>
   <li><strong>Add a coach reference doc.</strong> In the sidebar, under <strong>Reference</strong>, press <strong>+</strong> to write one, or the upload icon to import a Word, Excel, CSV, text or Markdown file. The whole team can read it.</li>
-  <li><strong>Start the round.</strong> Press <strong>New round</strong> in the top bar. Choose the round name, your side (Gov or Opp), the resolution, your <strong>partner</strong> and the tournament code if there is one, then <strong>Start round</strong>. You get a <em>round doc</em> (purple border) and its flow side by side, and the prep timer starts. <strong>Your partner gets an invitation</strong>: a bar appears at the top of their screen (within about 30 seconds, or when they switch back to the app) with <strong>Accept</strong> and <strong>Decline</strong>. They can't see or edit the doc until they accept, and you'll see whether they've accepted on the <strong>Partners</strong> button. No email or text is sent, so give them a nudge.</li>
-  <li><strong>Prep.</strong> With Round Mode still off, press <strong>Split view</strong> and open the reference doc next to your round doc. Read from it and retype what you need; paste is blocked in round docs on purpose. Your partner sees your doc live.</li>
+  <li><strong>Start the round.</strong> Press <strong>New round</strong> in the top bar. Choose the round name, your side (Gov or Opp), the resolution, your <strong>partner</strong> and the tournament code if there is one, then <strong>Start round</strong>. Pick <strong>what to make</strong>: a prep doc and a flow side by side (the default), just a flow, or just a doc. You get <em>round docs</em> (purple border) and the prep timer starts. <strong>Your partner gets an invitation</strong>: a bar appears at the top of their screen (within about 30 seconds, or when they switch back to the app) with <strong>Accept</strong> and <strong>Decline</strong>. They can't see or edit the doc until they accept, and you'll see whether they've accepted on the <strong>Partners</strong> button. No email or text is sent, so give them a nudge.</li>
+  <li><strong>Prep.</strong> With Round Mode still off, press <strong>Split view</strong> and open the reference doc next to your round doc (or flow). Read from it and retype what you need; paste is blocked in round docs on purpose. Your partner sees your doc live.</li>
   <li><strong>Pin what you might read.</strong> See <a href="#pins">Pins</a> below. Do this in your round doc, before the round.</li>
   <li><strong>Turn on Round Mode</strong> when the round starts (top bar). Only round docs stay available, so you speak from what you typed.</li>
 </ol>
 
 <h2 id="styles">The styles</h2>
-<p>Every line has a style. The style decides how it looks in the doc <em>and</em> where it goes in the flow. Pick one from the style menu in the toolbar, with the keys (<kbd>Ctrl</kbd>+1–6 on a Mac, <kbd>Alt</kbd>+1–6 on Windows), or press <kbd>Shift</kbd>+<kbd>Enter</kbd> to switch the line to the next style. <kbd>Enter</kbd> just starts a new line: a claim after a position or section title, otherwise the same style as the line above.</p>
+<p>Every line has a style. The style decides how it looks in a doc and where it goes in a flow. Pick one from the style menu in the toolbar, with the keys (<kbd>Ctrl</kbd>+1–6 on a Mac, <kbd>Alt</kbd>+1–6 on Windows), or press <kbd>Shift</kbd>+<kbd>Enter</kbd> to switch the line to the next style. <kbd>Enter</kbd> just starts a new line: a claim after a position or section title, otherwise the same style as the line above.</p>
 <table>
   <tr><th>Style</th><th>Use it for</th></tr>
-  <tr><td><strong>Position title</strong></td><td>One case or position, e.g. “Gov: Ban facial recognition”. Each one becomes a <em>sheet</em> (tab) in the flow.</td></tr>
+  <tr><td><strong>Position title</strong></td><td>One case or position, e.g. “Gov: Ban facial recognition”. In a flow, each one is a <em>sheet</em> (tab).</td></tr>
   <tr><td><strong>Section title</strong></td><td>A group inside a position, e.g. “Advantage 1” or “A2 – T”.</td></tr>
   <tr><td><strong>Claim</strong></td><td>One argument. Each claim starts a row in the flow.</td></tr>
   <tr><td><strong>Warrant</strong></td><td>The reasoning or evidence for a claim. Sits under it.</td></tr>
@@ -52,14 +52,15 @@ export function guidePage(): string {
   <tr><td><strong>Note</strong></td><td>A reminder to yourself.</td></tr>
 </table>
 
-<h2 id="flow">The flow</h2>
+<h2 id="flow">Docs and flows</h2>
 <ul>
-  <li>Every window has a <strong>Doc / Flow</strong> switch. They are the same document: typing in either one changes both.</li>
-  <li>Each Position title is a sheet, marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR and PMR columns; Opp sheets start at the LOC.</li>
+  <li>Prep is either a <strong>doc</strong> (written as text) or a <strong>flow</strong> (written in the grid, like a spreadsheet). You choose when you make it, with the <strong>+</strong> next to Prep or in New round, and it <strong>stays that way</strong>. A doc is never shown as a flow or the other way round, so whatever you type exists in only one place.</li>
+  <li>Put a prep doc and a flow side by side with <strong>Split view</strong>: write your prep in the doc, flow the round in the flow.</li>
+  <li>In a flow, each position title is a sheet, marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR and PMR columns; Opp sheets start at the LOC.</li>
   <li>A claim starts a row. A line tagged with a later speech (use the speech menu in the toolbar, or just type in that column) is an answer and sits beside the claim it answers.</li>
   <li>Click any empty cell to type there. <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> move to the next or previous speech in the row; <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> starts a new row.</li>
   <li>Mark an argument <strong>→ extended</strong>, <strong>! dropped</strong>, <strong>✓ answered</strong> or <strong>★ key</strong> from the toolbar.</li>
-  <li>Download your flow as an Excel file, or the doc as Word, from the download icon in the window header.</li>
+  <li>Download a doc as Word, or a flow as Excel, from the download icon in the window header. An Excel flow you import becomes a flow.</li>
 </ul>
 
 <h2 id="pins">Pins: finding your blocks fast in the round</h2>

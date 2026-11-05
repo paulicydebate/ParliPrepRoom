@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WebsocketProvider } from 'y-websocket';
 import type * as Y from 'yjs';
 import { toast } from '../editor/roundGuard';
-import { renameDoc, setDocRound, type DocMeta } from '../store/docs';
+import { formatOf, renameDoc, setDocRound, type DocFormat, type DocMeta } from '../store/docs';
 import { setRound, useRound } from '../store/roundDoc';
 import { useConnectionCheck, useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
@@ -19,7 +19,6 @@ export interface PaneState {
   key: string;
   docId: string | null;
   outline: boolean;
-  view?: 'doc' | 'flow';
   /** Jump request from the block finder or pin board (n changes each time). */
   focus?: { blockId: string; n: number };
 }
@@ -53,7 +52,7 @@ const closeMenu = (e: React.MouseEvent) => {
   if (d) d.open = false;
 };
 
-function ExportMenu({ editor, title }: { editor: Editor | null; title: string }) {
+function ExportMenu({ editor, title, format }: { editor: Editor | null; title: string; format: DocFormat }) {
   const [busy, setBusy] = useState(false);
   const run = async (e: React.MouseEvent, kind: 'docx' | 'xlsx') => {
     closeMenu(e);
@@ -70,12 +69,15 @@ function ExportMenu({ editor, title }: { editor: Editor | null; title: string })
         <IconDownload />
       </summary>
       <div className="menu">
-        <button type="button" disabled={busy} onClick={(e) => void run(e, 'docx')}>
-          Word document (.docx)
-        </button>
-        <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
-          Excel flow (.xlsx)
-        </button>
+        {format === 'doc' ? (
+          <button type="button" disabled={busy} onClick={(e) => void run(e, 'docx')}>
+            Word document (.docx)
+          </button>
+        ) : (
+          <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
+            Excel flow (.xlsx)
+          </button>
+        )}
       </div>
     </details>
   );
@@ -92,6 +94,7 @@ function DocSwitcher({ docs, value, onPick }: { docs: DocMeta[]; value: string |
           {docs.filter((d) => d.kind === 'prep').map((d) => (
             <option key={d.id} value={d.id}>
               {d.title}
+              {formatOf(d) === 'flow' ? ' (flow)' : ''}
             </option>
           ))}
         </optgroup>
@@ -99,6 +102,7 @@ function DocSwitcher({ docs, value, onPick }: { docs: DocMeta[]; value: string |
           {docs.filter((d) => d.kind === 'reference').map((d) => (
             <option key={d.id} value={d.id}>
               {d.title}
+              {formatOf(d) === 'flow' ? ' (flow)' : ''}
             </option>
           ))}
         </optgroup>
@@ -321,7 +325,7 @@ export function Pane({
   onFocus: () => void;
   onChange: (p: PaneState) => void;
   onClose: () => void;
-  onCreate: (kind: DocMeta['kind']) => void;
+  onCreate: (kind: DocMeta['kind'], format?: DocFormat) => void;
   /** One window fills the screen. */
   focusMode: boolean;
   onFocusMode: () => void;
@@ -344,7 +348,8 @@ export function Pane({
   }, []);
 
   useEffect(() => setHistory(false), [pane.docId]);
-  const view = pane.view ?? 'doc';
+  // A doc is only ever shown as a doc and a flow only as a flow: there is no switch, so there is only ever one copy of the text.
+  const view = formatOf(meta);
   const round = useRound(ydoc);
 
   // Jump to a block (from search or the pin board) once the editor is ready.
@@ -388,6 +393,11 @@ export function Pane({
             ) : (
               <span className={'badge ' + meta.kind}>{meta.kind === 'prep' ? 'Prep' : 'Reference'}</span>
             )}
+            {view === 'flow' && (
+              <span className="badge flow" title="A flow: written in the grid. It stays a flow; it can't be shown as a doc.">
+                Flow
+              </span>
+            )}
             <TitleInput meta={meta} ydoc={ydoc} provider={provider} />
             {syncStatus !== 'off' && <SyncDot status={syncStatus} provider={provider} />}
             {provider && meta.teamId && !round && <PartnersButton meta={meta} />}
@@ -401,16 +411,6 @@ export function Pane({
           <span className="pane-empty-title">Open a document</span>
         )}
         <span className="tb-spacer" />
-        {meta && (
-          <div className="seg view-toggle" role="group" aria-label="View">
-            <button type="button" className={view === 'doc' ? 'is-on' : ''} aria-pressed={view === 'doc'} onClick={() => onChange({ ...pane, view: 'doc' })}>
-              Doc
-            </button>
-            <button type="button" className={view === 'flow' ? 'is-on' : ''} aria-pressed={view === 'flow'} onClick={() => onChange({ ...pane, view: 'flow' })}>
-              Flow
-            </button>
-          </div>
-        )}
         <DocSwitcher docs={docs} value={pane.docId} onPick={(docId) => onChange({ ...pane, docId })} />
         {meta && (
           <>
@@ -429,7 +429,7 @@ export function Pane({
                 </button>
               )}
               {provider && <ShareButton docId={meta.id} />}
-              <ExportMenu editor={editor} title={meta.title} />
+              <ExportMenu editor={editor} title={meta.title} format={view} />
               <button
                 type="button"
                 className={'icon-btn' + (history ? ' is-on' : '')}
@@ -479,12 +479,15 @@ export function Pane({
                     Copy link to this doc
                   </button>
                 )}
-                <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'docx'))}>
-                  Download Word (.docx)
-                </button>
-                <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx'))}>
-                  Download Excel flow (.xlsx)
-                </button>
+                {view === 'doc' ? (
+                  <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'docx'))}>
+                    Download Word (.docx)
+                  </button>
+                ) : (
+                  <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx'))}>
+                    Download Excel flow (.xlsx)
+                  </button>
+                )}
               </div>
             </details>
           </>
@@ -521,6 +524,7 @@ export function Pane({
                       <li key={d.id}>
                         <button type="button" onClick={() => onChange({ ...pane, docId: d.id })}>
                           {d.title}
+                          {formatOf(d) === 'flow' ? ' (flow)' : ''}
                         </button>
                       </li>
                     ))}
@@ -528,6 +532,11 @@ export function Pane({
                 {(kind === 'prep' || !roundMode) && (
                   <button type="button" className="btn ghost small" onClick={() => onCreate(kind)}>
                     + New {kind === 'prep' ? (roundMode ? 'round doc' : 'prep doc') : 'reference doc'}
+                  </button>
+                )}
+                {kind === 'prep' && (
+                  <button type="button" className="btn ghost small" onClick={() => onCreate(kind, 'flow')}>
+                    + New {roundMode ? 'round flow' : 'flow'}
                   </button>
                 )}
               </div>

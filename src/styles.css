@@ -3882,3 +3882,34 @@ kbd {
 .partner-status.is-declined {
   color: var(--danger);
 }
+
+/* New doc / New flow menu in the sidebar, and the Flow badge on a window */
+.new-menu {
+  position: relative;
+}
+.new-menu > summary {
+  list-style: none;
+}
+.new-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.new-menu .menu {
+  min-width: 190px;
+  z-index: 30;
+}
+.new-menu .menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.menu-sub {
+  flex-basis: 100%;
+  padding-left: 24px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.badge.flow {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
