@@ -221,6 +221,9 @@ export const PrepBlock = Node.create({
         const { $from, empty } = this.editor.state.selection;
         const node = $from.parent;
         if (node.type.name !== 'block' || !empty) return false;
+        // In a flow, Enter drops down to the next cell (the flow editor provides this command).
+        const flowEnter = (this.editor.commands as unknown as { nextCell?: () => boolean }).nextCell;
+        if (flowEnter?.()) return true;
         const afterTitle = $from.parentOffset === node.content.size && (node.attrs.kind === 'position' || node.attrs.kind === 'section');
         return this.editor
           .chain()

@@ -58,7 +58,7 @@ export function guidePage(): string {
   <li>Put a prep doc and a flow side by side with <strong>Split view</strong>: write your prep in the doc, flow the round in the flow.</li>
   <li>In a flow, each position title is a sheet, marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR and PMR columns; Opp sheets start at the LOC.</li>
   <li>A claim starts a row. A line tagged with a later speech (use the speech menu in the toolbar, or just type in that column) is an answer and sits beside the claim it answers.</li>
-  <li>Click any empty cell to type there. <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> move to the next or previous speech in the row; <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> starts a new row.</li>
+  <li>Click any empty cell to type there. <kbd>Enter</kbd> drops down to the cell below in the same column (a new row after the last one); <kbd>Alt</kbd>/<kbd>Option</kbd>+<kbd>Enter</kbd> adds another line inside the same cell. <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> move to the next or previous speech in the row; <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd> starts a new row right below this one.</li>
   <li>Mark an argument <strong>→ extended</strong>, <strong>! dropped</strong>, <strong>✓ answered</strong> or <strong>★ key</strong> from the toolbar.</li>
   <li>Download a doc as Word, or a flow as Excel, from the download icon in the window header. An Excel flow you import becomes a flow.</li>
 </ul>
@@ -97,7 +97,8 @@ export function guidePage(): string {
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd></td><td>Find a block (and pin it)</td></tr>
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>\\</kbd></td><td>Show or hide the doc list</td></tr>
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>\\</kbd></td><td>One window fills the screen</td></tr>
-  <tr><td><kbd>Enter</kbd></td><td>New line (a claim after a title, otherwise the same style)</td></tr>
+  <tr><td><kbd>Enter</kbd></td><td>In a doc: new line (a claim after a title, otherwise the same style). In a flow: down to the cell below</td></tr>
+  <tr><td><kbd>Alt</kbd>/<kbd>Option</kbd>+<kbd>Enter</kbd></td><td>In a flow: another line inside the same cell</td></tr>
   <tr><td><kbd>Shift</kbd>+<kbd>Enter</kbd> · <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Switch the line to the next · previous style (position, section, claim, warrant, analytic, note, then around)</td></tr>
   <tr><td><kbd>Ctrl</kbd>+1–6 (Mac) · <kbd>Alt</kbd>+1–6 (Windows)</td><td>Set the line's style directly</td></tr>
   <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> / <kbd>D</kbd> / <kbd>A</kbd> / <kbd>K</kbd></td><td>Mark extended / dropped / answered / key</td></tr>

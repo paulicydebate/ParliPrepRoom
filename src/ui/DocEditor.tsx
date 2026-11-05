@@ -163,7 +163,7 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
       {view === 'flow' && (
         <>
           <span className="tb-sep" />
-          <span className="tb-hint">Tab: next speech · {MOD}+Enter: new row · Shift+Enter: next style</span>
+          <span className="tb-hint">Enter: next cell · Tab: next speech · {MOD}+Enter: new row · Alt+Enter: line in cell</span>
         </>
       )}
       {extra}

@@ -28,7 +28,7 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 - A claim starts a row. Lines tagged with a later speech (toolbar speech menu, or by typing in that column) are answers and sit beside it. Warrants follow their claim. Section titles are label rows: the text stays in the first column (long ones wrap there) and a divider line runs across every column. Long sheet names are shortened with “…” in the tabs (hover for the full name).
 - Every sheet shows 150 rows. Click any empty cell in any row to type there; the rows above stay blank (stored as a blank-row count on the line, so the doc view has no empty lines).
 - Dragging a selection down across cells selects and copies only the column you started in.
-- In the flow: Tab / Shift+Tab move to the next/previous speech in the row; Cmd/Ctrl+Enter starts a new row; + Gov / + Opp add a sheet; double-click a tab to rename it; Delete sheet removes the one in view (Undo brings it back).
+- In the flow: **Enter drops down to the cell below** in the same column (the cell in the next row, or a new row after the last one), so a cell doesn't grow by accident; **Alt/Option+Enter** adds another line inside the same cell; Tab / Shift+Tab move to the next/previous speech in the row; Cmd/Ctrl+Enter starts a new row right below this one; + Gov / + Opp add a sheet; double-click a tab to rename it; Delete sheet removes the one in view (Undo brings it back).
 - The doc view labels answers with their speech (LOC, MG, ...).
 - **Flow marks:** mark any argument Extend (→), Dropped (!), Answered (✓, crossed out) or Key (★) from the toolbar or Ctrl/Cmd+Shift+E / D / A / K.
 - Export: Word (.docx, using your fonts, with real headings) and an Excel flow (.xlsx, one worksheet per sheet, colored gov/opp columns).

@@ -66,6 +66,6 @@ export function writeJSON(doc: Y.Doc, json: JSONContent) {
 
 /** The sample flow: the same arguments, written in the grid (a flow is its own document, not a view of the doc). */
 export const SAMPLE_FLOW: Line[] = [
-  ['note', 'Sample flow. Each position title is a tab; a claim starts a row; click any cell and type. Tab moves to the next speech, and Ctrl/Cmd+Enter starts a new row. A flow stays a flow: it is not a view of a doc.'],
+  ['note', 'Sample flow. Each position title is a tab; a claim starts a row; click any cell and type. Enter drops down to the cell below, Tab moves to the next speech, Ctrl/Cmd+Enter starts a new row, and Alt/Option+Enter adds another line inside the same cell. A flow stays a flow: it is not a view of a doc.'],
   ...SAMPLE_PREP.slice(1),
 ];

@@ -46,6 +46,11 @@ declare module '@tiptap/core' {
       moveColumn: (dir: 1 | -1) => ReturnType;
       /** Start a new row below the current one, in the current column. */
       newRow: () => ReturnType;
+      /**
+       * Enter: go down one cell in this column (the cell in the next row, making it if the row has
+       * none there, or a new row after the last). False when the caret is not in a cell (a title).
+       */
+      nextCell: () => ReturnType;
     };
   }
 }
@@ -69,6 +74,19 @@ function selectEnd(tr: Transaction, pos: number) {
   const node = tr.doc.nodeAt(pos);
   if (!node) return;
   tr.setSelection(TextSelection.create(tr.doc, pos + 1 + node.content.size)).scrollIntoView();
+}
+
+/** A new row right after this one, in the same column (a blank row below is filled instead of pushing rows down). */
+function startRowBelow(state: EditorState, tr: Transaction, sheet: FlowSheet, p: { group: number; col: number }) {
+  const g = sheet.groups[p.group];
+  const speech = sheet.columns[p.col - 1];
+  const isBase = speech === baseSpeech(sheet.side);
+  const next = tr.doc.nodeAt(g.to);
+  const nextGap = Number(next?.attrs.gap) || 0;
+  if (next && nextGap > 0) tr.setNodeMarkup(g.to, undefined, { ...next.attrs, gap: nextGap - 1 });
+  tr.insert(g.to, blockNode(state, { kind: 'claim', speech: isBase ? null : speech, newRow: !isBase }));
+  tr.setSelection(TextSelection.create(tr.doc, g.to + 1)).scrollIntoView();
+  return true;
 }
 
 /** Where a click asks for a new cell: an existing row, a blank row kept above a row, or an empty row below the content. */
@@ -276,16 +294,25 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
           if (!sheet) return false;
           if (!dispatch) return true;
           if (!cur || cur.p.group < 0) return insertCell(state, tr, sheet, { ghost: 0 }, 1);
-          const g = sheet.groups[cur.p.group];
-          const speech = sheet.columns[cur.p.col - 1];
-          const isBase = speech === baseSpeech(sheet.side);
-          // Fill a blank row below instead of pushing everything down.
-          const next = tr.doc.nodeAt(g.to);
-          const nextGap = Number(next?.attrs.gap) || 0;
-          if (next && nextGap > 0) tr.setNodeMarkup(g.to, undefined, { ...next.attrs, gap: nextGap - 1 });
-          tr.insert(g.to, blockNode(state, { kind: 'claim', speech: isBase ? null : speech, newRow: !isBase }));
-          tr.setSelection(TextSelection.create(tr.doc, g.to + 1)).scrollIntoView();
-          return true;
+          return startRowBelow(state, tr, cur.sheet, cur.p);
+        },
+      nextCell:
+        () =>
+        ({ state, tr, dispatch }) => {
+          const cur = currentPlacement(state);
+          if (!cur || cur.p.group < 0) return false;
+          const { sheet, p } = cur;
+          const below = sheet.groups[p.group + 1];
+          if (!dispatch) return true;
+          // Last row: start a new one in this column.
+          if (!below) return startRowBelow(state, tr, sheet, p);
+          // The cell below already has something: go to it. Otherwise make the empty cell in that row.
+          const list = below.cells.get(p.col);
+          if (list?.length) {
+            selectEnd(tr, list[0].pos);
+            return true;
+          }
+          return insertCell(state, tr, sheet, { group: p.group + 1 }, p.col);
         },
     };
   },
@@ -295,6 +322,8 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
       Tab: () => this.editor.commands.moveColumn(1),
       'Shift-Tab': () => this.editor.commands.moveColumn(-1),
       'Mod-Enter': () => this.editor.commands.newRow(),
+      // Alt/Option+Enter: another line inside this same cell (like Alt+Enter in a spreadsheet).
+      'Alt-Enter': () => this.editor.commands.splitBlock(),
     };
   },
 

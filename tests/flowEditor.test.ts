@@ -99,3 +99,117 @@ describe('deleting a sheet', () => {
     expect(e.state.doc.childCount).toBe(1);
   });
 });
+
+function press(e: Editor, combo: string) {
+  const parts = combo.split('-');
+  const key = parts[parts.length - 1];
+  const event = new KeyboardEvent('keydown', {
+    key,
+    code: key,
+    ctrlKey: parts.includes('Mod') || parts.includes('Ctrl'),
+    altKey: parts.includes('Alt'),
+    shiftKey: parts.includes('Shift'),
+    bubbles: true,
+    cancelable: true,
+  });
+  e.view.someProp('handleKeyDown', (f) => f(e.view, event));
+}
+/** Put the caret at the end of the line with this text. */
+function caretEndOf(e: Editor, text: string) {
+  const p = rowOf(e, text);
+  e.commands.setTextSelection(p.pos + 1 + e.state.doc.nodeAt(p.pos)!.content.size);
+}
+const caretLine = (e: Editor) => e.state.selection.$from.parent;
+const blockCount = (e: Editor) => e.state.doc.childCount;
+const rowCells = (e: Editor, speech: string) => sheet(e).placements.filter((p) => p.group >= 0 && e.state.doc.nodeAt(p.pos)!.attrs.speech === speech);
+
+describe('Enter in the flow drops you down to the next cell', () => {
+  const lines = (): Line[] => [
+    ['position', 'Case', { side: 'gov' }],
+    ['claim', 'C1'],
+    ['claim', 'LOC answer 1', { speech: 'LOC' }],
+    ['claim', 'C2'],
+    ['claim', 'LOC answer 2', { speech: 'LOC' }],
+  ];
+
+  it('in a later column, goes to the cell below in the same column instead of making this cell bigger', () => {
+    const e = make(lines());
+    const before = blockCount(e);
+    caretEndOf(e, 'LOC answer 1');
+    press(e, 'Enter');
+    expect(caretLine(e).textContent).toBe('LOC answer 2');
+    expect(blockCount(e)).toBe(before); // nothing was added: the cell did not grow
+  });
+
+  it('on the last row of a later column, starts a new row below in that column', () => {
+    const e = make(lines());
+    caretEndOf(e, 'LOC answer 2');
+    const before = blockCount(e);
+    press(e, 'Enter');
+    expect(blockCount(e)).toBe(before + 1);
+    const here = caretLine(e);
+    expect(here.attrs.speech).toBe('LOC');
+    expect(here.attrs.newRow).toBe(true); // a new row, not an extra line in the cell above
+    e.commands.insertContent('LOC answer 3');
+    expect(rowOf(e, 'LOC answer 3').row).toBeGreaterThan(rowOf(e, 'LOC answer 2').row);
+    expect(rowOf(e, 'LOC answer 3').col).toBe(rowOf(e, 'LOC answer 2').col);
+    expect(sheet(e).groups[sheet(e).groups.length - 1].cells.get(rowOf(e, 'LOC answer 2').col)?.length).toBe(1); // still one line per cell
+  });
+
+  it('when the row below has nothing in this column yet, makes the empty cell there', () => {
+    const e = make([['position', 'Case', { side: 'gov' }], ['claim', 'C1'], ['claim', 'LOC answer 1', { speech: 'LOC' }], ['claim', 'C2']]);
+    caretEndOf(e, 'LOC answer 1');
+    press(e, 'Enter');
+    const here = caretLine(e);
+    expect(here.attrs.speech).toBe('LOC');
+    expect(here.textContent).toBe('');
+    e.commands.insertContent('Answer to C2');
+    expect(rowOf(e, 'Answer to C2').row).toBe(rowOf(e, 'C2').row); // in C2's row, not a new row
+  });
+
+  it('in the first column, goes to the existing claim below instead of inserting a row', () => {
+    const e = make(lines());
+    const before = blockCount(e);
+    caretEndOf(e, 'C1');
+    press(e, 'Enter');
+    expect(caretLine(e).textContent).toBe('C2');
+    expect(blockCount(e)).toBe(before);
+  });
+
+  it('on the last claim, starts a new claim row', () => {
+    const e = make(lines());
+    caretEndOf(e, 'C2');
+    const before = blockCount(e);
+    press(e, 'Enter');
+    expect(blockCount(e)).toBe(before + 1);
+    e.commands.insertContent('C3');
+    expect(rowOf(e, 'C3').row).toBeGreaterThan(rowOf(e, 'C2').row);
+    expect(rowOf(e, 'C3').col).toBe(1);
+  });
+
+  it('Alt+Enter adds another line inside the same cell (to make a cell bigger on purpose)', () => {
+    const e = make(lines());
+    caretEndOf(e, 'LOC answer 1');
+    const before = blockCount(e);
+    press(e, 'Alt-Enter');
+    expect(blockCount(e)).toBe(before + 1);
+    e.commands.insertContent('second line');
+    expect(rowOf(e, 'second line').group).toBe(rowOf(e, 'LOC answer 1').group); // same row of the flow, same cell
+    expect(rowOf(e, 'second line').col).toBe(rowOf(e, 'LOC answer 1').col);
+    const g = sheet(e).groups[0];
+    expect(g.cells.get(rowOf(e, 'LOC answer 1').col)?.length).toBe(2);
+  });
+
+  it('Ctrl/Cmd+Enter still starts a new row right below the current one', () => {
+    const e = make(lines());
+    caretEndOf(e, 'C1');
+    press(e, 'Mod-Enter');
+    e.commands.insertContent('Inserted');
+    expect(rowOf(e, 'Inserted').row).toBe(rowOf(e, 'C1').row + 1);
+  });
+
+  it('rowCells helper sanity', () => {
+    const e = make(lines());
+    expect(rowCells(e, 'LOC')).toHaveLength(2);
+  });
+});
