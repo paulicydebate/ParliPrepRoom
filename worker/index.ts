@@ -5,7 +5,6 @@
 import { renderCheckPage } from './checkPage';
 import { guidePage } from './guidePage';
 import { privacyPage } from './legal';
-import { summarizeRecord } from './summary';
 import { renderTabroomPage } from './tabroomPage';
 import type { DocRecord, Role } from './directory';
 import { FILES } from './static.gen';
@@ -209,7 +208,7 @@ export default {
         return html(renderCheckPage({ doc: d, team: d.teamName, owner: d.ownerName, partners: d.partnerNames, record, withText: true, url: url.toString(), tz, director: true }));
       }
       const rows = await Promise.all(
-        found.docs.map(async (d) => ({ doc: d, summary: summarizeRecord(await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).record(false)) })),
+        found.docs.map(async (d) => ({ doc: d, summary: await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).summary() })),
       );
       return html(renderTabroomPage(found.tournament, rows, td[1], tz));
     }
@@ -288,7 +287,7 @@ export default {
       if (!list) return fail('Only coaches can see this', 403);
       const rows = await Promise.all(
         list.map(async (d) => {
-          const record = await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).record(false);
+          const summary = await env.DOC_ROOM.get(env.DOC_ROOM.idFromName(d.id)).summary();
           return {
             id: d.id,
             title: d.title,
@@ -298,7 +297,7 @@ export default {
             createdAt: d.createdAt,
             deletedAt: d.deletedAt,
             deletedByName: d.deletedByName,
-            summary: summarizeRecord(record),
+            summary,
           };
         }),
       );
@@ -404,7 +403,7 @@ export default {
         const update = await room.state(seq ? Number(seq) : undefined);
         return new Response(update, { headers: { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' } });
       }
-      if (sub === '/log') return json({ updates: await room.log() });
+      if (sub === '/log') return json({ updates: await room.log(Number(url.searchParams.get('since')) || 0) });
     }
 
     // ---------- Live sync ----------

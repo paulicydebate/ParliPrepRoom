@@ -1,6 +1,6 @@
 # Server efficiency plan
 
-Written 2026-11-04 by Claude. Goal: keep what the app does (live co-editing with cursors, the typed-by-hand record, check pages, history and replay, coach view, invitations) while sending the server far less. **Step 1 is built, measured and deployed (2026-11-04); steps 2 and 3 are not.** Figures marked **measured** come from `scripts/measure-traffic.cjs` (real browsers against a local server); figures marked **projected** are estimates from those measurements and need re-measuring after each change.
+Written 2026-11-04 by Claude. Goal: keep what the app does (live co-editing with cursors, the typed-by-hand record, check pages, history and replay, coach view, invitations) while sending the server far less. **Step 1 is built, measured and deployed (2026-11-04); step 2 (F, G, H, I, J and the row-counter fix) is built and tested 2026-11-05, awaiting deploy; step 3 is not.** Figures marked **measured** come from `scripts/measure-traffic.cjs` (real browsers against a local server); figures marked **projected** are estimates from those measurements and need re-measuring after each change.
 
 ## Short version
 
@@ -53,7 +53,9 @@ Two students in one round doc. Ann types 200 characters at 5 a second; Bea only 
 | **D. One directory call per request.** A single `bootstrap(token, space)` returns user, docs and invitations (and cache the session lookup for a few seconds in the Worker). | 3 billed calls to 1 per poll | None | `worker/directory.ts`, `worker/index.ts`. |
 | **E. Poll smarter.** 30 s while the person has done something in the last 2 minutes, 2 minutes otherwise; add random jitter; send a version number and answer "unchanged" with an empty reply; never poll while hidden (already done). | about 60 to 75% of polling | Invitations and shared docs can take up to 2 minutes to appear for an idle tab (instant after any click, or after step 3) | `src/ui/App.tsx`, `worker/index.ts`. |
 
-### Step 2: batching (about 2 to 3 days; small change in feel, needs care)
+### Step 2: batching (BUILT 2026-11-05, not yet deployed; see HANDOFF.md)
+
+Measured in real browsers: messages per typed character 1.41 to 0.91; two people typing at once converge to identical text; 60 typed characters saved as 7 rows. Client batching can be switched off with `localStorage['pp-batch']='0'`.
 
 | Change | Saves | Efficacy impact |
 |---|---|---|

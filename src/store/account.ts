@@ -360,8 +360,20 @@ export interface LogUpdate {
   data: string;
 }
 
+// Saved edits never change, so keep what was fetched (in memory only, so a
+// shared computer keeps nothing) and ask the server just for newer ones.
+const logCache = new Map<string, LogUpdate[]>();
+export const clearLogCache = () => logCache.clear();
+
 /** Every saved edit to a doc, with who and when (for named history and replay). */
-export const docLog = (id: string) => api<{ updates: LogUpdate[] }>(`/api/docs/${id}/log`).then((r) => r.updates);
+export async function docLog(id: string): Promise<LogUpdate[]> {
+  const have = logCache.get(id) ?? [];
+  const since = have.length ? have[have.length - 1].seq : 0;
+  const { updates } = await api<{ updates: LogUpdate[] }>(`/api/docs/${id}/log${since ? `?since=${since}` : ''}`);
+  const all = updates.length ? [...have, ...updates] : have;
+  logCache.set(id, all);
+  return all;
+}
 
 export const createTournament = (name: string) => api<Tournament>('/api/tournaments', { method: 'POST', json: { name } });
 export const myTournaments = () => api<{ tournaments: Tournament[] }>('/api/tournaments').then((r) => r.tournaments);

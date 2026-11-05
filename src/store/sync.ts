@@ -2,10 +2,10 @@ import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import { useEffect, useState } from 'react';
 import { WebsocketProvider } from 'y-websocket';
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import { createSignal } from './emitter';
 import { getProfile } from '../settings/profile';
-import { slimTraffic } from './presence';
+import { batchEdits, batchingEnabled, slimTraffic } from './presence';
 
 // Live sync with the ParliPrepRoom server (Cloudflare). Only used when the
 // page is served by that server and someone is signed in (see account.ts);
@@ -24,6 +24,7 @@ export function connect(docId: string, doc: Y.Doc): WebsocketProvider {
   const provider = new WebsocketProvider(base, docId, doc);
   provider.awareness.setLocalStateField('user', { name: who.name || 'Unnamed', color: colorFor(who.deviceId) });
   slimTraffic(provider as never, doc);
+  if (batchingEnabled()) batchEdits(provider as never, doc as never, (u) => Y.mergeUpdates(u), undefined, undefined);
   watchConnection(provider, doc);
   guardReconnects(provider, docId, doc);
   return provider;

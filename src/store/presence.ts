@@ -174,3 +174,78 @@ export function slimTraffic(provider: KeepAliveProvider & { awareness: Awareness
     stopKeepAlive();
   });
 }
+
+// ---------- Batching our own edits (EFFICIENCY.md step 2F) ----------
+// y-websocket sends one message per key press. This merges the updates made
+// within BATCH_MS into one (Y.mergeUpdates; the content is identical, so the
+// merge rules for two people editing at once are untouched) and sends it
+// once. It flushes when the tab is hidden or closed. Off switch: set
+// localStorage 'pp-batch' to '0' (or call setBatching(false)).
+
+export const BATCH_MS = 300;
+
+export function batchingEnabled(): boolean {
+  try {
+    return localStorage.getItem('pp-batch') !== '0';
+  } catch {
+    return true;
+  }
+}
+
+export function setBatching(on: boolean) {
+  try {
+    localStorage.setItem('pp-batch', on ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
+interface BatchProvider {
+  _updateHandler: (update: Uint8Array, origin: unknown) => void;
+}
+interface BatchDoc {
+  on(e: string, f: (...a: never[]) => void): void;
+  off(e: string, f: (...a: never[]) => void): void;
+}
+
+/** Replace the provider's per-update sender with one that merges bursts. */
+export function batchEdits(
+  provider: BatchProvider,
+  doc: BatchDoc,
+  merge: (updates: Uint8Array[]) => Uint8Array,
+  ms = BATCH_MS,
+  t: Timers = realTimers,
+) {
+  const original = provider._updateHandler;
+  let queue: Uint8Array[] = [];
+  let timer: unknown = null;
+  const flush = () => {
+    if (timer !== null) t.clearTimeout(timer);
+    timer = null;
+    if (!queue.length) return;
+    const update = queue.length === 1 ? queue[0] : merge(queue);
+    queue = [];
+    original(update, null);
+  };
+  const handler = (update: Uint8Array, origin: unknown) => {
+    // Updates that came from the server (origin === provider) are never sent back.
+    if (origin === provider) return;
+    queue.push(update);
+    if (timer === null) timer = t.setTimeout(flush, ms);
+  };
+  doc.off('update', original as never);
+  doc.on('update', handler as never);
+  const onHide = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') flush();
+  };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onHide);
+  if (typeof window !== 'undefined') window.addEventListener('pagehide', flush);
+  const stop = () => {
+    flush();
+    doc.off('update', handler as never);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide);
+    if (typeof window !== 'undefined') window.removeEventListener('pagehide', flush);
+  };
+  doc.on('destroy', stop);
+  return { flush, stop };
+}

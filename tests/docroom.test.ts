@@ -44,18 +44,27 @@ const rows = () => sql.exec('SELECT COUNT(*) AS n FROM updates').toArray()[0].n 
 const message = (type: number, ...rest: number[]) => new Uint8Array([type, ...rest]).buffer as ArrayBuffer;
 
 describe('saving edits', () => {
-  it('saves each edit as a row', async () => {
+  // (Edits from one person within a second are saved together as one row; see docroom-batching.test.ts.
+  // `room.state()` saves anything waiting, so these tests ask for it between steps.)
+  it('saves what is typed, and saves it by the time the state is asked for', async () => {
     await room.webSocketMessage(ws, edit('hello'));
     await room.webSocketMessage(ws, edit('world'));
-    expect(rows()).toBe(2);
+    await room.state();
+    expect(rows()).toBe(1); // both edits were from the same person within the second
+    const d = new Y.Doc();
+    Y.applyUpdate(d, await room.state());
+    expect(d.getText('t').toString().length).toBe(10);
   });
 
   it('one failed save does not stop later saves, and the failure is recorded', async () => {
     await room.webSocketMessage(ws, edit('one'));
+    await room.state();
     sql.failWhen = (q) => q.includes('INSERT INTO updates');
     await room.webSocketMessage(ws, edit('lost'));
+    await room.state();
     sql.failWhen = null;
     await room.webSocketMessage(ws, edit('three'));
+    await room.state();
     expect(rows()).toBe(2); // 'one' and 'three'; 'lost' could not be saved
     const events = sql.exec("SELECT kind FROM events WHERE kind = 'save-failed'").toArray();
     expect(events).toHaveLength(1);
@@ -67,6 +76,7 @@ describe('saving edits', () => {
   it('still reports a failed save when even the note about it cannot be stored', async () => {
     sql.failWhen = (q) => q.includes('INSERT INTO updates') || q.includes('INSERT INTO events');
     await room.webSocketMessage(ws, edit('lost'));
+    await room.state();
     sql.failWhen = null;
     const record = await room.record(false);
     expect(record.events.filter((e) => e.kind === 'save-failed')).toHaveLength(1);
@@ -76,6 +86,7 @@ describe('saving edits', () => {
 describe('small messages', () => {
   it('cursor updates and keep-alives do not reload the document history', async () => {
     await room.webSocketMessage(ws, edit('some typing'));
+    await room.state();
     // A new room object is what a woken-up (hibernated) room looks like.
     const woken = new DocRoom({ ...ctx } as never, {} as never);
     sql.log.length = 0;
@@ -87,9 +98,11 @@ describe('small messages', () => {
 
   it('a typed edit after waking still loads the history first', async () => {
     await room.webSocketMessage(ws, edit('before'));
+    await room.state();
     const woken = new DocRoom({ ...ctx } as never, {} as never);
     sql.log.length = 0;
     await woken.webSocketMessage(ws, edit('after'));
+    await woken.state();
     expect(sql.log.some((q) => q.includes('SELECT data FROM updates'))).toBe(true);
     expect(rows()).toBe(2);
   });
@@ -105,5 +118,50 @@ describe('keep-alive', () => {
     new DocRoom(c as never, {} as never);
     expect(c.autoResponses).toEqual([new Pair('ping', 'pong')]);
     delete (globalThis as unknown as { WebSocketRequestResponsePair?: unknown }).WebSocketRequestResponsePair;
+  });
+});
+
+describe('saved-edits table without the extra counter', () => {
+  const OLD_UPDATES = `CREATE TABLE updates (seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, user_id TEXT NOT NULL, user TEXT NOT NULL, via TEXT NOT NULL, data BLOB NOT NULL, prev TEXT NOT NULL, hash TEXT NOT NULL)`;
+  const OLD_EVENTS = `CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, client_at INTEGER NOT NULL, user_id TEXT NOT NULL, user TEXT NOT NULL, kind TEXT NOT NULL, n INTEGER)`;
+  const layout = (c: ReturnType<typeof newContext>, table: string) => String(c.storage.sql.exec('SELECT sql FROM sqlite_master WHERE name = ?', table).toArray()[0].sql);
+
+  it('new rooms are made without it', () => {
+    const c = newContext();
+    new DocRoom(c as never, {} as never);
+    expect(layout(c, 'updates')).not.toContain('AUTOINCREMENT');
+    expect(layout(c, 'events')).not.toContain('AUTOINCREMENT');
+  });
+
+  it('existing rooms are converted, keeping every row, in order, and numbering carries on', async () => {
+    const c = newContext();
+    c.storage.sql.exec(OLD_UPDATES);
+    c.storage.sql.exec(OLD_EVENTS);
+    const doc = new Y.Doc();
+    const updates: Uint8Array[] = [];
+    doc.on('update', (u: Uint8Array) => updates.push(u));
+    for (const ch of ['a', 'b', 'c']) doc.getText('t').insert(doc.getText('t').length, ch);
+    updates.forEach((u, i) => c.storage.sql.exec('INSERT INTO updates (at, user_id, user, via, data, prev, hash) VALUES (?, ?, ?, ?, ?, ?, ?)', 1000 + i, 'u1', 'Ann', 'live', u, `p${i}`, `h${i}`));
+    c.storage.sql.exec("INSERT INTO events (at, client_at, user_id, user, kind, n) VALUES (5, 5, 'u1', 'Ann', 'away', NULL)");
+    const room = new DocRoom(c as never, {} as never);
+    expect(layout(c, 'updates')).not.toContain('AUTOINCREMENT');
+    expect(layout(c, 'events')).not.toContain('AUTOINCREMENT');
+    expect(c.storage.sql.exec('SELECT seq, at, user, hash FROM updates ORDER BY seq').toArray()).toEqual([
+      { seq: 1, at: 1000, user: 'Ann', hash: 'h0' },
+      { seq: 2, at: 1001, user: 'Ann', hash: 'h1' },
+      { seq: 3, at: 1002, user: 'Ann', hash: 'h2' },
+    ]);
+    expect(c.storage.sql.exec('SELECT kind FROM events').toArray()).toEqual([{ kind: 'away' }]);
+    await room.webSocketMessage(ws, edit('new'));
+    await room.state();
+    expect(c.storage.sql.exec('SELECT MAX(seq) AS m FROM updates').toArray()[0].m).toBe(4);
+  });
+
+  it('is left alone once converted (no repeated copying)', () => {
+    const c = newContext();
+    new DocRoom(c as never, {} as never);
+    c.storage.sql.log.length = 0;
+    new DocRoom(c as never, {} as never);
+    expect(c.storage.sql.log.some((q) => q.includes('INSERT INTO updates_new') || q.includes('DROP TABLE'))).toBe(false);
   });
 });

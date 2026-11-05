@@ -4,6 +4,7 @@ import * as encoding from 'lib0/encoding';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
 import { measureUpdate } from './measure';
+import { LARGE_EDIT, isStarting, summarizeRecord, type RecordSummary } from './summary';
 
 export { measureUpdate };
 
@@ -31,6 +32,13 @@ const MSG_PING = 99;
 const MAX_AWARENESS_PER_SEC = 12;
 const CUT_OFF_PER_SEC = 100;
 const CUT_OFF_AFTER_SECONDS = 5;
+/** Edits from one person are saved together as one row, this often (EFFICIENCY.md step 2). */
+const FLUSH_MS = 1_000;
+/** ...or sooner if this many pile up. */
+const MAX_BATCH = 200;
+/** A snapshot of the whole document is stored every this many saved rows, so a woken room need not re-read them all. */
+const SNAPSHOT_EVERY = 200;
+const GENESIS = '0'.repeat(64);
 /** Close code the app understands as "back off for a minute". */
 export const TOO_MANY = 4429;
 
@@ -74,16 +82,42 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
+const UPDATES_TABLE = (name: string, ifNotExists = '') => `CREATE TABLE ${ifNotExists}${name} (
+  seq INTEGER PRIMARY KEY,
+  at INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  user TEXT NOT NULL,
+  via TEXT NOT NULL,
+  data BLOB NOT NULL,
+  prev TEXT NOT NULL,
+  hash TEXT NOT NULL
+)`;
+const EVENTS_TABLE = (name: string, ifNotExists = '') => `CREATE TABLE ${ifNotExists}${name} (
+  id INTEGER PRIMARY KEY,
+  at INTEGER NOT NULL,
+  client_at INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  user TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  n INTEGER
+)`;
+
 const hex = (buf: ArrayBuffer) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 
 export class DocRoom extends DurableObject {
   private doc: Y.Doc | null = null;
   /** How the message being handled arrived (see RecordUpdate.via). */
   private via = 'live';
-  private lastHash = '0'.repeat(64);
+  private lastHash = GENESIS;
   private writes: Promise<void> = Promise.resolve();
   /** Edits that could not be saved and could not even be noted in the database (kept until the room restarts). */
   private unnotedFailures = 0;
+  /** Edits received but not yet saved: one entry per person and way of arriving ('live' or 'catchup'). */
+  private pending = new Map<string, { who: Who; via: string; at: number; updates: Uint8Array[] }>();
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Rows queued to be written (so a snapshot is only taken when the document equals the saved rows). */
+  private inFlight = 0;
+  private rowsSinceSnapshot = 0;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -91,36 +125,57 @@ export class DocRoom extends DurableObject {
     // without waking this room or billing a request (see EFFICIENCY.md).
     if (typeof WebSocketRequestResponsePair !== 'undefined') ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
     ctx.blockConcurrencyWhile(async () => {
-      this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS updates (
-        seq INTEGER PRIMARY KEY AUTOINCREMENT,
-        at INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        user TEXT NOT NULL,
-        via TEXT NOT NULL,
-        data BLOB NOT NULL,
-        prev TEXT NOT NULL,
-        hash TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        at INTEGER NOT NULL,
-        client_at INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        user TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        n INTEGER
-      )`);
+      const sql = this.ctx.storage.sql;
+      sql.exec(UPDATES_TABLE('updates', 'IF NOT EXISTS '));
+      sql.exec(EVENTS_TABLE('events', 'IF NOT EXISTS '));
+      // Rooms made before 2026-11-05 used AUTOINCREMENT, which makes SQLite keep a separate counter row and
+      // (it appears) doubles the rows billed per saved edit. Rebuild those tables once without it.
+      this.rebuildWithoutAutoincrement('updates', UPDATES_TABLE);
+      this.rebuildWithoutAutoincrement('events', EVENTS_TABLE);
+      sql.exec('CREATE TABLE IF NOT EXISTS snapshots (seq INTEGER PRIMARY KEY, data BLOB NOT NULL)');
+      sql.exec('CREATE TABLE IF NOT EXISTS stats (id INTEGER PRIMARY KEY, json TEXT NOT NULL)');
       const last = this.ctx.storage.sql.exec('SELECT hash FROM updates ORDER BY seq DESC LIMIT 1').toArray()[0];
       if (last) this.lastHash = String(last.hash);
     });
   }
 
+  /** One-time: copy a table that was made with AUTOINCREMENT into one without it, keeping every row and its number. */
+  private rebuildWithoutAutoincrement(table: string, create: (name: string) => string) {
+    const sql = this.ctx.storage.sql;
+    const row = sql.exec("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", table).toArray()[0];
+    if (!row || !String(row.sql).includes('AUTOINCREMENT')) return;
+    const run = () => {
+      sql.exec(create(`${table}_new`));
+      sql.exec(`INSERT INTO ${table}_new SELECT * FROM ${table}`);
+      sql.exec(`DROP TABLE ${table}`);
+      sql.exec(`ALTER TABLE ${table}_new RENAME TO ${table}`);
+    };
+    const storage = this.ctx.storage as unknown as { transactionSync?: (fn: () => void) => void };
+    if (storage.transactionSync) storage.transactionSync(run);
+    else run();
+  }
+
   private loadDoc(): Y.Doc {
     if (this.doc) return this.doc;
-    const doc = new Y.Doc();
-    for (const row of this.ctx.storage.sql.exec('SELECT data FROM updates ORDER BY seq')) {
-      Y.applyUpdate(doc, new Uint8Array(row.data as ArrayBuffer));
+    const sql = this.ctx.storage.sql;
+    let doc = new Y.Doc();
+    let from = 0;
+    // Start from the newest snapshot (the whole document at some row number), then add the newer rows.
+    const snap = sql.exec('SELECT seq, data FROM snapshots ORDER BY seq DESC LIMIT 1').toArray()[0];
+    if (snap) {
+      try {
+        Y.applyUpdate(doc, new Uint8Array(snap.data as ArrayBuffer));
+        from = Number(snap.seq);
+      } catch {
+        doc = new Y.Doc(); // unreadable snapshot: replay everything instead
+      }
     }
+    let tail = 0;
+    for (const row of sql.exec('SELECT data FROM updates WHERE seq > ? ORDER BY seq', from)) {
+      Y.applyUpdate(doc, new Uint8Array(row.data as ArrayBuffer));
+      tail++;
+    }
+    this.rowsSinceSnapshot = tail;
     doc.on('update', (update: Uint8Array, origin: unknown) => this.onUpdate(update, origin));
     this.doc = doc;
     return doc;
@@ -129,44 +184,94 @@ export class DocRoom extends DurableObject {
   private onUpdate(update: Uint8Array, origin: unknown) {
     const ws = origin instanceof WebSocket ? origin : null;
     const who: Who = (ws?.deserializeAttachment() as Who | null) ?? { id: 'server', name: 'server' };
-    const at = Date.now();
     const via = ws ? this.via : 'server';
-    this.writes = this.writes.then(async () => {
-      const prev = this.lastHash;
-      const head = new TextEncoder().encode(`${prev}|${at}|${who.id}|${who.name}|${via}|`);
-      const buf = new Uint8Array(head.length + update.length);
-      buf.set(head);
-      buf.set(update, head.length);
-      const hash = hex(await crypto.subtle.digest('SHA-256', buf));
-      this.ctx.storage.sql.exec(
-        'INSERT INTO updates (at, user_id, user, via, data, prev, hash) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        at,
-        who.id,
-        who.name,
-        via,
-        update,
-        prev,
-        hash,
-      );
-      this.lastHash = hash;
-    })
-      // One failed save must not stop every later one (a rejected promise in
-      // this chain would skip all the saves after it). Say so in the record
-      // instead, so the check page shows that something could not be saved.
-      .catch((e: unknown) => {
-        console.error('Could not save an edit:', String(e));
-        try {
-          this.ctx.storage.sql.exec("INSERT INTO events (at, client_at, user_id, user, kind, n) VALUES (?, ?, 'server', 'server', 'save-failed', 1)", Date.now(), Date.now());
-        } catch {
-          this.unnotedFailures++;
-        }
-      });
+    // Save one row per person per second, not one per key press. The edit is applied and passed on at
+    // once; only the saving waits, and it is saved before anyone asks for the record, history or state.
+    const key = `${who.id}|${via}`;
+    let batch = this.pending.get(key);
+    if (!batch) this.pending.set(key, (batch = { who, via, at: Date.now(), updates: [] }));
+    batch.updates.push(update);
+    if (batch.updates.length >= MAX_BATCH) void this.flush();
+    else if (this.flushTimer === null) this.flushTimer = setTimeout(() => void this.flush(), FLUSH_MS);
     // Pass the change on to everyone else in the room.
     const enc = encoding.createEncoder();
     encoding.writeVarUint(enc, MSG_SYNC);
     syncProtocol.writeUpdate(enc, update);
     const msg = encoding.toUint8Array(enc);
     for (const peer of this.ctx.getWebSockets()) if (peer !== ws && !(peer.deserializeAttachment() as Who | null)?.revoked) peer.send(msg);
+  }
+
+  /** Save everything waiting (in the order each person started), and resolve when it is all written. */
+  private flush(): Promise<void> {
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    const batches = [...this.pending.values()].sort((a, b) => a.at - b.at);
+    this.pending.clear();
+    for (const batch of batches) {
+      this.inFlight++;
+      this.writes = this.writes.then(async () => {
+        try {
+          await this.writeBatch(batch);
+        } catch (e) {
+          // One failed save must not stop every later one (a rejected promise in this chain would skip all
+          // the saves after it). Say so in the record instead, so the check page shows that something
+          // could not be saved.
+          console.error('Could not save an edit:', String(e));
+          try {
+            this.ctx.storage.sql.exec("INSERT INTO events (at, client_at, user_id, user, kind, n) VALUES (?, ?, 'server', 'server', 'save-failed', 1)", Date.now(), Date.now());
+          } catch {
+            this.unnotedFailures++;
+          }
+        } finally {
+          this.inFlight--;
+        }
+        this.maybeSnapshot();
+      });
+    }
+    return this.writes;
+  }
+
+  /** One row: this person's edits since their last row, merged into one update, chained to the row before. */
+  private async writeBatch(batch: { who: Who; via: string; at: number; updates: Uint8Array[] }) {
+    const update = batch.updates.length === 1 ? batch.updates[0] : Y.mergeUpdates(batch.updates);
+    const prev = this.lastHash;
+    const head = new TextEncoder().encode(`${prev}|${batch.at}|${batch.who.id}|${batch.who.name}|${batch.via}|`);
+    const buf = new Uint8Array(head.length + update.length);
+    buf.set(head);
+    buf.set(update, head.length);
+    const hash = hex(await crypto.subtle.digest('SHA-256', buf));
+    this.ctx.storage.sql.exec(
+      'INSERT INTO updates (at, user_id, user, via, data, prev, hash) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      batch.at,
+      batch.who.id,
+      batch.who.name,
+      batch.via,
+      update,
+      prev,
+      hash,
+    );
+    this.lastHash = hash;
+    this.rowsSinceSnapshot++;
+  }
+
+  /**
+   * Every so often, store the whole document. Only when nothing is waiting or being written, so the
+   * document is exactly what the saved rows add up to; during non-stop typing it simply waits for a pause.
+   */
+  private maybeSnapshot() {
+    if (!this.doc || this.rowsSinceSnapshot < SNAPSHOT_EVERY || this.inFlight > 0 || this.pending.size > 0) return;
+    try {
+      const sql = this.ctx.storage.sql;
+      const last = sql.exec('SELECT seq FROM updates ORDER BY seq DESC LIMIT 1').toArray()[0];
+      if (!last) return;
+      sql.exec('INSERT OR REPLACE INTO snapshots (seq, data) VALUES (?, ?)', Number(last.seq), Y.encodeStateAsUpdate(this.doc));
+      sql.exec('DELETE FROM snapshots WHERE seq < ?', Number(last.seq));
+      this.rowsSinceSnapshot = 0;
+    } catch (e) {
+      console.error('Could not save a snapshot:', String(e));
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -245,7 +350,7 @@ export class DocRoom extends DurableObject {
       // Connection check from the app: answered only after every earlier
       // message from this connection is saved, so the reply also means
       // "your edits so far are on the server".
-      await this.writes;
+      await this.flush();
       ws.send(data);
       return;
     } else if (type === MSG_AWARENESS) {
@@ -257,6 +362,7 @@ export class DocRoom extends DurableObject {
 
   async webSocketClose(ws: WebSocket, code: number) {
     this.rate.delete(ws);
+    void this.flush();
     try {
       ws.close(code === 1005 ? 1000 : code, 'closing');
     } catch {
@@ -265,6 +371,7 @@ export class DocRoom extends DurableObject {
   }
 
   async webSocketError(ws: WebSocket) {
+    void this.flush();
     try {
       ws.close(1011, 'error');
     } catch {
@@ -274,7 +381,7 @@ export class DocRoom extends DurableObject {
 
   /** The document as it is now, or as it was after update number `seq`, as one Yjs update. */
   async state(seq?: number): Promise<Uint8Array> {
-    await this.writes;
+    await this.flush();
     if (seq === undefined) return Y.encodeStateAsUpdate(this.loadDoc());
     const doc = new Y.Doc();
     for (const row of this.ctx.storage.sql.exec('SELECT data FROM updates WHERE seq <= ? ORDER BY seq', seq)) {
@@ -284,10 +391,10 @@ export class DocRoom extends DurableObject {
   }
 
   /** Every saved update with who and when, for version history and replay in the app. */
-  async log(): Promise<{ seq: number; at: number; userId: string; name: string; via: string; data: string }[]> {
-    await this.writes;
+  async log(since = 0): Promise<{ seq: number; at: number; userId: string; name: string; via: string; data: string }[]> {
+    await this.flush();
     return this.ctx.storage.sql
-      .exec('SELECT seq, at, user_id, user, via, data FROM updates ORDER BY seq')
+      .exec('SELECT seq, at, user_id, user, via, data FROM updates WHERE seq > ? ORDER BY seq', since)
       .toArray()
       .map((r) => ({
         seq: Number(r.seq),
@@ -326,6 +433,9 @@ export class DocRoom extends DurableObject {
 
   /** Erase this document's contents and record (account deletion). */
   async wipe(): Promise<void> {
+    if (this.flushTimer !== null) clearTimeout(this.flushTimer);
+    this.flushTimer = null;
+    this.pending.clear();
     await this.writes;
     for (const ws of this.ctx.getWebSockets()) {
       try {
@@ -355,9 +465,9 @@ export class DocRoom extends DurableObject {
    * reported events, plus whether the hash chain checks out.
    */
   async record(withText: boolean): Promise<{ updates: RecordUpdate[]; events: RecordEvent[]; intact: boolean; seal: string | null }> {
-    await this.writes;
+    await this.flush();
     const updates: RecordUpdate[] = [];
-    let prev = '0'.repeat(64);
+    let prev = GENESIS;
     let intact = true;
     const chars = new Map<string, string>();
     for (const row of this.ctx.storage.sql.exec('SELECT * FROM updates ORDER BY seq')) {
@@ -388,4 +498,86 @@ export class DocRoom extends DurableObject {
     const seal = updates.length ? `${prev.slice(0, 4)}-${prev.slice(4, 8)}`.toUpperCase() : null;
     return { updates, events, intact, seal };
   }
+
+  /**
+   * The one-line health summary for the coach view and tab room, without replaying the record: counts
+   * are kept in a small table and only rows saved since the last call are read (the first call, for a
+   * doc that already has history, reads it once). Same result as summarizing the full record.
+   */
+  async summary(): Promise<RecordSummary> {
+    await this.flush();
+    const st = await this.catchUpStats();
+    const events = this.ctx.storage.sql
+      .exec('SELECT * FROM events ORDER BY id')
+      .toArray()
+      .map((r) => ({ at: Number(r.at), clientAt: Number(r.client_at), userId: String(r.user_id), name: String(r.user), kind: String(r.kind), n: r.n === null ? null : Number(r.n) }));
+    if (this.unnotedFailures) events.push({ at: Date.now(), clientAt: Date.now(), userId: 'server', name: 'server', kind: 'save-failed', n: this.unnotedFailures });
+    const seal = st.lastSeq > 0 ? `${st.prevHash.slice(0, 4)}-${st.prevHash.slice(4, 8)}`.toUpperCase() : null;
+    // The parts that come from events (blocked pastes, time away, ...) are worked out from the events;
+    // the parts that come from the saved edits come from the running counts.
+    const base = summarizeRecord({ updates: [], events, intact: st.chainOk, seal });
+    return {
+      ...base,
+      firstAt: st.firstAt,
+      lastAt: st.lastAt,
+      typedLive: st.typedLive,
+      catchup: st.catchup,
+      large: st.large,
+      people: Object.values(st.people).sort((a, b) => b.typed - a.typed),
+      flags: base.flags + st.large,
+    };
+  }
+
+  private async catchUpStats(): Promise<RoomStats> {
+    const sql = this.ctx.storage.sql;
+    const saved = sql.exec('SELECT json FROM stats WHERE id = 1').toArray()[0];
+    let st: RoomStats = emptyStats();
+    if (saved) {
+      try {
+        st = JSON.parse(String(saved.json)) as RoomStats;
+      } catch {
+        st = emptyStats();
+      }
+    }
+    const rows = sql.exec('SELECT seq, at, user_id, user, via, data, prev, hash FROM updates WHERE seq > ? ORDER BY seq', st.lastSeq).toArray();
+    if (!rows.length) return st;
+    for (const row of rows) {
+      const data = new Uint8Array(row.data as ArrayBuffer);
+      // Check the chain as we go (each row's hash covers the row before it).
+      const head = new TextEncoder().encode(`${row.prev}|${row.at}|${row.user_id}|${row.user}|${row.via}|`);
+      const buf = new Uint8Array(head.length + data.length);
+      buf.set(head);
+      buf.set(data, head.length);
+      if (row.prev !== st.prevHash || hex(await crypto.subtle.digest('SHA-256', buf)) !== row.hash) st.chainOk = false;
+      st.prevHash = String(row.hash);
+      const at = Number(row.at);
+      const inserted = measureUpdate(data, new Map()).text.length;
+      if (st.firstAt === null) st.firstAt = at;
+      st.lastAt = at;
+      const userId = String(row.user_id);
+      const person = (st.people[userId] ??= { name: String(row.user), typed: 0 });
+      person.typed += inserted;
+      if (row.via === 'live') {
+        st.typedLive += inserted;
+        if (inserted > LARGE_EDIT) st.large++;
+      } else if (!isStarting({ via: String(row.via), at } as never, st.firstAt)) st.catchup += inserted;
+      st.lastSeq = Number(row.seq);
+    }
+    sql.exec('INSERT OR REPLACE INTO stats (id, json) VALUES (1, ?)', JSON.stringify(st));
+    return st;
+  }
 }
+
+/** Running counts over the saved edits (see DocRoom.summary). */
+interface RoomStats {
+  lastSeq: number;
+  prevHash: string;
+  chainOk: boolean;
+  firstAt: number | null;
+  lastAt: number | null;
+  typedLive: number;
+  catchup: number;
+  large: number;
+  people: Record<string, { name: string; typed: number }>;
+}
+const emptyStats = (): RoomStats => ({ lastSeq: 0, prevHash: GENESIS, chainOk: true, firstAt: null, lastAt: null, typedLive: 0, catchup: 0, large: 0, people: {} });
