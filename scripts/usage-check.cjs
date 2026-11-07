@@ -16,7 +16,10 @@ const LIMITS = {
 };
 
 const now = new Date();
-const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+// Count from the day the paid plan started (usage before that was on the Free plan and is not billed).
+const PAID_SINCE = process.env.PAID_SINCE || '2026-11-05';
+const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+const from = new Date(Math.max(monthStart.getTime(), Date.parse(PAID_SINCE + 'T00:00:00Z'))).toISOString();
 const to = now.toISOString();
 const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
 
@@ -50,7 +53,7 @@ const total = (rows, k) => (rows || []).reduce((s, r) => s + (r.sum?.[k] || 0), 
   ];
   const monthFrac = now.getUTCDate() / new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
   let over = false;
-  console.log(`Cloudflare usage ${from.slice(0, 10)} to now (${(monthFrac * 100).toFixed(0)}% of the month gone); warning line ${WARN}% of the monthly allowance`);
+  console.log(`Cloudflare usage since ${from.slice(0, 10)} (paid plan) to now (${(monthFrac * 100).toFixed(0)}% of the month gone); warning line ${WARN}% of the monthly allowance`);
   for (const [name, m, d] of rows) {
     const pct = (m / LIMITS[name]) * 100;
     const flag = pct >= WARN ? ' <== OVER THE WARNING LINE' : '';
