@@ -143,6 +143,15 @@ export const IconPin = () => (
     <path d="M12 12v9" />
   </Svg>
 );
+/** Link: one argument branching into several answers. */
+export const IconThread = () => (
+  <Svg size={16}>
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="19" cy="5.5" r="2" />
+    <circle cx="19" cy="18.5" r="2" />
+    <path d="M7 12c5 0 5-6.5 10-6.5M7 12c5 0 5 6.5 10 6.5" />
+  </Svg>
+);
 export const IconSearch = () => (
   <Svg>
     <circle cx="11" cy="11" r="6.5" />

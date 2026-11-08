@@ -5,6 +5,7 @@ import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { newBlockId } from '../model/blocks';
 import { computeFlow, insertPosFor, readBlocks, sheetAt, type FlowLayout, type FlowSheet } from '../model/flow';
 import { baseSpeech, SPEECH_INFO, type Side } from '../model/speeches';
+import { toast } from './roundGuard';
 
 // Flow view: the same document as the doc view, laid out as a grid. The
 // editor root becomes a CSS grid and each block is placed in its speech
@@ -16,6 +17,8 @@ export interface FlowState {
   active: string | null;
   /** Pins column: shown just after this (1-based) speech column, pushing later columns right. */
   pinCol: number | null;
+  /** Link mode: the claims being linked (by block id) and their column; the next click on an argument links them. */
+  linking: { ids: string[]; col: number } | null;
 }
 
 export const flowKey = new PluginKey<FlowState>('pp-flow');
@@ -51,6 +54,11 @@ declare module '@tiptap/core' {
        * none there, or a new row after the last). False when the caret is not in a cell (a title).
        */
       nextCell: () => ReturnType;
+      /** Link mode: the selected claims (or the one the caret is in) will answer the argument you click next. */
+      startLinking: () => ReturnType;
+      cancelLinking: () => ReturnType;
+      /** Take a linked claim out of its link (it goes back to its place in the document order). */
+      unlinkBlock: (pos: number) => ReturnType;
     };
   }
 }
@@ -178,6 +186,53 @@ function copyColumn(view: EditorView, event: ClipboardEvent, cut: boolean): bool
   return true;
 }
 
+
+const LINK_HINT = 'Select one or more claims in a later speech (drag across them), then press Link and click the argument they answer.';
+
+/** Block position of a DOM node inside the flow grid. */
+function blockPosOf(view: EditorView, el: Element): number | null {
+  try {
+    const $p = view.state.doc.resolve(view.posAtDOM(el, 0));
+    return $p.depth >= 1 ? $p.before(1) : $p.pos;
+  } catch {
+    return null;
+  }
+}
+
+function posOfId(state: EditorState, sheet: FlowSheet, id: string): number | null {
+  for (const p of sheet.placements) if (state.doc.nodeAt(p.pos)?.attrs.id === id) return p.pos;
+  return null;
+}
+
+/** Link the claims chosen with Link to the argument at targetPos. */
+export function applyLink(view: EditorView, targetPos: number): boolean {
+  const state = view.state;
+  const fs = flowKey.getState(state);
+  const sheet = activeSheet(fs);
+  const lk = fs?.linking;
+  if (!sheet || !lk) return false;
+  const tp = sheet.placements.find((p) => p.pos === targetPos);
+  const tnode = state.doc.nodeAt(targetPos);
+  if (!tp || !tnode || tp.col === 0) return false;
+  const targetId = tnode.attrs.id as string | null;
+  if (!targetId) return false;
+  if (tp.col !== lk.col - 1) {
+    toast(`Click an argument in the ${sheet.columns[lk.col - 2] ?? 'previous'} column (the speech just before), or press Esc.`);
+    return true;
+  }
+  const tr = state.tr;
+  for (const id of lk.ids) {
+    const pos = posOfId(state, sheet, id);
+    const node = pos === null ? null : state.doc.nodeAt(pos);
+    if (pos === null || !node) continue;
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, answers: targetId, speech: sheet.columns[lk.col - 1] });
+  }
+  tr.setMeta(flowKey, { linking: null });
+  tr.setSelection(TextSelection.create(tr.doc, targetPos + 1 + tnode.content.size));
+  view.dispatch(tr);
+  return true;
+}
+
 export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
   name: 'flowView',
   addOptions() {
@@ -296,6 +351,42 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
           if (!cur || cur.p.group < 0) return insertCell(state, tr, sheet, { ghost: 0 }, 1);
           return startRowBelow(state, tr, cur.sheet, cur.p);
         },
+      startLinking:
+        () =>
+        ({ state, tr, dispatch }) => {
+          const sheet = activeSheet(flowKey.getState(state));
+          if (!sheet) return false;
+          let positions: number[];
+          const sel = columnSelection(state);
+          if (sel) positions = sel.positions;
+          else {
+            const cur = currentPlacement(state);
+            positions = cur ? [cur.p.pos] : [];
+          }
+          const claims = positions
+            .map((pos) => ({ pos, p: sheet.placements.find((x) => x.pos === pos), node: state.doc.nodeAt(pos) }))
+            .filter((x) => x.p && x.p.col >= 2 && x.node?.attrs.kind === 'claim' && x.node.attrs.id);
+          if (!claims.length) {
+            if (dispatch) toast(LINK_HINT);
+            return true;
+          }
+          if (dispatch) tr.setMeta(flowKey, { linking: { ids: claims.map((x) => String(x.node!.attrs.id)), col: claims[0].p!.col } });
+          return true;
+        },
+      cancelLinking:
+        () =>
+        ({ tr, dispatch }) => {
+          if (dispatch) tr.setMeta(flowKey, { linking: null });
+          return true;
+        },
+      unlinkBlock:
+        (pos) =>
+        ({ state, tr, dispatch }) => {
+          const node = state.doc.nodeAt(pos);
+          if (!node || !node.attrs.answers) return false;
+          if (dispatch) tr.setNodeMarkup(pos, undefined, { ...node.attrs, answers: null });
+          return true;
+        },
       nextCell:
         () =>
         ({ state, tr, dispatch }) => {
@@ -322,6 +413,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
       Tab: () => this.editor.commands.moveColumn(1),
       'Shift-Tab': () => this.editor.commands.moveColumn(-1),
       'Mod-Enter': () => this.editor.commands.newRow(),
+      'Mod-Shift-l': () => (flowKey.getState(this.editor.state)?.linking ? this.editor.commands.cancelLinking() : this.editor.commands.startLinking()),
       // Alt/Option+Enter: another line inside this same cell (like Alt+Enter in a spreadsheet).
       'Alt-Enter': () => this.editor.commands.splitBlock(),
     };
@@ -336,13 +428,15 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
           init: (_config, state) => {
             const layout = computeFlow(readBlocks(state.doc));
             const sheet = sheetAt(layout, state.selection.from) ?? layout.sheets[0];
-            return { layout, active: sheet ? sheetKey(sheet) : null, pinCol: null };
+            return { layout, active: sheet ? sheetKey(sheet) : null, pinCol: null, linking: null };
           },
           apply(tr, value, _old, newState) {
             const layout = tr.docChanged ? computeFlow(readBlocks(newState.doc)) : value.layout;
             let active = value.active;
             let pinCol = value.pinCol;
-            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null } | undefined;
+            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null; linking?: FlowState['linking'] } | undefined;
+            let linking = value.linking;
+            if (meta && 'linking' in meta) linking = meta.linking ?? null;
             if (meta && 'pinCol' in meta) pinCol = meta.pinCol ?? null;
             if (meta && meta.active !== undefined) active = meta.active;
             else if (tr.selectionSet || tr.docChanged) {
@@ -355,7 +449,8 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             }
             const sheetNow = layout.sheets.find((s) => sheetKey(s) === active);
             if (pinCol !== null && sheetNow && pinCol > sheetNow.columns.length) pinCol = sheetNow.columns.length;
-            return { layout, active, pinCol };
+            if (active !== value.active) linking = null;
+            return { layout, active, pinCol, linking };
           },
         },
         props: {
@@ -363,6 +458,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             const sheet = activeSheet(flowKey.getState(state));
             return {
               ...(columnSelection(state) ? { 'data-colsel': 'true' } : {}),
+              ...(flowKey.getState(state)?.linking ? { 'data-linking': 'true' } : {}),
               class: 'pp-flow',
               style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}`,
               'data-side': sheet?.side ?? 'gov',
@@ -509,6 +605,17 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
               );
             }
 
+            // Link mode: the claims being linked, and the arguments they can be linked to.
+            if (fs.linking) {
+              const ids = new Set(fs.linking.ids);
+              for (const p of sheet.placements) {
+                const n = state.doc.nodeAt(p.pos);
+                if (!n) continue;
+                if (ids.has(String(n.attrs.id))) decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: 'fl-linking' }));
+                else if (p.col === fs.linking.col - 1 && n.attrs.kind === 'claim') decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: 'fl-linkable' }));
+              }
+            }
+
             // Column selection: mark the lines that will be copied.
             const colSel = columnSelection(state);
             if (colSel) {
@@ -528,6 +635,31 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             editor.chain().createCell({ ghost: 0 }, 1).insertContent(text).run();
             return true;
           },
+          handleKeyDown(view, event) {
+            if (event.key === 'Escape' && flowKey.getState(view.state)?.linking) {
+              view.dispatch(view.state.tr.setMeta(flowKey, { linking: null }));
+              return true;
+            }
+            return false;
+          },
+          handleDOMEvents: {
+            mousedown(view, event) {
+              if (flowKey.getState(view.state)?.linking) {
+                const item = (event.target as HTMLElement | null)?.closest?.('.fl-item');
+                const pos = item ? blockPosOf(view, item) : null;
+                if (pos !== null && applyLink(view, pos)) {
+                  event.preventDefault();
+                  return true;
+                }
+              }
+              return false;
+            },
+          },
+        },
+      }),
+      new Plugin({
+        key: new PluginKey('pp-flow-cells'),
+        props: {
           handleDOMEvents: {
             mousedown(_view, event) {
               const el = (event.target as HTMLElement | null)?.closest?.('.fl-cell.is-empty') as HTMLElement | null;
@@ -560,7 +692,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             slice.content.forEach((n) => {
               nodes.push(
                 n.type.name === 'block'
-                  ? n.type.create({ ...n.attrs, id: null, newRow: false, gap: 0, side: null, speech: isBase ? null : speech, kind: n.attrs.kind === 'position' || n.attrs.kind === 'section' ? 'claim' : n.attrs.kind }, n.content, n.marks)
+                  ? n.type.create({ ...n.attrs, id: null, newRow: false, gap: 0, answers: null, side: null, speech: isBase ? null : speech, kind: n.attrs.kind === 'position' || n.attrs.kind === 'section' ? 'claim' : n.attrs.kind }, n.content, n.marks)
                   : n,
               );
             });

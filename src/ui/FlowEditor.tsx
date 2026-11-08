@@ -3,7 +3,7 @@ import CollaborationCaret from '@tiptap/extension-collaboration-caret';
 import type { WebsocketProvider } from 'y-websocket';
 import { Placeholder } from '@tiptap/extensions';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { blockWithChildren } from '../model/outline';
 import { useBoard } from '../store/pins';
@@ -18,7 +18,7 @@ import { activeSheet, flowKey, FlowView, sheetKey } from '../editor/flowView';
 import { KIND_INFO, asKind } from '../model/blocks';
 import { SPEECH_INFO } from '../model/speeches';
 import { ColorwayPicker } from './ColorwayPicker';
-import { IconClose, IconPin, IconPlus } from './icons';
+import { IconClose, IconPin, IconPlus, IconThread } from './icons';
 
 export function FlowEditor({
   ydoc,
@@ -66,7 +66,10 @@ export function FlowEditor({
       {editor && <SheetTabs editor={editor} />}
       <div className="flow-scroll">
         {editor && <ColumnHeaders editor={editor} />}
-        <EditorContent editor={editor} className="flow-grid-host" />
+        <div className="flow-grid-wrap">
+          <EditorContent editor={editor} className="flow-grid-host" />
+          {editor && <FlowThreads editor={editor} />}
+        </div>
       </div>
       {editor && createPortal(<PinColumn editor={editor} space={space} />, pinPanel)}
     </div>
@@ -142,6 +145,7 @@ function SheetTabs({ editor }: { editor: Editor }) {
           </select>
         </label>
       )}
+      {active && <LinkButtons editor={editor} />}
       <ColorsButton />
       {active && <DeleteSheetButton editor={editor} sheetKey={active} title={sheets.find((s) => s.key === active)?.title ?? ''} />}
       <span className="tb-spacer" />
@@ -320,5 +324,115 @@ function ColorsDialog({ onClose }: { onClose: () => void }) {
         </button>
       </div>
     </dialog>
+  );
+}
+
+/** Link / Unlink in the sheet bar, and the hint while linking. */
+function LinkButtons({ editor }: { editor: Editor }) {
+  const st = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      const fs = flowKey.getState(e.state);
+      const sheet = activeSheet(fs);
+      const $from = e.state.selection.$from;
+      const pos = $from.depth >= 1 ? $from.before(1) : -1;
+      return { linking: !!fs?.linking, linked: !!sheet?.links.some((l) => l.to === pos), pos };
+    },
+  });
+  const mac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
+  return (
+    <>
+      <button
+        type="button"
+        className={'btn ghost small link-btn' + (st.linking ? ' is-on' : '')}
+        aria-pressed={st.linking}
+        title={`Link the selected claims to the argument they answer (${mac ? '⌘' : 'Ctrl'}+Shift+L)`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => (st.linking ? editor.commands.cancelLinking() : editor.commands.startLinking())}
+      >
+        <IconThread /> {st.linking ? 'Cancel link' : 'Link'}
+      </button>
+      {st.linking && <span className="link-hint">Click the argument these answer (Esc cancels)</span>}
+      {st.linked && !st.linking && (
+        <button
+          type="button"
+          className="btn ghost small"
+          title="Unlink this claim from the argument it answers"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => editor.chain().unlinkBlock(st.pos).focus().run()}
+        >
+          Unlink
+        </button>
+      )}
+    </>
+  );
+}
+
+/** Threads: a line from each argument into the claims that answer it, drawn from where they are on screen. */
+function FlowThreads({ editor }: { editor: Editor }) {
+  const svg = useRef<SVGSVGElement>(null);
+  const [paths, setPaths] = useState<{ d: string; side: string; on: boolean; key: string }[]>([]);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const again = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setTick((t) => t + 1));
+    };
+    editor.on('update', again);
+    editor.on('selectionUpdate', again);
+    window.addEventListener('resize', again);
+    const ro = new ResizeObserver(again);
+    ro.observe(editor.view.dom);
+    return () => {
+      cancelAnimationFrame(raf);
+      editor.off('update', again);
+      editor.off('selectionUpdate', again);
+      window.removeEventListener('resize', again);
+      ro.disconnect();
+    };
+  }, [editor]);
+
+  useLayoutEffect(() => {
+    const wrap = svg.current?.parentElement;
+    const sheet = activeSheet(flowKey.getState(editor.state));
+    if (!wrap || !sheet || !sheet.links.length) {
+      setPaths((p) => (p.length ? [] : p));
+      return;
+    }
+    const origin = wrap.getBoundingClientRect();
+    const $from = editor.state.selection.$from;
+    const here = $from.depth >= 1 ? $from.before(1) : -1;
+    const out: { d: string; side: string; on: boolean; key: string }[] = [];
+    for (const l of sheet.links) {
+      const a = editor.view.nodeDOM(l.from) as HTMLElement | null;
+      const b = editor.view.nodeDOM(l.to) as HTMLElement | null;
+      if (!a || !b || !a.getBoundingClientRect || !b.getBoundingClientRect) continue;
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      if (!ra.width || !rb.width) continue;
+      const x1 = ra.right - origin.left;
+      const y1 = ra.top - origin.top + Math.min(16, ra.height / 2);
+      const x2 = rb.left - origin.left;
+      const y2 = rb.top - origin.top + Math.min(16, rb.height / 2);
+      const xm = (x1 + x2) / 2;
+      const dy = y2 - y1;
+      const r = Math.min(5, Math.abs(dy) / 2, Math.max(1, (x2 - x1) / 2));
+      const d =
+        Math.abs(dy) < 2
+          ? `M ${x1} ${y1} L ${x2} ${y2}`
+          : `M ${x1} ${y1} H ${xm - r} Q ${xm} ${y1} ${xm} ${y1 + Math.sign(dy) * r} V ${y2 - Math.sign(dy) * r} Q ${xm} ${y2} ${xm + r} ${y2} H ${x2}`;
+      out.push({ d, side: a.classList.contains('fl-opp') ? 'opp' : 'gov', on: here === l.from || here === l.to, key: `${l.from}-${l.to}` });
+    }
+    setPaths(out);
+  }, [editor, tick]);
+
+  return (
+    <svg ref={svg} className="flow-threads" aria-hidden="true">
+      {paths.map((p) => (
+        <path key={p.key} d={p.d} className={`thread fl-${p.side}` + (p.on ? ' is-on' : '')} />
+      ))}
+    </svg>
   );
 }

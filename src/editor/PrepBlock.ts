@@ -111,6 +111,13 @@ export const PrepBlock = Node.create({
         parseHTML: (el) => Number(el.getAttribute('data-gap')) || 0,
         renderHTML: (attrs) => (Number(attrs.gap) > 0 ? { 'data-gap': String(attrs.gap) } : {}),
       },
+      // Flow link: the id of the argument (in the speech just before) this claim answers.
+      answers: {
+        default: null,
+        keepOnSplit: false,
+        parseHTML: (el) => el.getAttribute('data-answers') || null,
+        renderHTML: (attrs) => (typeof attrs.answers === 'string' && attrs.answers ? { 'data-answers': attrs.answers } : {}),
+      },
       // Claims only: always start a new flow row.
       newRow: {
         default: false,

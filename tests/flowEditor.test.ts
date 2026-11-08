@@ -213,3 +213,67 @@ describe('Enter in the flow drops you down to the next cell', () => {
     expect(rowCells(e, 'LOC')).toHaveLength(2);
   });
 });
+
+describe('linking responses to an argument', () => {
+  const lines: Line[] = [
+    ['position', 'Case'],
+    ['claim', 'A'],
+    ['claim', 'B'],
+    ['claim', 'ans for A', { speech: 'LOC' }],
+    ['claim', 'ans for B', { speech: 'LOC' }],
+  ];
+  const posOf = (e: Editor, text: string) => rowOf(e, text).pos;
+  const caretIn = (e: Editor, text: string) => {
+    const pos = posOf(e, text);
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, pos + 1)));
+  };
+
+  it('link mode starts from the caret, and a click on an argument in the speech before links it', async () => {
+    const { applyLink } = await import('../src/editor/flowView');
+    const e = make(lines);
+    // (the lines are typed in the order A, B, then the two answers, so they sit in B's row group)
+    caretIn(e, 'ans for A');
+    e.commands.startLinking();
+    expect(flowKey.getState(e.state)!.linking).toMatchObject({ col: 2 });
+    expect(applyLink(e.view, posOf(e, 'A'))).toBe(true);
+    expect(flowKey.getState(e.state)!.linking).toBeNull();
+    const a = rowOf(e, 'A');
+    const ans = rowOf(e, 'ans for A');
+    expect(ans.row).toBe(a.row);
+    expect(sheet(e).links).toEqual([{ from: a.pos, to: ans.pos }]);
+    // The document order did not change.
+    expect(e.state.doc.child(3).textContent).toBe('ans for A');
+  });
+
+  it('refuses a target that is not in the column just before, and keeps link mode on', async () => {
+    const { applyLink } = await import('../src/editor/flowView');
+    const e = make(lines);
+    caretIn(e, 'ans for A');
+    e.commands.startLinking();
+    applyLink(e.view, posOf(e, 'ans for B')); // same column
+    expect(flowKey.getState(e.state)!.linking).not.toBeNull();
+    expect(sheet(e).links).toEqual([]);
+  });
+
+  it('Escape (cancelLinking) leaves everything as it was, and unlinkBlock removes a link', async () => {
+    const { applyLink } = await import('../src/editor/flowView');
+    const e = make(lines);
+    caretIn(e, 'ans for A');
+    e.commands.startLinking();
+    e.commands.cancelLinking();
+    expect(flowKey.getState(e.state)!.linking).toBeNull();
+    caretIn(e, 'ans for A');
+    e.commands.startLinking();
+    applyLink(e.view, posOf(e, 'B'));
+    expect(sheet(e).links).toHaveLength(1);
+    e.commands.unlinkBlock(posOf(e, 'ans for A'));
+    expect(sheet(e).links).toEqual([]);
+  });
+
+  it('Link does nothing when no claim in a later speech is selected', () => {
+    const e = make(lines);
+    caretIn(e, 'A');
+    e.commands.startLinking();
+    expect(flowKey.getState(e.state)!.linking).toBeNull();
+  });
+});

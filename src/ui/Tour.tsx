@@ -49,6 +49,11 @@ const STEPS: Step[] = [
     body: 'Prep is either a doc (written as text) or a flow (written in the grid). You choose when you make it with the + next to Prep, and it stays that way, so there is only ever one copy of what you type. In a flow, a claim starts a row and you click any cell to type.',
   },
   {
+    target: ['.link-btn'],
+    title: 'Link answers to an argument',
+    body: 'In a flow, drag across the claims in a later speech, press Link, then click the argument in the speech before. The answers line up beside it with a thread between them. Unlink or Esc undoes it.',
+  },
+  {
     target: ['.pane .pin-btn'],
     title: 'Pin a block',
     body: 'Put the cursor in a section, claim or analytic in your round doc and press Pin. Pin the things you might read in the round.',

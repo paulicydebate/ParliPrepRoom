@@ -554,7 +554,7 @@ export function App() {
       const p = sheet.placements.find((x) => x.pos === $from.before(1));
       if (p && p.speech && p.speech !== baseSpeech(sheet.side)) speech = p.speech;
     }
-    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech } }));
+    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, answers: null, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech } }));
     const at = $from.depth >= 1 ? $from.after(1) : editor.state.doc.content.size;
     editor.chain().focus().insertContentAt(at, copies).run();
     toast(`Inserted into “${focusedMeta!.title}”.`);
