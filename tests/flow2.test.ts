@@ -261,3 +261,59 @@ describe('flow2 connectors (from Flowist)', () => {
     expect(connectorCrossings([a, parallel], crossingShadowExtent(CROSSING_SHADOW_DEFAULTS))).toEqual([]);
   });
 });
+
+import { columnGeometry } from '../src/flow2/columns';
+import { isWorldRectNearViewport, nextSheetPosition, stepZoom, viewportToWorld, zoomAt } from '../src/flow2/canvasGeometry';
+import { readWheelIntent } from '../src/flow2/canvasWheel';
+import { moveSheet } from '../src/flow2/model';
+
+describe('flow2 canvas (camera maths from Flowist)', () => {
+  it('zooming about a point keeps the point under the pointer', () => {
+    const cam = { x: 100, y: 50, zoom: 1 };
+    const anchor = { x: 400, y: 300 };
+    const before = viewportToWorld(anchor, cam);
+    const next = zoomAt(cam, anchor, 2);
+    expect(next.zoom).toBe(2);
+    const after = viewportToWorld(anchor, next);
+    expect(after.x).toBeCloseTo(before.x, 6);
+    expect(after.y).toBeCloseTo(before.y, 6);
+    expect(zoomAt(cam, anchor, 50).zoom).toBe(2); // capped
+    expect(zoomAt(cam, anchor, 0.01).zoom).toBe(0.25);
+  });
+
+  it('wheel: scrolling pans, ctrl or ⌘ zooms, shift scrolls sideways', () => {
+    const base = { deltaX: 0, deltaY: 30, deltaMode: 0, ctrlKey: false, metaKey: false, shiftKey: false, clientX: 10, clientY: 20 };
+    expect(readWheelIntent(base, 800)).toMatchObject({ kind: 'pan', dy: -30 });
+    const z = readWheelIntent({ ...base, ctrlKey: true }, 800);
+    expect(z.kind).toBe('zoom');
+    expect(readWheelIntent({ ...base, shiftKey: true }, 800)).toMatchObject({ kind: 'pan', dy: 0 });
+  });
+
+  it('steps zoom through fixed levels and places a new sheet beside the others', () => {
+    expect(stepZoom(1, 'in')).toBeGreaterThan(1);
+    expect(stepZoom(1, 'out')).toBeLessThan(1);
+    expect(stepZoom(2, 'in')).toBe(2);
+    expect(nextSheetPosition([])).toEqual({ x: 0, y: 0 });
+    expect(nextSheetPosition([{ x: 0, y: 10, width: 100, height: 50 }])).toEqual({ x: 148, y: 10 });
+  });
+
+  it('only sheets near the view are drawn live', () => {
+    const cam = { x: 0, y: 0, zoom: 1 };
+    const view = { width: 1000, height: 700 };
+    expect(isWorldRectNearViewport({ x: 100, y: 100, width: 300, height: 200 }, cam, view)).toBe(true);
+    expect(isWorldRectNearViewport({ x: 5000, y: 100, width: 300, height: 200 }, cam, view, 400)).toBe(false);
+  });
+
+  it('a sheet remembers where it was put, and columns narrow until used', () => {
+    const { doc, sheetId, cells } = setup();
+    void cells;
+    moveSheet(doc, sheetId, 120.4, -30);
+    expect(readFlow(doc)[0]).toMatchObject({ x: 120, y: -30 });
+    const g = columnGeometry(readFlow(doc)[0], null, null);
+    expect(g.used).toEqual([true, false, false, false, false, false]);
+    expect(g.colW[1]).toBe(76);
+    const g2 = columnGeometry(readFlow(doc)[0], 3, null);
+    expect(g2.used[2]).toBe(true);
+    expect(g2.minWidth).toBeGreaterThan(g.minWidth);
+  });
+});

@@ -33,6 +33,9 @@ export interface FlowSheetData {
   side: Side;
   columns: Speech[];
   cells: FlowCell[];
+  /** Where the sheet sits on the canvas (null until it has been placed or moved). */
+  x: number | null;
+  y: number | null;
 }
 
 /** What a remote or local change to a sheet does, so views can redraw. */
@@ -67,7 +70,8 @@ export function readSheet(id: string, sheet: Y.Map<unknown>): FlowSheetData {
   const side = asSide(sheet.get('side'));
   const cells: FlowCell[] = [];
   yCells(sheet).forEach((m, cid) => cells.push(readCell(cid, m)));
-  return { id, name: String(sheet.get('name') ?? ''), side, columns: columnsFor(side), cells };
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  return { id, name: String(sheet.get('name') ?? ''), side, columns: columnsFor(side), cells, x: num(sheet.get('x')), y: num(sheet.get('y')) };
 }
 
 export function readFlow(doc: Y.Doc): FlowSheetData[] {
@@ -107,6 +111,15 @@ export function addSheet(doc: Y.Doc, side: Side, name?: string): string {
     sheetsMap(doc).set(id, sheet);
     sheetOrder(doc).push([id]);
     return id;
+  });
+}
+
+/** Put a sheet at a place on the canvas. */
+export function moveSheet(doc: Y.Doc, id: string, x: number, y: number) {
+  local(doc, () => {
+    const s = sheetsMap(doc).get(id);
+    s?.set('x', Math.round(x));
+    s?.set('y', Math.round(y));
   });
 }
 

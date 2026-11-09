@@ -33,6 +33,8 @@ import {
   type FlowCell,
   type FlowSheetData,
 } from './model';
+import { columnGeometry, GAP_PX } from './columns';
+import { Flow2Canvas } from './Flow2Canvas';
 import { bindText } from './textBinding';
 import './flowist/palette-0.css';
 import './flowist/fonts.css';
@@ -42,9 +44,6 @@ import './flowist/flowist-theme.css';
 // answers, box-select, link mode, narrow unused columns. Interaction design adapted from Flowist
 // (by Elli, used with permission); the code is this app's own.
 
-const NARROW_PX = 76;
-const WIDE_MIN_PX = 190;
-const GAP_PX = 44;
 
 function useFlow(doc: Y.Doc): FlowSheetData[] {
   const version = useRef(0);
@@ -92,6 +91,34 @@ export function Flow2Editor({
   const undo = useUndo(ydoc);
   const [activeId, setActiveId] = useState<string | null>(null);
   const sheet = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
+  const [mode, setMode] = useState<'canvas' | 'page'>(() => {
+    try {
+      return localStorage.getItem('pp-flow2-view') === 'page' ? 'page' : 'canvas';
+    } catch {
+      return 'canvas';
+    }
+  });
+  const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
+  const setViewMode = (m: 'canvas' | 'page') => {
+    setMode(m);
+    try {
+      localStorage.setItem('pp-flow2-view', m);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  useEffect(() => {
+    const on = () => {
+      try {
+        setMode(localStorage.getItem('pp-flow2-view') === 'page' ? 'page' : 'canvas');
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener('pp-flow2-view', on);
+    return () => window.removeEventListener('pp-flow2-view', on);
+  }, []);
 
   useEffect(() => onEditor(null), [onEditor]);
 
@@ -115,9 +142,54 @@ export function Flow2Editor({
   }, [ydoc, provider]);
 
   if (!sheet) return <div className="flow-wrap" data-flow-theme={theme} />;
+  const goTo = (id: string) => {
+    setActiveId(id);
+    setFly((f) => ({ id, n: (f?.n ?? 0) + 1 }));
+  };
   return (
     <div className="flow-wrap f2" data-flow-theme={theme}>
-      <SheetView key={sheet.id} doc={ydoc} sheets={sheets} sheet={sheet} undo={undo} onPick={setActiveId} />
+      {mode === 'canvas' ? (
+        <>
+          <NavBar doc={ydoc} sheets={sheets} activeId={sheet.id} onGo={goTo} mode={mode} onMode={setViewMode} />
+          <Flow2Canvas
+            doc={ydoc}
+            sheets={sheets}
+            activeId={sheet.id}
+            onActive={setActiveId}
+            fly={fly}
+            renderLive={(s, zoom) => <SheetView doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom }} />}
+          />
+        </>
+      ) : (
+        <>
+          <SheetView key={sheet.id} doc={ydoc} sheets={sheets} sheet={sheet} undo={undo} onPick={setActiveId} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The canvas's top bar: a tab per sheet (click to fly there), new sheets, colors, and the view switch. */
+function NavBar({ doc, sheets, activeId, onGo, mode, onMode }: { doc: Y.Doc; sheets: FlowSheetData[]; activeId: string; onGo: (id: string) => void; mode: 'canvas' | 'page'; onMode: (m: 'canvas' | 'page') => void }) {
+  return (
+    <div className="sheet-tabs" role="tablist" aria-label="Sheets">
+      {sheets.map((s) => (
+        <button key={s.id} type="button" role="tab" aria-selected={s.id === activeId} className={`sheet-tab fl-${s.side}` + (s.id === activeId ? ' is-on' : '')} title={`Go to ${s.name || 'Untitled'}`} onClick={() => onGo(s.id)}>
+          <span className="sheet-dot" />
+          <span className="sheet-name">{s.name || 'Untitled'}</span>
+        </button>
+      ))}
+      <button type="button" className="btn ghost small" onClick={() => onGo(addSheet(doc, 'gov'))}>
+        <IconPlus /> Gov
+      </button>
+      <button type="button" className="btn ghost small" onClick={() => onGo(addSheet(doc, 'opp'))}>
+        <IconPlus /> Opp
+      </button>
+      <span className="tb-spacer" />
+      <ColorsButton />
+      <button type="button" className="btn ghost small" aria-pressed={mode === 'page'} title="Show one sheet at a time, filling the window" onClick={() => onMode(mode === 'canvas' ? 'page' : 'canvas')}>
+        {mode === 'canvas' ? 'Page view' : 'Canvas'}
+      </button>
     </div>
   );
 }
@@ -186,6 +258,9 @@ function Tabs({ doc, sheets, sheet, onPick, tools }: { doc: Y.Doc; sheets: FlowS
         {confirm ? `Delete “${sheet.name || 'Untitled'}” and everything on it?` : 'Delete sheet'}
       </button>
       <span className="tb-spacer" />
+      <button type="button" className="btn ghost small" title="Show every sheet on one canvas" onClick={() => { try { localStorage.setItem('pp-flow2-view', 'canvas'); } catch { /* ignore */ } window.dispatchEvent(new Event('pp-flow2-view')); }}>
+        Canvas
+      </button>
       <button type="button" className="btn ghost small" onClick={() => onPick(addSheet(doc, 'gov'))}>
         <IconPlus /> Gov
       </button>
@@ -200,7 +275,12 @@ function Tabs({ doc, sheets, sheet, onPick, tools }: { doc: Y.Doc; sheets: FlowS
 
 type Focus = { id: string; at: 'start' | 'end' };
 
-function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void }) {
+export interface Embedded {
+  /** Canvas zoom (the sheet is drawn scaled; mouse positions are divided by it). */
+  zoom: number;
+}
+
+export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -215,7 +295,7 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
 
   useLayoutEffect(() => {
     const el = scroll.current;
-    if (!el) return;
+    if (!el || embedded) return;
     const ro = new ResizeObserver(() => setWidth(el.clientWidth));
     ro.observe(el);
     setWidth(el.clientWidth);
@@ -227,22 +307,11 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
 
   // Which speech columns are wide: the first, the one the caret is in, and any with text in it.
   const focused = focusId ? byId.get(focusId) : undefined;
-  const used = sheet.columns.map((_, i) => i === 0 || focused?.col === i + 1 || cells.some((c) => c.col === i + 1 && c.text.trim() !== ''));
-  const nWide = used.filter(Boolean).length;
-  const nNarrow = used.length - nWide;
-  const minWidth = nWide * WIDE_MIN_PX + nNarrow * NARROW_PX + (used.length - 1) * GAP_PX;
-  const inner = Math.max(width, minWidth);
-  const wideW = (inner - nNarrow * NARROW_PX - (used.length - 1) * GAP_PX) / nWide;
-  const colX: number[] = [];
-  const colW: number[] = [];
-  let x = 0;
-  used.forEach((u) => {
-    colX.push(x);
-    colW.push(u ? wideW : NARROW_PX);
-    x += (u ? wideW : NARROW_PX) + GAP_PX;
-  });
+  const geo = columnGeometry(sheet, focused?.col ?? null, embedded ? null : width);
+  const { used, colX, colW, inner } = geo;
+  const zoom = embedded?.zoom ?? 1;
 
-  const layout = useMemo(() => layoutFlow(cells, heights), [cells, heights]);
+  const layout = useMemo(() => layoutFlow(cells, heights, embedded ? { ...METRICS, ghostRows: 6 } : METRICS), [cells, heights, embedded]);
   const top = (c: FlowCell) => layout.tops.get(c.id) ?? 0;
   const sideOf = (col: number) => SPEECH_INFO[sheet.columns[col - 1]].side;
 
@@ -408,12 +477,12 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
     if (e.button !== 0 || (e.target as HTMLElement).closest('.f2-cell, .f2-add')) return;
     e.preventDefault();
     const rect = canvas.current!.getBoundingClientRect();
-    const x0 = e.clientX - rect.left;
-    const y0 = e.clientY - rect.top;
+    const x0 = (e.clientX - rect.left) / zoom;
+    const y0 = (e.clientY - rect.top) / zoom;
     let moved = false;
     const move = (ev: MouseEvent) => {
-      const x1 = ev.clientX - rect.left;
-      const y1 = ev.clientY - rect.top;
+      const x1 = (ev.clientX - rect.left) / zoom;
+      const y1 = (ev.clientY - rect.top) / zoom;
       if (!moved && Math.hypot(x1 - x0, y1 - y0) < 5) return;
       moved = true;
       const box = { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
@@ -486,16 +555,8 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
   const total = layout.total + 8;
   const empty = cells.length === 0;
 
-  return (
-    <>
-      <Tabs
-        doc={doc}
-        sheets={sheets}
-        sheet={sheet}
-        onPick={onPick}
-        tools={<LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} />}
-      />
-      <div className="f2-scroll" ref={scroll} data-linking={linking ? 'true' : undefined}>
+  const tools = <LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} />;
+  const body = (
       <div className="f2-inner" style={{ width: inner }}>
         <div className="f2-head">
           {sheet.columns.map((s, i) => (
@@ -567,8 +628,72 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
           {marquee && <div className="f2-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
         </div>
       </div>
+  );
+  if (embedded) {
+    return (
+      <div className="f2-window-body" data-linking={linking ? 'true' : undefined}>
+        <WindowBar doc={doc} sheet={sheet} tools={tools} canDelete={sheets.length > 1} onDeleted={() => onPick(sheets.find((s) => s.id !== sheet.id)!.id)} />
+        {body}
+      </div>
+    );
+  }
+  return (
+    <>
+      <Tabs doc={doc} sheets={sheets} sheet={sheet} onPick={onPick} tools={tools} />
+      <div className="f2-scroll" ref={scroll} data-linking={linking ? 'true' : undefined}>
+        {body}
       </div>
     </>
+  );
+}
+
+/** A sheet's title bar on the canvas: drag it to move the sheet; name, side, Link and delete live here. */
+function WindowBar({ doc, sheet, tools, canDelete, onDeleted }: { doc: Y.Doc; sheet: FlowSheetData; tools: ReactNode; canDelete: boolean; onDeleted: () => void }) {
+  const [renaming, setRenaming] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className={`f2-window-bar fl-${sheet.side}`} data-window-handle>
+      <span className="sheet-dot" />
+      {renaming ? (
+        <input
+          className="sheet-rename"
+          autoFocus
+          defaultValue={sheet.name}
+          aria-label="Sheet name"
+          onBlur={(e) => {
+            renameSheet(doc, sheet.id, e.target.value.trim());
+            setRenaming(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') setRenaming(false);
+          }}
+        />
+      ) : (
+        <span className="f2-window-name" onDoubleClick={() => setRenaming(true)} title="Drag to move this sheet; double-click to rename">
+          {sheet.name || 'Untitled'}
+        </span>
+      )}
+      <select className="f2-window-side" value={sheet.side} disabled={sheet.cells.length > 0} aria-label="Side of this sheet" title="Whose sheet this is (can only change while the sheet is empty)" onChange={(e) => setSheetSide(doc, sheet.id, e.target.value as 'gov' | 'opp')}>
+        <option value="gov">Gov</option>
+        <option value="opp">Opp</option>
+      </select>
+      <span className="tb-spacer" />
+      {tools}
+      <button
+        type="button"
+        className={'btn ghost small sheet-delete' + (confirm ? ' confirm' : '')}
+        disabled={!canDelete}
+        title="Delete this sheet and everything on it (Undo brings it back)"
+        onClick={() => {
+          if (!confirm && sheet.cells.some((c) => c.text.trim())) return setConfirm(true);
+          deleteSheet(doc, sheet.id);
+          onDeleted();
+        }}
+      >
+        {confirm ? 'Delete it?' : 'Delete'}
+      </button>
+    </div>
   );
 }
 
