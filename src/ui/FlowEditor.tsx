@@ -280,7 +280,7 @@ function PinColumn({ editor, space }: { editor: Editor; space: string }) {
 }
 
 /** "Colors" in the sheet bar: a quick window to switch Gov/Opp colors. */
-function ColorsButton() {
+export function ColorsButton() {
   const [open, setOpen] = useState(false);
   return (
     <>

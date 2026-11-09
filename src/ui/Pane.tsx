@@ -7,7 +7,7 @@ import { formatOf, renameDoc, setDocRound, type DocFormat, type DocMeta } from '
 import { setRound, useRound } from '../store/roundDoc';
 import { useConnectionCheck, useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
-import { FlowEditor } from './FlowEditor';
+import { Flow2Editor } from '../flow2/Flow2Editor';
 import { CheckLinkButton, PartnersButton } from './RoundTools';
 import { PinButton } from './RoundModeUI';
 import { HistoryView } from './HistoryView';
@@ -569,7 +569,7 @@ export function Pane({
                 <PanelHandle panel={outlineWidth} edge="right" label="Resize the outline" onCollapse={() => onChange({ ...pane, outline: false })} />
               </>
             )}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} onEditor={onEditor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <Flow2Editor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} onEditor={onEditor as (e: null) => void} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
         </>
