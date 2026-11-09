@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { endTour, markTourSeen, startTour, tourSeen, useTourOpen } from '../store/tour';
 import { IconClose, IconHelp } from './icons';
 
+declare const __BUILD__: string | undefined;
+
 // A short, skippable tour. Each step points at a part of the screen; steps
 // whose part isn't showing right now (not signed in, panel hidden on a small
 // screen, ...) are skipped. The same story is on the /guide page.
@@ -285,6 +287,9 @@ export function HelpMenu() {
         <a href="/privacy" target="_blank" rel="noreferrer" onClick={close}>
           Privacy
         </a>
+        <span className="muted small build-stamp" title="Which version of the app this page is running">
+          Version {typeof __BUILD__ === 'string' ? __BUILD__ : 'dev'}
+        </span>
       </div>
     </details>
   );

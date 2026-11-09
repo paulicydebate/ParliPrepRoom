@@ -4217,3 +4217,7 @@ kbd {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+.build-stamp {
+  display: block;
+  padding: 6px 12px 2px;
+}
