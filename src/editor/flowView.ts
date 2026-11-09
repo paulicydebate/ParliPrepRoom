@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core';
 import { DOMSerializer, Fragment, Slice, type Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
-import { newBlockId } from '../model/blocks';
+import { levelOf, newBlockId } from '../model/blocks';
 import { computeFlow, insertPosFor, readBlocks, sheetAt, type FlowLayout, type FlowSheet } from '../model/flow';
 import { DEFAULT_METRICS, layoutFlow, type FlowGeometry } from '../model/flowLayout';
 import { baseSpeech, SPEECH_INFO, type Side } from '../model/speeches';
@@ -233,14 +233,26 @@ export function applyLink(view: EditorView, targetPos: number): boolean {
     return true;
   }
   const tr = state.tr;
+  // Empty cells in the selection (a claim with nothing typed and no text under it) are not linked:
+  // they disappear when the answers collapse beside their argument.
+  const toDelete: { pos: number; size: number }[] = [];
   for (const id of lk.ids) {
     const pos = posOfId(state, sheet, id);
     const node = pos === null ? null : state.doc.nodeAt(pos);
     if (pos === null || !node) continue;
-    tr.setNodeMarkup(pos, undefined, { ...node.attrs, answers: targetId, speech: sheet.columns[lk.col - 1] });
+    let end = pos + node.nodeSize;
+    let hasText = node.textContent.trim() !== '';
+    for (let next = state.doc.nodeAt(end); next && next.attrs.kind !== 'claim' && levelOf(next.attrs.kind) > 2 && !next.attrs.speech; next = state.doc.nodeAt(end)) {
+      hasText = hasText || next.textContent.trim() !== '';
+      end += next.nodeSize;
+    }
+    if (!hasText) toDelete.push({ pos, size: end - pos });
+    else tr.setNodeMarkup(pos, undefined, { ...node.attrs, answers: targetId, speech: sheet.columns[lk.col - 1] });
   }
+  for (const d of toDelete.sort((a, b) => b.pos - a.pos)) tr.delete(d.pos, d.pos + d.size);
   tr.setMeta(flowKey, { linking: null });
-  tr.setSelection(TextSelection.create(tr.doc, targetPos + 1 + tnode.content.size));
+  const mapped = tr.mapping.map(targetPos);
+  tr.setSelection(TextSelection.create(tr.doc, mapped + 1 + tnode.content.size));
   view.dispatch(tr);
   return true;
 }

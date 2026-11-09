@@ -298,3 +298,43 @@ describe('adding another answer to a linked argument', () => {
     expect(added.textContent).toBe('');
   });
 });
+
+describe('empty cells when linking', () => {
+  it('empty cells in the selection vanish when the answers collapse beside the argument; the rest are linked', async () => {
+    const { applyLink } = await import('../src/editor/flowView');
+    const e = make([
+      ['position', 'Case'],
+      ['claim', 'A'],
+      ['claim', 'one', { speech: 'LOC' }],
+      ['claim', '', { speech: 'LOC' }],
+      ['claim', 'three', { speech: 'LOC' }],
+    ]);
+    const first = rowOf(e, 'one').pos;
+    const last = rowOf(e, 'three').pos;
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, first + 1, last + 2)));
+    e.commands.startLinking();
+    expect(flowKey.getState(e.state)!.linking!.ids).toHaveLength(3);
+    applyLink(e.view, rowOf(e, 'A').pos);
+    expect(sheet(e).links).toHaveLength(2);
+    const texts = [...Array(e.state.doc.childCount).keys()].map((i) => e.state.doc.child(i).textContent);
+    expect(texts).toEqual(['Case', 'A', 'one', 'three']);
+  });
+
+  it('a claim with no text but text in a line under it is kept and linked', async () => {
+    const { applyLink } = await import('../src/editor/flowView');
+    const e = make([
+      ['position', 'Case'],
+      ['claim', 'A'],
+      ['claim', '', { speech: 'LOC' }],
+      ['warrant', 'the reason'],
+    ]);
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, rowOf(e, 'the reason').pos - 1)));
+    const emptyClaim = e.state.doc.child(2);
+    expect(emptyClaim.textContent).toBe('');
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, e.state.doc.child(0).nodeSize + e.state.doc.child(1).nodeSize + 1)));
+    e.commands.startLinking();
+    applyLink(e.view, rowOf(e, 'A').pos);
+    expect(sheet(e).links).toHaveLength(1);
+    expect(e.state.doc.childCount).toBe(4);
+  });
+});
