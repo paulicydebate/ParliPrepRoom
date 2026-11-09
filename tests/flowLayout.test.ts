@@ -93,3 +93,20 @@ describe('free cell layout', () => {
     expect(g.blanks).toEqual([{ before: 0, top: 0, count: 3 }]);
   });
 });
+
+describe('narrow unused columns', () => {
+  it('only columns with something in them are wide; the first is always wide', async () => {
+    const { columnTracks, NARROW_COLUMN_PX } = await import('../src/model/flowLayout');
+    const { sheet } = make([['position', 'S'], ['claim', 'A'], ['claim', 'a1', { speech: 'LOC' }]]);
+    const t = columnTracks(sheet, null);
+    expect(t.used).toEqual([true, true, false, false, false, false]);
+    expect(t.template.split(' ').filter((x) => x === `${NARROW_COLUMN_PX}px`)).toHaveLength(4);
+    expect(columnTracks(sheet, 1).template.split(' ').length).toBeGreaterThan(columnTracks(sheet, null).template.split(' ').length - 1);
+  });
+
+  it('an empty sheet shows the first column wide and the rest narrow', async () => {
+    const { columnTracks } = await import('../src/model/flowLayout');
+    const { sheet } = make([['position', 'S']]);
+    expect(columnTracks(sheet, null).used).toEqual([true, false, false, false, false, false]);
+  });
+});

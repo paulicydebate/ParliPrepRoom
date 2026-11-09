@@ -3977,20 +3977,31 @@ kbd {
 }
 
 /* ---------- Flow layout: every cell grows on its own (adapted from Flowist's idea) ---------- */
-/* Blocks and backgrounds are placed by the layout in src/model/flowLayout.ts: a column (--c) and a top. */
+/* The sheet is a grid only for its column widths (unused speeches stay narrow, see columnTracks in
+   src/model/flowLayout.ts). Blocks and backgrounds sit inside their column (--c) at a top set by
+   the layout (src/model/flowLayout.ts), so every cell is as tall as its own text. */
+.flow-head,
 .pp-flow {
-  display: block;
+  grid-template-columns: var(--fl-template, repeat(var(--fl-cols, 6), minmax(var(--fl-min), 1fr)));
+  min-width: var(--fl-minw, 0px);
+}
+.pp-flow {
+  display: grid;
   position: relative;
-  --cw: calc((100% - (var(--fl-cols, 6) - 1) * var(--fl-gap)) / var(--fl-cols, 6));
+  grid-template-rows: none;
 }
 .pp-flow > .fl-item,
 .pp-flow > .fl-section,
 .pp-flow > .fl-cell,
-.pp-flow > .fl-pins {
+.pp-flow > .fl-pins,
+.pp-flow > .fl-add-answer {
   position: absolute;
   box-sizing: border-box;
-  left: calc((var(--c) - 1) * (var(--cw) + var(--fl-gap)));
-  width: var(--cw);
+  grid-column: var(--c) / span 1;
+  grid-row: auto;
+  left: 0;
+  right: 0;
+  width: auto;
   margin: 0;
 }
 .pp-flow > .fl-item.pp-block,
@@ -4000,8 +4011,10 @@ kbd {
 .pp-flow > .fl-item {
   padding: 5px 10px 4px;
 }
+/* A section title: its text stays about one column wide, its line runs across the sheet. */
 .pp-flow > .fl-section {
-  padding: 4px 4px 4px 2px;
+  grid-column: 1 / -1;
+  padding: 4px calc(100% - var(--fl-min)) 4px 2px;
 }
 .pp-flow > .fl-cell {
   min-height: 0;
@@ -4013,24 +4026,35 @@ kbd {
 .pp-flow > .fl-band {
   position: absolute;
   box-sizing: border-box;
+  grid-column: var(--c) / span 1;
+  grid-row: auto;
   top: 0;
   height: 100%;
   margin: 0;
-  left: calc((var(--c) - 1) * (var(--cw) + var(--fl-gap)) - var(--fl-gap) / 2);
-  width: calc(var(--cw) + var(--fl-gap));
+  left: calc(var(--fl-gap) / -2);
+  right: calc(var(--fl-gap) / -2);
+  width: auto;
 }
 .pp-flow > .fl-rows {
   position: absolute;
+  grid-column: 1 / -1;
+  grid-row: auto;
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(var(--fl-cols, 6), minmax(0, 1fr));
-  grid-auto-rows: 38px; /* = DEFAULT_METRICS.rowHeight in src/model/flowLayout.ts */
+  grid-auto-rows: 34px; /* = DEFAULT_METRICS.rowHeight in src/model/flowLayout.ts */
   column-gap: var(--fl-gap);
 }
 .pp-flow[data-measuring] > .fl-item,
 .pp-flow[data-measuring] > .fl-section {
   visibility: hidden;
+}
+/* An unused speech column stays narrow; its heading shrinks to fit. */
+.flow-col-head.is-narrow {
+  opacity: 0.7;
+}
+.flow-col-head.is-narrow .col-pin-btn {
+  display: none;
 }
 
 /* ---------- Flow look: thin outlines, side-colored text, empty cells invisible (after the Flowist video) ---------- */
@@ -4151,9 +4175,6 @@ kbd {
 }
 /* The + under linked answers. */
 .pp-flow > .fl-add-answer {
-  position: absolute;
-  left: calc((var(--c) - 1) * (var(--cw) + var(--fl-gap)));
-  width: var(--cw);
   height: 22px;
   padding: 0;
   border: 0;
@@ -4180,4 +4201,19 @@ kbd {
 }
 .pp-flow > .fl-add-answer:hover {
   color: var(--text);
+}
+
+/* Box-select */
+.fl-marquee {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 3px;
+}
+.pp-flow > .fl-cell.is-picked {
+  background: color-mix(in srgb, var(--text) 17%, var(--surface));
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }

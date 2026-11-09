@@ -338,3 +338,21 @@ describe('empty cells when linking', () => {
     expect(e.state.doc.childCount).toBe(4);
   });
 });
+
+describe('box-select', () => {
+  it('Link uses the cells picked with the box-select, in the column that has most of them', () => {
+    const e = make([
+      ['position', 'Case'],
+      ['claim', 'A'],
+      ['claim', 'one', { speech: 'LOC' }],
+      ['claim', 'two', { speech: 'LOC' }],
+      ['claim', 'mg', { speech: 'MG' }],
+    ]);
+    const idOf = (t: string) => String(e.state.doc.nodeAt(rowOf(e, t).pos)!.attrs.id);
+    e.view.dispatch(e.state.tr.setMeta(flowKey, { picked: [idOf('one'), idOf('two'), idOf('mg')] }));
+    e.commands.startLinking();
+    const lk = flowKey.getState(e.state)!.linking!;
+    expect(lk.col).toBe(2);
+    expect(lk.ids).toEqual([idOf('one'), idOf('two')]);
+  });
+});

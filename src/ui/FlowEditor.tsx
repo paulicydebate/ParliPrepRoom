@@ -9,6 +9,7 @@ import { blockWithChildren } from '../model/outline';
 import { useBoard } from '../store/pins';
 import { useLibrary } from './useLibrary';
 import { setFlowTheme, useFlowTheme } from '../store/flowTheme';
+import { columnTracks } from '../model/flowLayout';
 import { useDocs } from './hooks';
 import { useRoundMode } from '../store/roundMode';
 import { toast } from '../editor/roundGuard';
@@ -91,6 +92,7 @@ function useSheets(editor: Editor) {
         side: active?.side ?? 'gov',
         title: active?.title ?? '',
         pinCol: fs?.pinCol ?? null,
+        tracks: columnTracks(active, fs?.pinCol ?? null),
       };
     },
     equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b),
@@ -162,7 +164,7 @@ function SheetTabs({ editor }: { editor: Editor }) {
 }
 
 function ColumnHeaders({ editor }: { editor: Editor }) {
-  const { columns, sheets, pinCol } = useSheets(editor);
+  const { columns, sheets, pinCol, tracks } = useSheets(editor);
   if (!sheets.length) {
     return (
       <div className="flow-empty">
@@ -174,10 +176,10 @@ function ColumnHeaders({ editor }: { editor: Editor }) {
     );
   }
   return (
-    <div className="flow-head" style={{ ['--fl-cols' as string]: columns.length + (pinCol ? 1 : 0) }}>
+    <div className="flow-head" style={{ ['--fl-cols' as string]: columns.length + (pinCol ? 1 : 0), ['--fl-template' as string]: tracks.template, ['--fl-minw' as string]: tracks.minWidth }}>
       {columns.map((c, i) => (
         <Fragment key={c}>
-          <div className={`flow-col-head fl-${SPEECH_INFO[c].side}`} title={SPEECH_INFO[c].name}>
+          <div className={`flow-col-head fl-${SPEECH_INFO[c].side}` + (tracks.used[i] ? '' : ' is-narrow')} title={SPEECH_INFO[c].name}>
             <span>{c}</span>
             <button
               type="button"

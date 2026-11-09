@@ -132,3 +132,47 @@ export function layoutFlow(sheet: FlowSheet, measured: ReadonlyMap<number, numbe
   }
   return { tops, heights, groups, blanks, ghostTop: y, total: y + sheet.ghostRows * m.rowHeight };
 }
+
+/** Width of a speech column nobody has used yet. */
+export const NARROW_COLUMN_PX = 76;
+
+export interface ColumnTracks {
+  /** CSS grid-template-columns for the sheet (and its heading row). */
+  template: string;
+  /** CSS min-width so the sheet scrolls sideways instead of squashing. */
+  minWidth: string;
+  /** Which speech columns (1-based) have something in them. */
+  used: boolean[];
+}
+
+/**
+ * Columns with nothing in them stay narrow until they are used, so the screen goes to the
+ * arguments. The first column is always full width. `pinCol` adds the pins column after it.
+ */
+export function columnTracks(sheet: FlowSheet | null, pinCol: number | null): ColumnTracks {
+  const n = sheet?.columns.length ?? 1;
+  const used: boolean[] = [];
+  for (let c = 1; c <= n; c++) used.push(c === 1 || !!sheet?.placements.some((p) => p.col === c));
+  const tracks: string[] = [];
+  let wide = 0;
+  let narrow = 0;
+  for (let c = 1; c <= n; c++) {
+    if (used[c - 1]) {
+      tracks.push('minmax(var(--fl-min), 1fr)');
+      wide++;
+    } else {
+      tracks.push(`${NARROW_COLUMN_PX}px`);
+      narrow++;
+    }
+    if (pinCol === c) {
+      tracks.push('minmax(var(--fl-min), 1fr)');
+      wide++;
+    }
+  }
+  const gaps = tracks.length - 1;
+  return {
+    template: tracks.join(' '),
+    minWidth: `calc(${wide} * var(--fl-min) + ${narrow * NARROW_COLUMN_PX}px + ${gaps} * var(--fl-gap))`,
+    used,
+  };
+}

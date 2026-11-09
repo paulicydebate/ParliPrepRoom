@@ -4,7 +4,7 @@ import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } 
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { levelOf, newBlockId } from '../model/blocks';
 import { computeFlow, insertPosFor, readBlocks, sheetAt, type FlowLayout, type FlowSheet } from '../model/flow';
-import { DEFAULT_METRICS, layoutFlow, type FlowGeometry } from '../model/flowLayout';
+import { columnTracks, DEFAULT_METRICS, layoutFlow, type FlowGeometry } from '../model/flowLayout';
 import { baseSpeech, SPEECH_INFO, type Side } from '../model/speeches';
 import { toast } from './roundGuard';
 
@@ -20,6 +20,8 @@ export interface FlowState {
   pinCol: number | null;
   /** Link mode: the claims being linked (by block id) and their column; the next click on an argument links them. */
   linking: { ids: string[]; col: number } | null;
+  /** Cells picked with the box-select (ids of their first lines); Link uses them. */
+  picked: string[];
   /** Measured height of each block of the sheet in view, by document position (px). Measured after every change. */
   heights: ReadonlyMap<number, number>;
   /** Where everything goes on screen (see model/flowLayout.ts); null until there is a sheet. */
@@ -250,11 +252,68 @@ export function applyLink(view: EditorView, targetPos: number): boolean {
     else tr.setNodeMarkup(pos, undefined, { ...node.attrs, answers: targetId, speech: sheet.columns[lk.col - 1] });
   }
   for (const d of toDelete.sort((a, b) => b.pos - a.pos)) tr.delete(d.pos, d.pos + d.size);
-  tr.setMeta(flowKey, { linking: null });
+  tr.setMeta(flowKey, { linking: null, picked: [] });
   const mapped = tr.mapping.map(targetPos);
   tr.setSelection(TextSelection.create(tr.doc, mapped + 1 + tnode.content.size));
   view.dispatch(tr);
   return true;
+}
+
+
+/**
+ * Drag on an empty spot to draw a box; the cells it touches are picked (then Link uses them). A press
+ * that never moves is a plain click and calls `onClick`.
+ */
+function boxSelect(view: EditorView, start: MouseEvent, onClick: () => void) {
+  const wrap = view.dom.closest('.flow-grid-wrap') as HTMLElement | null;
+  const x0 = start.clientX;
+  const y0 = start.clientY;
+  let box: HTMLElement | null = null;
+  let moved = false;
+  let raf = 0;
+  let last = { x: x0, y: y0 };
+  const apply = () => {
+    raf = 0;
+    if (!box || !wrap) return;
+    const left = Math.min(x0, last.x);
+    const top = Math.min(y0, last.y);
+    const right = Math.max(x0, last.x);
+    const bottom = Math.max(y0, last.y);
+    const w = wrap.getBoundingClientRect();
+    box.style.left = `${left - w.left}px`;
+    box.style.top = `${top - w.top}px`;
+    box.style.width = `${right - left}px`;
+    box.style.height = `${bottom - top}px`;
+    const ids: string[] = [];
+    for (const el of view.dom.querySelectorAll<HTMLElement>(':scope > .fl-cell[data-first]')) {
+      const r = el.getBoundingClientRect();
+      if (r.right < left || r.left > right || r.bottom < top || r.top > bottom) continue;
+      const id = view.state.doc.nodeAt(Number(el.dataset.first))?.attrs.id;
+      if (id) ids.push(String(id));
+    }
+    const now = flowKey.getState(view.state)?.picked ?? [];
+    if (ids.join() !== now.join()) view.dispatch(view.state.tr.setMeta(flowKey, { picked: ids }));
+  };
+  const move = (e: MouseEvent) => {
+    last = { x: e.clientX, y: e.clientY };
+    if (!moved) {
+      if (Math.hypot(e.clientX - x0, e.clientY - y0) < 5) return;
+      moved = true;
+      box = document.createElement('div');
+      box.className = 'fl-marquee';
+      wrap?.appendChild(box);
+    }
+    if (!raf) raf = requestAnimationFrame(apply);
+  };
+  const up = () => {
+    window.removeEventListener('mousemove', move);
+    if (raf) cancelAnimationFrame(raf);
+    if (moved) apply();
+    box?.remove();
+    if (!moved) onClick();
+  };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up, { once: true });
 }
 
 export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
@@ -382,7 +441,15 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
           if (!sheet) return false;
           let positions: number[];
           const sel = columnSelection(state);
-          if (sel) positions = sel.positions;
+          const pickedIds = new Set(flowKey.getState(state)?.picked ?? []);
+          if (pickedIds.size) {
+            // Cells picked with the box-select: the column that has the most of them.
+            const mine = sheet.placements.filter((p) => pickedIds.has(String(state.doc.nodeAt(p.pos)?.attrs.id)));
+            const counts = new Map<number, number>();
+            for (const p of mine) counts.set(p.col, (counts.get(p.col) ?? 0) + 1);
+            const col = [...counts].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]?.[0];
+            positions = mine.filter((p) => p.col === col).map((p) => p.pos);
+          } else if (sel) positions = sel.positions;
           else {
             const cur = currentPlacement(state);
             positions = cur ? [cur.p.pos] : [];
@@ -467,18 +534,20 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             const sheet = sheetAt(layout, state.selection.from) ?? layout.sheets[0];
             const heights = new Map<number, number>();
             const active = sheet ? sheetKey(sheet) : null;
-            return { layout, active, pinCol: null, linking: null, heights, geometry: geometryOf(layout, active, heights) };
+            return { layout, active, pinCol: null, linking: null, picked: [], heights, geometry: geometryOf(layout, active, heights) };
           },
           apply(tr, value, _old, newState) {
             const layout = tr.docChanged ? computeFlow(readBlocks(newState.doc)) : value.layout;
             let active = value.active;
             let pinCol = value.pinCol;
-            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null; linking?: FlowState['linking']; heights?: ReadonlyMap<number, number> } | undefined;
+            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null; linking?: FlowState['linking']; heights?: ReadonlyMap<number, number>; picked?: string[] } | undefined;
             let heights = value.heights;
             if (tr.docChanged) heights = new Map([...heights].map(([pos, h]) => [tr.mapping.map(pos), h]));
             if (meta?.heights) heights = meta.heights;
             let linking = value.linking;
             if (meta && 'linking' in meta) linking = meta.linking ?? null;
+            let picked = value.picked;
+            if (meta?.picked) picked = meta.picked;
             if (meta && 'pinCol' in meta) pinCol = meta.pinCol ?? null;
             if (meta && meta.active !== undefined) active = meta.active;
             else if (tr.selectionSet || tr.docChanged) {
@@ -491,8 +560,11 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             }
             const sheetNow = layout.sheets.find((s) => sheetKey(s) === active);
             if (pinCol !== null && sheetNow && pinCol > sheetNow.columns.length) pinCol = sheetNow.columns.length;
-            if (active !== value.active) linking = null;
-            return { layout, active, pinCol, linking, heights, geometry: geometryOf(layout, active, heights) };
+            if (active !== value.active) {
+              linking = null;
+              picked = [];
+            }
+            return { layout, active, pinCol, linking, picked, heights, geometry: geometryOf(layout, active, heights) };
           },
         },
         // Measures every block after each change and hands the heights to the layout.
@@ -542,7 +614,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
               ...(columnSelection(state) ? { 'data-colsel': 'true' } : {}),
               ...(flowKey.getState(state)?.linking ? { 'data-linking': 'true' } : {}),
               class: 'pp-flow',
-              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}; height: ${Math.ceil(flowKey.getState(state)?.geometry?.total ?? 0)}px`,
+              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}; --fl-template: ${columnTracks(sheet, flowKey.getState(state)?.pinCol ?? null).template}; --fl-minw: ${columnTracks(sheet, flowKey.getState(state)?.pinCol ?? null).minWidth}; height: ${Math.ceil(flowKey.getState(state)?.geometry?.total ?? 0)}px`,
               ...(sheet && sheet.placements.length && !flowKey.getState(state)?.heights.size ? { 'data-measuring': 'true' } : {}),
               'data-side': sheet?.side ?? 'gov',
             };
@@ -572,6 +644,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             // With the pins column open, columns after it move one to the right.
             const pinCol = fs.pinCol;
             const dc = (c: number) => (pinCol && c > pinCol ? c + 1 : c);
+            const template = columnTracks(sheet, pinCol).template;
             // Blocks are placed by the layout (model/flowLayout.ts): a column number and a top, so
             // every cell grows on its own instead of sharing a row height with its neighbours.
             for (const p of sheet.placements) {
@@ -641,6 +714,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             // The caret is in an argument or one of its answers: that argument and all its answers light up.
             const caret = state.selection.$from;
             const here = caret.depth >= 1 ? caret.before(1) : -1;
+            const picked = new Set(fs.picked);
             const lit = new Set<number>();
             for (const l of sheet.links) {
               const a = boxAt.get(l.from);
@@ -657,12 +731,13 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             for (const cb of cellBoxes) {
               const g = sheet.groups[cb.g];
               const on = !cb.empty && lit.has(cb.first);
+              const pk = !cb.empty && picked.has(String(state.doc.nodeAt(cb.first)?.attrs.id));
               decos.push(
                 Decoration.widget(
                   g.from,
                   () => {
                     const el = document.createElement('div');
-                    el.className = `fl-cell fl-${sideOf(cb.c)}` + (cb.empty ? ' is-empty' : cb.blank ? ' is-blank' : '') + (on ? ' is-lit' : '');
+                    el.className = `fl-cell fl-${sideOf(cb.c)}` + (cb.empty ? ' is-empty' : cb.blank ? ' is-blank' : '') + (on ? ' is-lit' : '') + (pk ? ' is-picked' : '');
                     el.contentEditable = 'false';
                     place(el, dc(cb.c), cb.top, cb.height);
                     el.dataset.col = String(cb.c);
@@ -674,7 +749,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                     }
                     return el;
                   },
-                  { side: -1, key: `c-${cb.g}-${cb.c}-${cb.i}-${dc(cb.c)}-${cb.top}-${cb.height}-${cb.empty ? 1 : cb.blank ? 2 : 0}-${on ? 1 : 0}-${cb.first}-${cb.last}-${sideOf(cb.c)}`, ignoreSelection: true },
+                  { side: -1, key: `c-${cb.g}-${cb.c}-${cb.i}-${dc(cb.c)}-${cb.top}-${cb.height}-${cb.empty ? 1 : cb.blank ? 2 : 0}-${on ? 1 : 0}-${pk ? 1 : 0}-${cb.first}-${cb.last}-${sideOf(cb.c)}`, ignoreSelection: true },
                 ),
               );
             }
@@ -726,6 +801,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                     wrap.className = 'fl-rows' + (target === 'ghost' ? ' is-ghost' : '');
                     wrap.contentEditable = 'false';
                     wrap.style.top = `${rounded}px`;
+                    wrap.style.gridTemplateColumns = template;
                     wrap.style.height = `${count * DEFAULT_METRICS.rowHeight}px`;
                     const frag = document.createDocumentFragment();
                     for (let i = 0; i < count; i++) {
@@ -744,7 +820,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                     wrap.appendChild(frag);
                     return wrap;
                   },
-                  { side: -1, key: `r-${target}-${before}-${rounded}-${count}-${cols}-${sheet.side}-${pinCol ?? 0}`, ignoreSelection: true },
+                  { side: -1, key: `r-${target}-${before}-${rounded}-${count}-${cols}-${sheet.side}-${pinCol ?? 0}-${template}`, ignoreSelection: true },
                 ),
               );
             };
@@ -799,8 +875,9 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             return true;
           },
           handleKeyDown(view, event) {
-            if (event.key === 'Escape' && flowKey.getState(view.state)?.linking) {
-              view.dispatch(view.state.tr.setMeta(flowKey, { linking: null }));
+            const st = flowKey.getState(view.state);
+            if (event.key === 'Escape' && (st?.linking || st?.picked.length)) {
+              view.dispatch(view.state.tr.setMeta(flowKey, { linking: null, picked: [] }));
               return true;
             }
             return false;
@@ -815,6 +892,10 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                   return true;
                 }
               }
+              // Clicking into text drops a box-select.
+              if (flowKey.getState(view.state)?.picked.length && (event.target as HTMLElement | null)?.closest?.('.fl-item')) {
+                view.dispatch(view.state.tr.setMeta(flowKey, { picked: [] }));
+              }
               return false;
             },
           },
@@ -824,24 +905,34 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
         key: new PluginKey('pp-flow-cells'),
         props: {
           handleDOMEvents: {
-            mousedown(_view, event) {
-              const add = (event.target as HTMLElement | null)?.closest?.('.fl-add-answer') as HTMLElement | null;
+            mousedown(view, event) {
+              const target = event.target as HTMLElement | null;
+              const add = target?.closest?.('.fl-add-answer') as HTMLElement | null;
               if (add) {
                 event.preventDefault();
                 editor.chain().focus().addAnswer(Number(add.dataset.addTarget), Number(add.dataset.addAt)).run();
                 return true;
               }
-              const el = (event.target as HTMLElement | null)?.closest?.('.fl-cell.is-empty') as HTMLElement | null;
-              if (!el) return false;
+              // Anything that is not text starts a box-select if you drag, and a click if you do not.
+              const empty = target?.closest?.('.fl-cell.is-empty') as HTMLElement | null;
+              const background = !empty && (target === view.dom || !!target?.closest?.('.fl-band, .fl-rows, .fl-cell.is-empty'));
+              if (!empty && !background) return false;
               event.preventDefault();
-              const col = Number(el.dataset.col);
-              const target: CellTarget =
-                el.dataset.target === 'ghost'
-                  ? { ghost: Number(el.dataset.index) }
-                  : el.dataset.target === 'blank'
-                    ? { before: Number(el.dataset.before), index: Number(el.dataset.index) }
-                    : { group: Number(el.dataset.group) };
-              editor.chain().focus().createCell(target, col).run();
+              view.focus();
+              boxSelect(view, event as MouseEvent, () => {
+                if (!empty) {
+                  if (flowKey.getState(view.state)?.picked.length) view.dispatch(view.state.tr.setMeta(flowKey, { picked: [] }));
+                  return;
+                }
+                const col = Number(empty.dataset.col);
+                const cell: CellTarget =
+                  empty.dataset.target === 'ghost'
+                    ? { ghost: Number(empty.dataset.index) }
+                    : empty.dataset.target === 'blank'
+                      ? { before: Number(empty.dataset.before), index: Number(empty.dataset.index) }
+                      : { group: Number(empty.dataset.group) };
+                editor.chain().focus().createCell(cell, col).run();
+              });
               return true;
             },
             copy(view, event) {
