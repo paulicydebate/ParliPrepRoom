@@ -229,3 +229,35 @@ describe('flow2 text binding', () => {
     expect(e2.value).toBe('Xabcd');
   });
 });
+
+import { connectorPath, routeBetween } from '../src/flow2/connectors';
+import { connectorCrossings, CROSSING_SHADOW_DEFAULTS, crossingShadowExtent } from '../src/flow2/connectorCrossings';
+
+describe('flow2 connectors (from Flowist)', () => {
+  const rect = (left: number, top: number, w = 150, h = 30) => ({ left, right: left + w, top, bottom: top + h });
+
+  it('runs from the argument’s right edge to the answer’s left edge, bending halfway across the gutter', () => {
+    const r = routeBetween('a:b', rect(0, 0), rect(194, 60), 'a', 'b');
+    expect(r.sourceX).toBe(150);
+    expect(r.responseX).toBe(194);
+    expect(r.elbowX).toBeCloseTo(172, 5);
+    const p = connectorPath(r);
+    expect(p.d.startsWith('M 150 15')).toBe(true);
+    expect(p.d).toContain(' C ');
+    expect(p.straight).toBe(false);
+  });
+
+  it('a line between cells at the same height is straight', () => {
+    const p = connectorPath(routeBetween('a:b', rect(0, 0), rect(194, 0), 'a', 'b'));
+    expect(p.straight).toBe(true);
+    expect(p.d).toBe('M 150 15 L 194 15');
+  });
+
+  it('finds where two lines cross', () => {
+    const a = connectorPath(routeBetween('a:c', rect(0, 0), rect(194, 100), 'a', 'c'));
+    const b = connectorPath(routeBetween('b:d', rect(0, 100), rect(194, 0), 'b', 'd'));
+    expect(connectorCrossings([a, b], crossingShadowExtent(CROSSING_SHADOW_DEFAULTS)).length).toBeGreaterThan(0);
+    const parallel = connectorPath(routeBetween('e:f', rect(0, 200), rect(194, 300), 'e', 'f'));
+    expect(connectorCrossings([a, parallel], crossingShadowExtent(CROSSING_SHADOW_DEFAULTS))).toEqual([]);
+  });
+});

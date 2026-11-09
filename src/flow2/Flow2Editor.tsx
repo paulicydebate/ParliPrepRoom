@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, Fragment, useId, type ReactNode } from 'react';
 import * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
 import { toast } from '../editor/roundGuard';
@@ -6,6 +6,8 @@ import { SPEECH_INFO } from '../model/speeches';
 import { useFlowTheme } from '../store/flowTheme';
 import { ColorsButton } from '../ui/FlowEditor';
 import { IconPlus, IconThread } from '../ui/icons';
+import { connectorPath, routeBetween, type ConnectorPath } from './connectors';
+import { connectorCrossings, CROSSING_SHADOW_DEFAULTS, crossingShadowExtent } from './connectorCrossings';
 import { layoutFlow, METRICS } from './layout';
 import {
   addSheet,
@@ -32,6 +34,9 @@ import {
   type FlowSheetData,
 } from './model';
 import { bindText } from './textBinding';
+import './flowist/palette-0.css';
+import './flowist/fonts.css';
+import './flowist/flowist-theme.css';
 
 // The new flow editor: separate cells (each its own text box), threads between an argument and its
 // answers, box-select, link mode, narrow unused columns. Interaction design adapted from Flowist
@@ -206,6 +211,7 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const want = useRef<Focus | null>(null);
   const [, bump] = useState(0);
+  const sheetUid = useId().replace(/:/g, '');
 
   useLayoutEffect(() => {
     const el = scroll.current;
@@ -456,17 +462,23 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
   }, [focusId, byId, cells]);
 
   // ---------- Threads and the + buttons ----------
-  const threads = cells
+  const rectOf = (c: FlowCell) => ({ left: colX[c.col - 1], right: colX[c.col - 1] + colW[c.col - 1], top: top(c), bottom: top(c) + (layout.heights.get(c.id) ?? 30) });
+  const paths: ConnectorPath[] = cells
     .filter((c) => c.parent && byId.has(c.parent) && layout.tops.has(c.id) && layout.tops.has(c.parent))
-    .map((c) => {
-      const p = byId.get(c.parent!)!;
-      const x1 = colX[p.col - 1] + colW[p.col - 1];
-      const y1 = top(p) + Math.min((layout.heights.get(p.id) ?? 30) / 2, 18);
-      const x2 = colX[c.col - 1];
-      const y2 = top(c) + Math.min((layout.heights.get(c.id) ?? 30) / 2, 18);
-      const dx = Math.max(12, (x2 - x1) * 0.55);
-      return { key: c.id, d: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`, on: lit.has(c.id) && lit.has(c.parent!) };
-    });
+    .sort((a, b) => top(a) - top(b))
+    .map((c) => connectorPath(routeBetween(`${c.parent}:${c.id}`, rectOf(byId.get(c.parent!)!), rectOf(c), c.parent!, c.id)));
+  const crossings = useMemo(() => connectorCrossings(paths, crossingShadowExtent(CROSSING_SHADOW_DEFAULTS)), [paths.map((p) => p.d).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The line drawn first at a junction is beneath; the other casts its shadow on it (as in Flowist's ResponseConnectors).
+  const paintOrder = new Map(paths.map((p, i) => [p.key, i]));
+  const shadowsUnder = new Map<string, { id: string; box: { x: number; y: number; width: number; height: number }; beneath: string; above: string; x: number; y: number }[]>();
+  crossings.forEach((crossing, index) => {
+    const [first, second] = crossing.lines;
+    const [beneath, above] = (paintOrder.get(first.key) ?? 0) < (paintOrder.get(second.key) ?? 0) ? [first, second] : [second, first];
+    const entry = { id: `${sheetUid}-x${index}`, box: crossing.box, beneath: beneath.piece, above: above.piece, x: crossing.x, y: crossing.y };
+    const list = shadowsUnder.get(beneath.key);
+    if (!list) shadowsUnder.set(beneath.key, [entry]);
+    else if (!list.some((o) => Math.hypot(o.x - entry.x, o.y - entry.y) < 1)) list.push(entry);
+  });
   const adds = [...new Set(cells.filter((c) => c.parent).map((c) => c.parent!))]
     .map((pid) => childrenOf(cells, pid).at(-1))
     .filter((k): k is FlowCell => !!k && layout.tops.has(k.id));
@@ -497,9 +509,22 @@ function SheetView({ doc, sheets, sheet, undo, onPick }: { doc: Y.Doc; sheets: F
             <div key={s} className={'f2-band' + (i % 2 ? ' is-alt' : '')} style={{ left: colX[i] - GAP_PX / 2, width: colW[i] + GAP_PX }} />
           ))}
           {empty && <div className="f2-hint">Click here, or press Enter, to start. Tab moves to the next speech.</div>}
-          <svg className="f2-threads" aria-hidden="true">
-            {threads.map((t) => (
-              <path key={t.key} d={t.d} className={'thread' + (t.on ? ' is-on' : '')} />
+          <svg className="f2-threads" aria-hidden="true" focusable="false">
+            {paths.map((p) => (
+              <Fragment key={p.key}>
+                <path className="link-line" d={p.d} data-straight={p.straight && p.sourceY === p.responseY ? 'true' : undefined} data-active={lit.has(p.responseId ?? '') && lit.has(p.sourceId) ? 'true' : undefined} vectorEffect="non-scaling-stroke" />
+                {shadowsUnder.get(p.key)?.map((sh) => (
+                  <Fragment key={sh.id}>
+                    <filter id={`${sh.id}-blur`} filterUnits="userSpaceOnUse" {...sh.box}>
+                      <feGaussianBlur stdDeviation={CROSSING_SHADOW_DEFAULTS.blur} />
+                    </filter>
+                    <mask id={`${sh.id}-under`} maskUnits="userSpaceOnUse" {...sh.box}>
+                      <path className="link-crossing-mask" d={sh.beneath} vectorEffect="non-scaling-stroke" />
+                    </mask>
+                    <path className="link-crossing" d={sh.above} strokeWidth={1.5 + 2 * CROSSING_SHADOW_DEFAULTS.size} strokeOpacity={CROSSING_SHADOW_DEFAULTS.opacity} filter={`url(#${sh.id}-blur)`} mask={`url(#${sh.id}-under)`} vectorEffect="non-scaling-stroke" />
+                  </Fragment>
+                ))}
+              </Fragment>
             ))}
           </svg>
           {cells.map((c) => (

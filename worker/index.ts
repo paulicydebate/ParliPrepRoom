@@ -33,12 +33,22 @@ const isAdmin = (env: Env, email: string | undefined) =>
 const DOC_ID = /^[A-Za-z0-9-]{8,64}$/;
 const COOKIE = 'pp_session';
 
+const decodedFiles = new Map<string, Uint8Array>();
+function decoded(path: string, b64: string): Uint8Array {
+  let bytes = decodedFiles.get(path);
+  if (!bytes) {
+    bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    decodedFiles.set(path, bytes);
+  }
+  return bytes;
+}
+
 function serveFile(path: string): Response | null {
   const f = FILES[path];
   if (!f) return null;
   // Hashed build files never change; everything else is re-checked.
   const cache = path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store';
-  return new Response(f.body, { headers: { 'content-type': f.type, 'cache-control': cache } });
+  return new Response(f.b64 ? decoded(path, f.b64) : f.body, { headers: { 'content-type': f.type, 'cache-control': cache } });
 }
 
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'cache-control': 'no-store' } });

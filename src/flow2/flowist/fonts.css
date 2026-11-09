@@ -1,0 +1,32 @@
+/* Adapted from Flowist (by Elli; used with permission): packages/tokens/fonts/fonts.css.
+ * Inter 4.1 (inter-ui) and Paper Mono 1.000 (paper-design/paper-mono), both SIL OFL 1.1; see Inter-OFL.txt
+ * and PaperMono-OFL.txt. InterVariable-Latin.woff2 is the Latin subset; the full InterVariable.woff2
+ * loads only when a character outside it shows. (The italic file is left out: the flow does not use it.) */
+
+@font-face {
+  font-family: InterVariable;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./InterVariable.woff2") format("woff2");
+  unicode-range: U+0180-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB, U+02DD-0303, U+0306-0307, U+0309-0328, U+032C-04FF, U+052F,
+    U+0E3F, U+1D00-1D1B, U+1D43-1D65, U+1D9C-1FFE, U+2070-20AB, U+20AD-20F0, U+2150-2189, U+2423, U+2460-2468, U+24B6-24EA,
+    U+27EF-27FA, U+2913, U+2A38, U+2B06-2B24, U+2C7C-2C7F, U+2DFF-2E18, U+A69F, U+A7FF, U+A92E, U+E000-E163, U+E1C3-E2DC,
+    U+EE01-EEE1, U+F6C3, U+1F12F-1F149, U+1F16A-1F16B, U+1F850-1F852;
+}
+@font-face {
+  font-family: InterVariable;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./InterVariable-Latin.woff2") format("woff2");
+  unicode-range: U+0000-017F, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2100-214F,
+    U+2190-23FF, U+25A0-27BF, U+FEFF, U+FFFC-FFFD;
+}
+@font-face {
+  font-family: "Paper Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("./PaperMonoVariable.woff2") format("woff2");
+}
