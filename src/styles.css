@@ -1470,7 +1470,6 @@ del {
 }
 .pp-flow > .pp-block[data-kind='claim'] {
   font-size: calc(var(--pp-claim-size) * 0.86);
-  margin-top: 9px;
 }
 .pp-flow > .pp-block[data-kind='warrant'],
 .pp-flow > .pp-block[data-kind='analytic'] {
@@ -3975,4 +3974,61 @@ kbd {
 .pp-flow[data-linking] > .fl-linkable:hover {
   outline: 2px dashed var(--accent);
   outline-offset: -2px;
+}
+
+/* ---------- Flow layout: every cell grows on its own (adapted from Flowist's idea) ---------- */
+/* Blocks and backgrounds are placed by the layout in src/model/flowLayout.ts: a column (--c) and a top. */
+.pp-flow {
+  display: block;
+  position: relative;
+  --cw: calc((100% - (var(--fl-cols, 6) - 1) * var(--fl-gap)) / var(--fl-cols, 6));
+}
+.pp-flow > .fl-item,
+.pp-flow > .fl-section,
+.pp-flow > .fl-cell,
+.pp-flow > .fl-pins {
+  position: absolute;
+  box-sizing: border-box;
+  left: calc((var(--c) - 1) * (var(--cw) + var(--fl-gap)));
+  width: var(--cw);
+  margin: 0;
+}
+.pp-flow > .fl-item.pp-block,
+.pp-flow > .fl-section {
+  margin: 0;
+}
+.pp-flow > .fl-item {
+  padding: 5px 10px 4px;
+}
+.pp-flow > .fl-section {
+  padding: 4px 4px 4px 2px;
+}
+.pp-flow > .fl-cell {
+  min-height: 0;
+}
+.pp-flow > .fl-pins {
+  top: 0;
+  height: 100%;
+}
+.pp-flow > .fl-band {
+  position: absolute;
+  box-sizing: border-box;
+  top: 0;
+  height: 100%;
+  margin: 0;
+  left: calc((var(--c) - 1) * (var(--cw) + var(--fl-gap)) - var(--fl-gap) / 2);
+  width: calc(var(--cw) + var(--fl-gap));
+}
+.pp-flow > .fl-rows {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--fl-cols, 6), minmax(0, 1fr));
+  grid-auto-rows: 38px; /* = DEFAULT_METRICS.rowHeight in src/model/flowLayout.ts */
+  column-gap: var(--fl-gap);
+}
+.pp-flow[data-measuring] > .fl-item,
+.pp-flow[data-measuring] > .fl-section {
+  visibility: hidden;
 }

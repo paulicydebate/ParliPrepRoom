@@ -108,3 +108,7 @@ The app runs on Cloudflare Workers (`wrangler.jsonc`, server code in `worker/`).
 | `src/settings/` | Fonts, themes, per-style appearance. |
 | `src/ui/` | React components. |
 | `tests/` | Unit tests. |
+
+## Credits
+
+- **Flowist** (by Elli): the flow view's cell layout, the lines linking an argument to its answers, and the multi-sheet canvas are adapted from Flowist, a debate flowing app, used with the author's permission. Files adapted from it say so in their headers.

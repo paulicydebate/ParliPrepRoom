@@ -4,6 +4,7 @@ import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } 
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
 import { newBlockId } from '../model/blocks';
 import { computeFlow, insertPosFor, readBlocks, sheetAt, type FlowLayout, type FlowSheet } from '../model/flow';
+import { DEFAULT_METRICS, layoutFlow, type FlowGeometry } from '../model/flowLayout';
 import { baseSpeech, SPEECH_INFO, type Side } from '../model/speeches';
 import { toast } from './roundGuard';
 
@@ -19,6 +20,15 @@ export interface FlowState {
   pinCol: number | null;
   /** Link mode: the claims being linked (by block id) and their column; the next click on an argument links them. */
   linking: { ids: string[]; col: number } | null;
+  /** Measured height of each block of the sheet in view, by document position (px). Measured after every change. */
+  heights: ReadonlyMap<number, number>;
+  /** Where everything goes on screen (see model/flowLayout.ts); null until there is a sheet. */
+  geometry: FlowGeometry | null;
+}
+
+function geometryOf(layout: FlowLayout, active: string | null, heights: ReadonlyMap<number, number>): FlowGeometry | null {
+  const sheet = layout.sheets.find((s) => sheetKey(s) === active) ?? layout.sheets[0];
+  return sheet ? layoutFlow(sheet, heights) : null;
 }
 
 export const flowKey = new PluginKey<FlowState>('pp-flow');
@@ -428,13 +438,18 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
           init: (_config, state) => {
             const layout = computeFlow(readBlocks(state.doc));
             const sheet = sheetAt(layout, state.selection.from) ?? layout.sheets[0];
-            return { layout, active: sheet ? sheetKey(sheet) : null, pinCol: null, linking: null };
+            const heights = new Map<number, number>();
+            const active = sheet ? sheetKey(sheet) : null;
+            return { layout, active, pinCol: null, linking: null, heights, geometry: geometryOf(layout, active, heights) };
           },
           apply(tr, value, _old, newState) {
             const layout = tr.docChanged ? computeFlow(readBlocks(newState.doc)) : value.layout;
             let active = value.active;
             let pinCol = value.pinCol;
-            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null; linking?: FlowState['linking'] } | undefined;
+            const meta = tr.getMeta(flowKey) as { active?: string; pinCol?: number | null; linking?: FlowState['linking']; heights?: ReadonlyMap<number, number> } | undefined;
+            let heights = value.heights;
+            if (tr.docChanged) heights = new Map([...heights].map(([pos, h]) => [tr.mapping.map(pos), h]));
+            if (meta?.heights) heights = meta.heights;
             let linking = value.linking;
             if (meta && 'linking' in meta) linking = meta.linking ?? null;
             if (meta && 'pinCol' in meta) pinCol = meta.pinCol ?? null;
@@ -450,8 +465,48 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             const sheetNow = layout.sheets.find((s) => sheetKey(s) === active);
             if (pinCol !== null && sheetNow && pinCol > sheetNow.columns.length) pinCol = sheetNow.columns.length;
             if (active !== value.active) linking = null;
-            return { layout, active, pinCol, linking };
+            return { layout, active, pinCol, linking, heights, geometry: geometryOf(layout, active, heights) };
           },
+        },
+        // Measures every block after each change and hands the heights to the layout.
+        view(editorView) {
+          let raf = 0;
+          const measure = () => {
+            raf = 0;
+            if (editorView.isDestroyed) return;
+            const fs = flowKey.getState(editorView.state);
+            const sheet = activeSheet(fs);
+            if (!fs || !sheet) return;
+            const next = new Map<number, number>();
+            let changed = false;
+            for (const p of sheet.placements) {
+              let el: HTMLElement | null = null;
+              try {
+                el = editorView.nodeDOM(p.pos) as HTMLElement | null;
+              } catch {
+                el = null; // the view is being rebuilt; measure again next frame
+              }
+              if (!el || !el.getBoundingClientRect) continue;
+              const h = Math.round(el.getBoundingClientRect().height * 10) / 10;
+              next.set(p.pos, h);
+              if (Math.abs((fs.heights.get(p.pos) ?? 0) - h) > 0.5) changed = true;
+            }
+            if (changed) editorView.dispatch(editorView.state.tr.setMeta(flowKey, { heights: next }).setMeta('addToHistory', false));
+          };
+          const schedule = () => {
+            if (!raf) raf = requestAnimationFrame(measure);
+          };
+          const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
+          ro?.observe(editorView.dom);
+          void document.fonts?.ready.then(schedule);
+          schedule();
+          return {
+            update: schedule,
+            destroy() {
+              if (raf) cancelAnimationFrame(raf);
+              ro?.disconnect();
+            },
+          };
         },
         props: {
           attributes(state) {
@@ -460,7 +515,8 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
               ...(columnSelection(state) ? { 'data-colsel': 'true' } : {}),
               ...(flowKey.getState(state)?.linking ? { 'data-linking': 'true' } : {}),
               class: 'pp-flow',
-              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}`,
+              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}; height: ${Math.ceil(flowKey.getState(state)?.geometry?.total ?? 0)}px`,
+              ...(sheet && sheet.placements.length && !flowKey.getState(state)?.heights.size ? { 'data-measuring': 'true' } : {}),
               'data-side': sheet?.side ?? 'gov',
             };
           },
@@ -484,29 +540,32 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             if (!sheet) return DecorationSet.create(state.doc, decos);
 
             const cols = sheet.columns.length;
+            const geo = fs.geometry;
+            const topOf = (pos: number) => Math.round((geo?.tops.get(pos) ?? 0) * 10) / 10;
             // With the pins column open, columns after it move one to the right.
             const pinCol = fs.pinCol;
             const dc = (c: number) => (pinCol && c > pinCol ? c + 1 : c);
+            // Blocks are placed by the layout (model/flowLayout.ts): a column number and a top, so
+            // every cell grows on its own instead of sharing a row height with its neighbours.
             for (const p of sheet.placements) {
               const n = state.doc.nodeAt(p.pos);
               if (!n) continue;
               if (p.col === 0) {
-                decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: 'fl-section', style: `grid-column: 1; grid-row: ${p.row}` }));
+                decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: 'fl-section', style: `--c: 1; top: ${topOf(p.pos)}px` }));
               } else {
                 const side = p.speech ? SPEECH_INFO[p.speech].side : sheet.side;
-                decos.push(
-                  Decoration.node(p.pos, p.pos + n.nodeSize, {
-                    class: `fl-item fl-${side}`,
-                    style: `grid-column: ${dc(p.col)}; grid-row: ${p.row} / span ${p.rowSpan}`,
-                  }),
-                );
+                decos.push(Decoration.node(p.pos, p.pos + n.nodeSize, { class: `fl-item fl-${side}`, style: `--c: ${dc(p.col)}; top: ${topOf(p.pos)}px` }));
               }
             }
 
             const sideOf = (col: number) => SPEECH_INFO[sheet.columns[col - 1]].side;
+            const place = (el: HTMLElement, col: number, top?: number, height?: number) => {
+              el.style.setProperty('--c', String(col));
+              if (top !== undefined) el.style.top = `${top}px`;
+              if (height !== undefined) el.style.height = `${height}px`;
+            };
 
             // Alternating column shades, behind everything, the full height of the sheet.
-            const bandRows = sheet.nextRow + sheet.ghostRows;
             for (let c = 1; c <= cols; c++) {
               decos.push(
                 Decoration.widget(
@@ -516,43 +575,49 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                     el.className = 'fl-band' + (c % 2 === 0 ? ' is-alt' : '');
                     el.contentEditable = 'false';
                     el.setAttribute('aria-hidden', 'true');
-                    el.style.gridColumn = String(dc(c));
-                    el.style.gridRow = `1 / span ${bandRows}`;
+                    place(el, dc(c));
                     return el;
                   },
-                  { side: -2, key: `band-${c}-${dc(c)}-${bandRows}`, ignoreSelection: true },
+                  { side: -2, key: `band-${c}-${dc(c)}`, ignoreSelection: true },
                 ),
               );
             }
 
-            // Background for each cell of a row (and a click target if empty).
-            for (const g of sheet.groups) {
+            // Background for each cell of a row (and a click target if empty). Each speech column's
+            // box is only as tall as its own text.
+            for (const gm of geo?.groups ?? []) {
+              const g = sheet.groups[gm.index];
+              if (!g) continue;
               for (let c = 1; c <= cols; c++) {
-                const filled = g.cells.has(c);
-                decos.push(
-                  Decoration.widget(
-                    g.from,
-                    () => {
-                      const el = document.createElement('div');
-                      el.className = `fl-cell fl-${sideOf(c)}` + (filled ? '' : ' is-empty');
-                      el.contentEditable = 'false';
-                      el.style.gridColumn = String(dc(c));
-                      el.style.gridRow = `${g.row} / span ${g.span}`;
-                      el.dataset.col = String(c);
-                      el.dataset.target = 'group';
-                      el.dataset.group = String(g.index);
-                      return el;
-                    },
-                    { side: -1, key: `c-${g.index}-${c}-${dc(c)}-${g.row}-${g.span}-${filled ? 1 : 0}-${sideOf(c)}`, ignoreSelection: true },
-                  ),
-                );
+                const boxes = gm.columns.get(c) ?? [{ top: gm.top, height: DEFAULT_METRICS.rowHeight - DEFAULT_METRICS.cellGap, empty: true }];
+                boxes.forEach((box, i) => {
+                  const top = Math.round(box.top * 10) / 10;
+                  const height = Math.round(box.height * 10) / 10;
+                  decos.push(
+                    Decoration.widget(
+                      g.from,
+                      () => {
+                        const el = document.createElement('div');
+                        el.className = `fl-cell fl-${sideOf(c)}` + (box.empty ? ' is-empty' : '');
+                        el.contentEditable = 'false';
+                        place(el, dc(c), top, height);
+                        el.dataset.col = String(c);
+                        el.dataset.target = 'group';
+                        el.dataset.group = String(g.index);
+                        return el;
+                      },
+                      { side: -1, key: `c-${g.index}-${c}-${i}-${dc(c)}-${top}-${height}-${box.empty ? 1 : 0}-${sideOf(c)}`, ignoreSelection: true },
+                    ),
+                  );
+                });
               }
             }
 
             // Runs of empty rows (blank rows kept above a row, and the empty
             // rows below the content), drawn as one block of cells each.
-            const emptyRows = (pos: number, row: number, count: number, target: 'blank' | 'ghost', before: number) => {
+            const emptyRows = (pos: number, top: number, count: number, target: 'blank' | 'ghost', before: number) => {
               if (count <= 0) return;
+              const rounded = Math.round(top * 10) / 10;
               decos.push(
                 Decoration.widget(
                   pos,
@@ -560,8 +625,8 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                     const wrap = document.createElement('div');
                     wrap.className = 'fl-rows' + (target === 'ghost' ? ' is-ghost' : '');
                     wrap.contentEditable = 'false';
-                    wrap.style.gridColumn = '1 / -1';
-                    wrap.style.gridRow = `${row} / span ${count}`;
+                    wrap.style.top = `${rounded}px`;
+                    wrap.style.height = `${count * DEFAULT_METRICS.rowHeight}px`;
                     const frag = document.createDocumentFragment();
                     for (let i = 0; i < count; i++) {
                       for (let c = 1; c <= cols; c++) {
@@ -579,28 +644,26 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
                     wrap.appendChild(frag);
                     return wrap;
                   },
-                  { side: -1, key: `r-${target}-${before}-${row}-${count}-${cols}-${sheet.side}-${pinCol ?? 0}`, ignoreSelection: true },
+                  { side: -1, key: `r-${target}-${before}-${rounded}-${count}-${cols}-${sheet.side}-${pinCol ?? 0}`, ignoreSelection: true },
                 ),
               );
             };
-            for (const b of sheet.blanks) emptyRows(sheet.groups[b.before]?.from ?? sheet.end, b.row, b.count, 'blank', b.before);
-            emptyRows(sheet.end, sheet.nextRow, sheet.ghostRows, 'ghost', -1);
+            for (const b of geo?.blanks ?? []) emptyRows(sheet.groups[b.before]?.from ?? sheet.end, b.top, b.count, 'blank', b.before);
+            emptyRows(sheet.end, geo?.ghostTop ?? 0, sheet.ghostRows, 'ghost', -1);
 
             // The pins column: the app's panel, placed after the chosen column, as tall as the sheet.
             const panel = editor.extensionManager.extensions.find((x) => x.name === 'flowView')?.options.pinPanel as HTMLElement | null;
             if (pinCol && panel) {
-              const rows = sheet.nextRow + sheet.ghostRows;
               decos.push(
                 Decoration.widget(
                   sheet.pos,
                   () => {
                     panel.contentEditable = 'false';
                     panel.className = 'fl-pins';
-                    panel.style.gridColumn = String(pinCol + 1);
-                    panel.style.gridRow = `1 / span ${rows}`;
+                    place(panel, pinCol + 1);
                     return panel;
                   },
-                  { side: -1, key: `pins-${pinCol}-${rows}`, ignoreSelection: true, stopEvent: () => true },
+                  { side: -1, key: `pins-${pinCol}`, ignoreSelection: true, stopEvent: () => true },
                 ),
               );
             }
