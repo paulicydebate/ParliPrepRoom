@@ -37,6 +37,16 @@ export const flowKey = new PluginKey<FlowState>('pp-flow');
 
 export const sheetKey = (s: FlowSheet) => s.id ?? `pos:${s.pos}`;
 
+/** Column widths for the sheet in view: a column is narrow until a line with text is in it (or the caret is). */
+export function tracksFor(state: EditorState) {
+  const fs = flowKey.getState(state);
+  const sheet = activeSheet(fs);
+  const $from = state.selection.$from;
+  const here = $from.depth >= 1 ? $from.before(1) : -1;
+  const caretCol = sheet?.placements.find((p) => p.pos === here)?.col ?? null;
+  return columnTracks(sheet, fs?.pinCol ?? null, { hasText: (pos) => (state.doc.nodeAt(pos)?.textContent.trim() ?? '') !== '', caretCol: caretCol || null });
+}
+
 export function activeSheet(state: FlowState | undefined): FlowSheet | null {
   if (!state) return null;
   return state.layout.sheets.find((s) => sheetKey(s) === state.active) ?? state.layout.sheets[0] ?? null;
@@ -614,7 +624,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
               ...(columnSelection(state) ? { 'data-colsel': 'true' } : {}),
               ...(flowKey.getState(state)?.linking ? { 'data-linking': 'true' } : {}),
               class: 'pp-flow',
-              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}; --fl-template: ${columnTracks(sheet, flowKey.getState(state)?.pinCol ?? null).template}; --fl-minw: ${columnTracks(sheet, flowKey.getState(state)?.pinCol ?? null).minWidth}; height: ${Math.ceil(flowKey.getState(state)?.geometry?.total ?? 0)}px`,
+              style: `--fl-cols: ${(sheet?.columns.length ?? 1) + (flowKey.getState(state)?.pinCol ? 1 : 0)}; --fl-template: ${tracksFor(state).template}; --fl-minw: ${tracksFor(state).minWidth}; height: ${Math.ceil(flowKey.getState(state)?.geometry?.total ?? 0)}px`,
               ...(sheet && sheet.placements.length && !flowKey.getState(state)?.heights.size ? { 'data-measuring': 'true' } : {}),
               'data-side': sheet?.side ?? 'gov',
             };
@@ -644,7 +654,7 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
             // With the pins column open, columns after it move one to the right.
             const pinCol = fs.pinCol;
             const dc = (c: number) => (pinCol && c > pinCol ? c + 1 : c);
-            const template = columnTracks(sheet, pinCol).template;
+            const template = tracksFor(state).template;
             // Blocks are placed by the layout (model/flowLayout.ts): a column number and a top, so
             // every cell grows on its own instead of sharing a row height with its neighbours.
             for (const p of sheet.placements) {

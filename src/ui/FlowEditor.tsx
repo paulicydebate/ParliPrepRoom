@@ -9,14 +9,13 @@ import { blockWithChildren } from '../model/outline';
 import { useBoard } from '../store/pins';
 import { useLibrary } from './useLibrary';
 import { setFlowTheme, useFlowTheme } from '../store/flowTheme';
-import { columnTracks } from '../model/flowLayout';
 import { useDocs } from './hooks';
 import { useRoundMode } from '../store/roundMode';
 import { toast } from '../editor/roundGuard';
 import type * as Y from 'yjs';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
 import { RoundGuard } from '../editor/roundGuard';
-import { activeSheet, flowKey, FlowView, sheetKey } from '../editor/flowView';
+import { activeSheet, flowKey, FlowView, sheetKey, tracksFor } from '../editor/flowView';
 import { KIND_INFO, asKind } from '../model/blocks';
 import { SPEECH_INFO } from '../model/speeches';
 import { ColorwayPicker } from './ColorwayPicker';
@@ -92,7 +91,7 @@ function useSheets(editor: Editor) {
         side: active?.side ?? 'gov',
         title: active?.title ?? '',
         pinCol: fs?.pinCol ?? null,
-        tracks: columnTracks(active, fs?.pinCol ?? null),
+        tracks: tracksFor(e.state),
       };
     },
     equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b),

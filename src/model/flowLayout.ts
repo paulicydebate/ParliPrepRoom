@@ -149,10 +149,20 @@ export interface ColumnTracks {
  * Columns with nothing in them stay narrow until they are used, so the screen goes to the
  * arguments. The first column is always full width. `pinCol` adds the pins column after it.
  */
-export function columnTracks(sheet: FlowSheet | null, pinCol: number | null): ColumnTracks {
+export function columnTracks(
+  sheet: FlowSheet | null,
+  pinCol: number | null,
+  opts: {
+    /** True if the block at this document position has text; without it any block counts. */
+    hasText?: (pos: number) => boolean;
+    /** The column the caret is in: it counts as used so you can see what you type. */
+    caretCol?: number | null;
+  } = {},
+): ColumnTracks {
   const n = sheet?.columns.length ?? 1;
   const used: boolean[] = [];
-  for (let c = 1; c <= n; c++) used.push(c === 1 || !!sheet?.placements.some((p) => p.col === c));
+  const has = opts.hasText ?? (() => true);
+  for (let c = 1; c <= n; c++) used.push(c === 1 || c === opts.caretCol || !!sheet?.placements.some((p) => p.col === c && has(p.pos)));
   const tracks: string[] = [];
   let wide = 0;
   let narrow = 0;

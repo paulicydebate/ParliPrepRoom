@@ -110,3 +110,14 @@ describe('narrow unused columns', () => {
     expect(columnTracks(sheet, null).used).toEqual([true, false, false, false, false, false]);
   });
 });
+
+describe('narrow columns with blank cells', () => {
+  it('a column holding only blank cells stays narrow, unless the caret is in it', async () => {
+    const { columnTracks } = await import('../src/model/flowLayout');
+    const { sheet, at } = make([['position', 'S'], ['claim', 'A'], ['claim', '', { speech: 'LOC' }], ['claim', 'mg', { speech: 'MG' }]]);
+    const text = new Set([at('A'), at('mg')]);
+    const hasText = (pos: number) => text.has(pos);
+    expect(columnTracks(sheet, null, { hasText }).used).toEqual([true, false, true, false, false, false]);
+    expect(columnTracks(sheet, null, { hasText, caretCol: 2 }).used).toEqual([true, true, true, false, false, false]);
+  });
+});
