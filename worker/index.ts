@@ -8,7 +8,7 @@ import { guidePage } from './guidePage';
 import { privacyPage } from './legal';
 import { renderTabroomPage } from './tabroomPage';
 import { DEFAULT_PAUSE_NOTICE, type DocRecord, type Role } from './directory';
-import { FILES } from './static.gen';
+import { BUILD, FILES } from './static.gen';
 
 export { DocRoom } from './docRoom';
 export { Directory } from './directory';
@@ -37,7 +37,7 @@ function serveFile(path: string): Response | null {
   const f = FILES[path];
   if (!f) return null;
   // Hashed build files never change; everything else is re-checked.
-  const cache = path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
+  const cache = path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store';
   return new Response(f.body, { headers: { 'content-type': f.type, 'cache-control': cache } });
 }
 
@@ -121,7 +121,7 @@ export default {
 
     if (path === '/api/health') {
       const pause = env.PAUSED === '1' ? { paused: true, notice: DEFAULT_PAUSE_NOTICE } : await dir.pauseState();
-      return json({ ok: true, app: 'parlipreproom', sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString(), ...(pause.paused ? { notice: pause.notice } : {}) });
+      return json({ ok: true, app: 'parlipreproom', build: BUILD, sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString(), ...(pause.paused ? { notice: pause.notice } : {}) });
     }
 
     // Changes must come from this site's own pages (no cross-site form posts).
