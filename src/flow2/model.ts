@@ -24,6 +24,8 @@ export interface FlowCell {
   order: number;
   /** Blank rows kept above this cell (roots only). */
   gap: number;
+  /** Cells that share a group id (and sit next to each other) are drawn as one framed block. */
+  group: string | null;
   text: string;
 }
 
@@ -62,6 +64,7 @@ function readCell(id: string, m: Y.Map<unknown>): FlowCell {
     parent: typeof m.get('parent') === 'string' ? (m.get('parent') as string) : null,
     order: Number(m.get('order')) || 0,
     gap: Math.max(0, Math.floor(Number(m.get('gap')) || 0)),
+    group: typeof m.get('group') === 'string' ? (m.get('group') as string) : null,
     text: (m.get('text') as Y.Text | undefined)?.toString() ?? '',
   };
 }
@@ -284,6 +287,7 @@ export function linkCells(doc: Y.Doc, sheetId: string, ids: string[], targetId: 
       m.set('parent', targetId);
       m.set('order', last);
       m.delete('gap');
+      m.delete('group');
       linked.push(c.id);
     }
   });
@@ -303,6 +307,7 @@ export function unlinkCell(doc: Y.Doc, sheetId: string, cellId: string) {
     const roots = all.filter((c) => c.parent === null);
     m.set('order', orderAfter(roots, rootId));
     m.set('parent', null);
+    m.delete('group');
   });
 }
 
@@ -315,4 +320,47 @@ export function rootsOf(cells: FlowCell[]): FlowCell[] {
 
 export function childrenOf(cells: FlowCell[], id: string): FlowCell[] {
   return cells.filter((c) => c.parent === id).sort((a, b) => a.order - b.order);
+}
+
+// ---------- Groups ----------
+
+export type GroupResult = { ok: true; group: string } | { ok: false; error: string };
+
+/**
+ * Draw these cells as one framed block (the idea is Flowist's, by Elli, used with permission). They must be
+ * in one column under one parent (or all roots); they are moved next to each other, in their order.
+ */
+export function groupCells(doc: Y.Doc, sheetId: string, ids: string[]): GroupResult {
+  const cells = cellsOf(doc, sheetId);
+  if (!cells) return { ok: false, error: 'That sheet is gone.' };
+  const all = snapshot(cells);
+  const picked = all.filter((c) => ids.includes(c.id));
+  if (picked.length < 2) return { ok: false, error: 'Select two or more cells in one column to group them.' };
+  const first = picked[0];
+  if (picked.some((c) => c.col !== first.col || c.parent !== first.parent)) return { ok: false, error: 'Cells can only be grouped with others in the same column and under the same argument.' };
+  const group = newBlockId();
+  local(doc, () => {
+    const sorted = [...picked].sort((a, b) => a.order - b.order);
+    const others = all.filter((c) => c.parent === first.parent && (first.parent !== null || c.col === first.col) && !ids.includes(c.id));
+    let at = sorted[0].order;
+    const sibs = [...others];
+    sorted.forEach((c, i) => {
+      if (i > 0) {
+        at = orderAfterValue(sibs, at);
+        cells.get(c.id)!.set('order', at);
+      }
+      sibs.push({ ...c, order: at } as FlowCell);
+      cells.get(c.id)!.set('group', group);
+    });
+  });
+  return { ok: true, group };
+}
+
+/** Take cells out of their group. */
+export function ungroupCells(doc: Y.Doc, sheetId: string, ids: string[]) {
+  const cells = cellsOf(doc, sheetId);
+  if (!cells) return;
+  local(doc, () => {
+    for (const id of ids) cells.get(id)?.delete('group');
+  });
 }

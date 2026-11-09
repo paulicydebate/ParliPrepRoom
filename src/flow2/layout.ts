@@ -28,6 +28,8 @@ export interface Layout {
   bands: { rootId: string; top: number; height: number }[];
   /** Blank rows kept above a root. */
   blanks: { rootId: string; top: number; count: number }[];
+  /** Framed blocks: cells that share a group id and sit together. */
+  groups: { id: string; col: number; top: number; height: number }[];
   ghostTop: number;
   total: number;
 }
@@ -54,13 +56,18 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
     seen.add(cell.id);
     const kids: Node['kids'] = [];
     let y = 0;
+    let lastGap = m.cellGap;
     for (const c of childrenOf(cells, cell.id)) {
       if (seen.has(c.id)) continue; // a broken loop of links: ignore the repeat
       const k = build(c, seen);
+      const prev = kids.at(-1);
+      // Cells of one group touch.
+      if (prev && c.group && prev.cell.group === c.group) y -= m.cellGap;
       kids.push({ ...k, dy: y - k.top0 });
       y += k.height + m.cellGap;
+      lastGap = m.cellGap;
     }
-    const blockH = kids.length ? y - m.cellGap : 0;
+    const blockH = kids.length ? y - lastGap : 0;
     const off = kids.length ? Math.min(m.alignLimit, Math.max(-m.alignLimit, (h - blockH) / 2)) : 0;
     const top0 = Math.min(0, kids.length ? off : 0);
     const bottom = Math.max(h, kids.length ? off + blockH : 0);
@@ -76,7 +83,8 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
   const blanks: Layout['blanks'] = [];
   const seen = new Set<string>();
   let y = 0;
-  for (const root of rootsOf(cells)) {
+  const roots = rootsOf(cells);
+  for (const root of roots) {
     if (root.gap > 0) {
       blanks.push({ rootId: root.id, top: y, count: root.gap });
       y += root.gap * m.rowHeight;
@@ -85,6 +93,8 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
     place(node, y - node.top0);
     bands.push({ rootId: root.id, top: y, height: node.height });
     y += node.height + m.rootGap;
+    const next = roots[roots.indexOf(root) + 1];
+    if (next && root.group && next.group === root.group && next.gap === 0) y -= m.rootGap;
   }
   // Cells that hang off a missing parent (deleted in another window) are shown as roots.
   for (const c of cells) {
@@ -94,5 +104,15 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
     bands.push({ rootId: c.id, top: y, height: node.height });
     y += node.height + m.rootGap;
   }
-  return { tops, heights, bands, blanks, ghostTop: y, total: y + m.ghostRows * m.rowHeight };
+  // Framed blocks: each group's members, if two or more sit together.
+  const groups: Layout['groups'] = [];
+  const byGroup = new Map<string, FlowCell[]>();
+  for (const c of cells) if (c.group && tops.has(c.id)) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
+  for (const [id, members] of byGroup) {
+    if (members.length < 2) continue;
+    const top = Math.min(...members.map((c) => tops.get(c.id)!));
+    const bottom = Math.max(...members.map((c) => tops.get(c.id)! + (heights.get(c.id) ?? 0)));
+    groups.push({ id, col: members[0].col, top, height: bottom - top });
+  }
+  return { tops, heights, bands, blanks, groups, ghostTop: y, total: y + m.ghostRows * m.rowHeight };
 }

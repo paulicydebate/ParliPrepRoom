@@ -4503,3 +4503,16 @@ kbd {
   font-size: 12px;
   color: var(--text-2);
 }
+
+/* Groups: cells drawn together inside one frame. */
+.f2-group {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 2px solid light-dark(var(--p0-base-600, #6a6a65), var(--p0-base-400, #94958d));
+  border-radius: 5px;
+}
+.f2-cell.in-group {
+  border-radius: 0;
+}

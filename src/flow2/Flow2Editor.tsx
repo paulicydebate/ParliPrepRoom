@@ -18,6 +18,8 @@ import {
   deleteCell,
   deleteSheet,
   ensureSheet,
+  groupCells,
+  ungroupCells,
   linkCells,
   observeFlow,
   ORIGIN_LOCAL,
@@ -35,6 +37,7 @@ import {
 } from './model';
 import { columnGeometry, GAP_PX } from './columns';
 import { Flow2Canvas } from './Flow2Canvas';
+import { directionalTarget } from './directionalTarget';
 import { bindText } from './textBinding';
 import './flowist/palette-0.css';
 import './flowist/fonts.css';
@@ -290,6 +293,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
   const [linking, setLinking] = useState<{ ids: string[]; col: number } | null>(null);
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const want = useRef<Focus | null>(null);
+  const hops = useRef<{ from: string; to: string; key: string }[]>([]);
   const [, bump] = useState(0);
   const sheetUid = useId().replace(/:/g, '');
 
@@ -313,6 +317,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
 
   const layout = useMemo(() => layoutFlow(cells, heights, embedded ? { ...METRICS, ghostRows: 6 } : METRICS), [cells, heights, embedded]);
   const top = (c: FlowCell) => layout.tops.get(c.id) ?? 0;
+  const rectOf = (c: FlowCell) => ({ left: colX[c.col - 1], right: colX[c.col - 1] + colW[c.col - 1], top: top(c), bottom: top(c) + (layout.heights.get(c.id) ?? 30) });
   const sideOf = (col: number) => SPEECH_INFO[sheet.columns[col - 1]].side;
 
   const onHeight = useCallback((id: string, h: number) => {
@@ -352,6 +357,12 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
     if (mod && e.shiftKey && key.toLowerCase() === 'l') {
       e.preventDefault();
       toggleLinking(c.id);
+      return;
+    }
+    if (mod && key.toLowerCase() === 'g') {
+      e.preventDefault();
+      if (e.shiftKey) ungroup(c);
+      else group(c);
       return;
     }
     if (key === 'Escape') {
@@ -399,28 +410,34 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
     }
     const atStart = el.selectionStart === 0 && el.selectionEnd === 0;
     const atEnd = el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
-    if (key === 'ArrowUp' && atStart) {
-      const prev = colList(c.col).filter((k) => top(k) < top(c) - 0.5).at(-1);
-      if (prev) {
+    // A cell of one line has nowhere to move the caret up or down, so those keys leave it.
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 16;
+    const oneLine = el.scrollHeight < 2 * lh;
+    const leaving = (key === 'ArrowUp' && (atStart || oneLine)) || (key === 'ArrowDown' && (atEnd || oneLine)) || (key === 'ArrowLeft' && atStart) || (key === 'ArrowRight' && atEnd);
+    if (leaving && !mod && !e.altKey && !e.shiftKey) {
+      // The nearest cell that way (Flowist's rule); going back along a row returns to where you came from.
+      const horizontal = key === 'ArrowLeft' || key === 'ArrowRight';
+      const back = horizontal ? [...hops.current].reverse().find((h) => h.to === c.id && h.key === (key === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft')) : undefined;
+      const target = (back && byId.get(back.from)) || directionalTarget(key, rectOf(c), cells.filter((k) => k.id !== c.id), rectOf);
+      if (target) {
         e.preventDefault();
-        focusCell(prev.id, 'end');
-      }
-    } else if (key === 'ArrowDown' && atEnd) {
-      const next = colList(c.col).find((k) => top(k) > top(c) + 0.5);
-      if (next) {
-        e.preventDefault();
-        focusCell(next.id, 'start');
-      }
-    } else if (key === 'ArrowLeft' && atStart && c.parent) {
-      e.preventDefault();
-      focusCell(c.parent, 'end');
-    } else if (key === 'ArrowRight' && atEnd) {
-      const kid = childrenOf(cells, c.id)[0];
-      if (kid) {
-        e.preventDefault();
-        focusCell(kid.id, 'start');
+        if (horizontal) hops.current = [...hops.current.slice(-19), { from: c.id, to: target.id, key }];
+        focusCell(target.id, key === 'ArrowUp' || key === 'ArrowLeft' ? 'end' : 'start');
       }
     }
+  };
+
+  // ---------- Groups ----------
+  const group = (fallback?: FlowCell) => {
+    const ids = picked.length >= 2 ? picked : [];
+    const res = groupCells(doc, sheet.id, ids.length ? ids : fallback ? [fallback.id] : []);
+    if (!res.ok) toast(res.error);
+    else setPicked([]);
+  };
+  const ungroup = (fallback?: FlowCell) => {
+    const g = fallback?.group;
+    const ids = picked.length ? picked : g ? cells.filter((k) => k.group === g).map((k) => k.id) : [];
+    ungroupCells(doc, sheet.id, ids);
   };
 
   // ---------- Link mode ----------
@@ -531,7 +548,6 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
   }, [focusId, byId, cells]);
 
   // ---------- Threads and the + buttons ----------
-  const rectOf = (c: FlowCell) => ({ left: colX[c.col - 1], right: colX[c.col - 1] + colW[c.col - 1], top: top(c), bottom: top(c) + (layout.heights.get(c.id) ?? 30) });
   const paths: ConnectorPath[] = cells
     .filter((c) => c.parent && byId.has(c.parent) && layout.tops.has(c.id) && layout.tops.has(c.parent))
     .sort((a, b) => top(a) - top(b))
@@ -555,7 +571,8 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
   const total = layout.total + 8;
   const empty = cells.length === 0;
 
-  const tools = <LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} />;
+  const grouped = new Set(layout.groups.map((g) => g.id));
+  const tools = <LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} canGroup={picked.length >= 2} canUngroup={!!focused?.group && grouped.has(focused.group)} onGroup={() => group(focused)} onUngroup={() => ungroup(focused)} />;
   const body = (
       <div className="f2-inner" style={{ width: inner }}>
         <div className="f2-head">
@@ -588,6 +605,9 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
               </Fragment>
             ))}
           </svg>
+          {layout.groups.map((g) => (
+            <div key={g.id} className={`f2-group fl-${sideOf(g.col)}`} style={{ left: (colX[g.col - 1] ?? 0) - 2, top: g.top - 2, width: (colW[g.col - 1] ?? 100) + 4, height: g.height + 4 }} />
+          ))}
           {cells.map((c) => (
             <Cell
               key={c.id}
@@ -601,6 +621,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
               measured={heights.has(c.id)}
               lit={lit.has(c.id)}
               picked={picked.includes(c.id)}
+              inGroup={!!c.group && grouped.has(c.group)}
               linkingFrom={!!linking?.ids.includes(c.id)}
               linkable={!!linking && c.col === linking.col - 1}
               want={want}
@@ -697,13 +718,23 @@ function WindowBar({ doc, sheet, tools, canDelete, onDeleted }: { doc: Y.Doc; sh
   );
 }
 
-function LinkButtons({ linking, canUnlink, onToggle, onUnlink }: { linking: boolean; canUnlink: boolean; onToggle: () => void; onUnlink: () => void }) {
+function LinkButtons({ linking, canUnlink, onToggle, onUnlink, canGroup, canUngroup, onGroup, onUngroup }: { linking: boolean; canUnlink: boolean; onToggle: () => void; onUnlink: () => void; canGroup: boolean; canUngroup: boolean; onGroup: () => void; onUngroup: () => void }) {
   return (
     <>
       <button type="button" className={'btn ghost small link-btn' + (linking ? ' is-on' : '')} aria-pressed={linking} title="Link the selected cells to the argument they answer (Ctrl/⌘+Shift+L)" onMouseDown={(e) => e.preventDefault()} onClick={onToggle}>
         <IconThread /> {linking ? 'Cancel link' : 'Link'}
       </button>
       {linking && <span className="link-hint">Click the argument these answer (Esc cancels)</span>}
+      {canGroup && !linking && (
+        <button type="button" className="btn ghost small" title="Draw the selected cells as one framed block (Ctrl/⌘+G)" onMouseDown={(e) => e.preventDefault()} onClick={onGroup}>
+          Group
+        </button>
+      )}
+      {canUngroup && !linking && !canGroup && (
+        <button type="button" className="btn ghost small" title="Take this cell out of its group (Ctrl/⌘+Shift+G)" onMouseDown={(e) => e.preventDefault()} onClick={onUngroup}>
+          Ungroup
+        </button>
+      )}
       {canUnlink && !linking && (
         <button type="button" className="btn ghost small" title="Unlink this cell from the argument it answers" onMouseDown={(e) => e.preventDefault()} onClick={onUnlink}>
           Unlink
@@ -726,6 +757,7 @@ function Cell({
   measured,
   lit,
   picked,
+  inGroup,
   linkingFrom,
   linkable,
   want,
@@ -744,6 +776,7 @@ function Cell({
   measured: boolean;
   lit: boolean;
   picked: boolean;
+  inGroup: boolean;
   linkingFrom: boolean;
   linkable: boolean;
   want: React.MutableRefObject<Focus | null>;
@@ -797,7 +830,7 @@ function Cell({
   return (
     <div
       ref={wrap}
-      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
+      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
       style={{ left: x, top: y, width: w }}
       onMouseDown={(e) => onMouseDown(e, cell)}
     >

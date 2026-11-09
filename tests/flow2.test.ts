@@ -122,7 +122,7 @@ describe('flow2 model', () => {
   });
 });
 
-const cell = (id: string, col: number, parent: string | null, order: number, gap = 0) => ({ id, col, parent, order, gap, text: id });
+const cell = (id: string, col: number, parent: string | null, order: number, gap = 0, group: string | null = null) => ({ id, col, parent, order, gap, group, text: id });
 
 describe('flow2 layout', () => {
   it('stacks roots with a small gap; each cell is as tall as its own text', () => {
@@ -315,5 +315,52 @@ describe('flow2 canvas (camera maths from Flowist)', () => {
     const g2 = columnGeometry(readFlow(doc)[0], 3, null);
     expect(g2.used[2]).toBe(true);
     expect(g2.minWidth).toBeGreaterThan(g.minWidth);
+  });
+});
+
+
+import { directionalTarget, cycleTarget } from '../src/flow2/directionalTarget';
+import { groupCells, ungroupCells } from '../src/flow2/model';
+
+describe('flow2 groups', () => {
+  it('grouping puts cells of one column and parent next to each other; mixed columns are refused', () => {
+    const { doc, sheetId, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const k1 = createChild(doc, sheetId, a)!;
+    const k2 = createChild(doc, sheetId, a, k1)!;
+    const k3 = createChild(doc, sheetId, a, k2)!;
+    const r = groupCells(doc, sheetId, [k1, k3]);
+    expect(r.ok).toBe(true);
+    // k3 now sits right after k1, ahead of k2.
+    expect(childrenOf(cells(), a).map((k) => k.id)).toEqual([k1, k3, k2]);
+    expect(cells().find((c) => c.id === k1)!.group).toBe(cells().find((c) => c.id === k3)!.group);
+    expect(groupCells(doc, sheetId, [a, k1]).ok).toBe(false);
+    ungroupCells(doc, sheetId, [k1, k3]);
+    expect(cells().every((c) => c.group === null)).toBe(true);
+  });
+
+  it('cells of a group touch in the layout, and the group has a frame', () => {
+    const cells = [cell('a', 1, null, 1), cell('x', 2, 'a', 1, 0, 'g'), cell('y', 2, 'a', 2, 0, 'g'), cell('z', 2, 'a', 3)];
+    const l = layoutFlow(cells, new Map([['a', 30], ['x', 30], ['y', 30], ['z', 30]]));
+    expect(l.tops.get('y')).toBe(l.tops.get('x')! + 30);
+    expect(l.tops.get('z')).toBe(l.tops.get('y')! + 30 + M.cellGap);
+    expect(l.groups).toEqual([{ id: 'g', col: 2, top: l.tops.get('x'), height: 60 }]);
+  });
+});
+
+describe('flow2 arrow navigation (from Flowist)', () => {
+  const box = (left: number, top: number) => ({ left, right: left + 100, top, bottom: top + 30 });
+  const items = [{ id: 'up', ...box(0, 0) }, { id: 'down', ...box(0, 80) }, { id: 'right', ...box(150, 5) }, { id: 'farRight', ...box(150, 200) }];
+  const of = (i: { left: number; right: number; top: number; bottom: number }) => i;
+  it('goes to the nearest cell in the direction, preferring the one in line', () => {
+    const here = box(0, 40);
+    expect(directionalTarget('ArrowUp', here, items, of)?.id).toBe('up');
+    expect(directionalTarget('ArrowDown', here, items, of)?.id).toBe('down');
+    expect(directionalTarget('ArrowRight', here, items, of)?.id).toBe('right');
+    expect(directionalTarget('ArrowLeft', here, items, of)).toBeUndefined();
+  });
+  it('cycles through a list', () => {
+    expect(cycleTarget(['a', 'b', 'c'], 2, false)).toBe('a');
+    expect(cycleTarget(['a', 'b', 'c'], 0, true)).toBe('c');
   });
 });
