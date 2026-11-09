@@ -46,7 +46,7 @@ export interface FlowGroup {
   /** Doc position just after the group's last block. */
   to: number;
   /** Blocks per column (1-based column -> list of blocks, in doc order). */
-  cells: Map<number, { pos: number; size: number; moved?: boolean }[]>;
+  cells: Map<number, { pos: number; size: number; moved?: boolean; head?: boolean }[]>;
 }
 
 export interface FlowSheet {
@@ -125,6 +125,8 @@ interface Item {
   /** Row within its group (0 = the group's first row). */
   offset: number;
   moved: boolean;
+  /** First line of a cell (a claim); the lines after it belong to the same cell. */
+  head: boolean;
 }
 interface OpenGroup {
   index: number;
@@ -178,7 +180,7 @@ function layoutPass(blocks: FlowInputBlock[], off: Set<string>): { layout: FlowL
       const list = target.g.cells.get(col) ?? [];
       let offset = Math.max(target.item.offset, list.length ? list[list.length - 1].offset + 1 : 0);
       for (const x of r.items) {
-        const item: Item = { pos: x.pos, size: x.size, id: x.id, offset: offset++, moved: true };
+        const item: Item = { pos: x.pos, size: x.size, id: x.id, offset: offset++, moved: true, head: x === r.items[0] };
         list.push(item);
         itemOf.set(x.pos, item);
         s.placements.push({ pos: x.pos, col, row: 0, rowSpan: 1, speech: r.speech, group: target.g.index });
@@ -223,7 +225,7 @@ function layoutPass(blocks: FlowInputBlock[], off: Set<string>): { layout: FlowL
         span: g.span,
         from: g.from,
         to: g.to,
-        cells: new Map([...g.cells].map(([c, list]) => [c, list.map((it) => ({ pos: it.pos, size: it.size, ...(it.moved ? { moved: true } : {}) }))])),
+        cells: new Map([...g.cells].map(([c, list]) => [c, list.map((it) => ({ pos: it.pos, size: it.size, head: it.head, ...(it.moved ? { moved: true } : {}) }))])),
       });
     }
     s.placements.sort((a, b) => a.pos - b.pos);
@@ -312,7 +314,7 @@ function layoutPass(blocks: FlowInputBlock[], off: Set<string>): { layout: FlowL
 
     const col = colOf(sp);
     const list = g.cells.get(col) ?? [];
-    const item: Item = { pos: b.pos, size: b.size, id: b.id, offset: list.length, moved: false };
+    const item: Item = { pos: b.pos, size: b.size, id: b.id, offset: list.length, moved: false, head: b.kind === 'claim' };
     itemOf.set(b.pos, item);
     s.placements.push({ pos: b.pos, col, row: 0, rowSpan: 1, speech: sp, group: g.index });
     list.push(item);

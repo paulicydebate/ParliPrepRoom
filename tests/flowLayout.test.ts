@@ -29,11 +29,18 @@ describe('free cell layout', () => {
     expect(g.tops.get(at('B'))!).toBeGreaterThan(g.tops.get(at('a1w'))! + 60 - 1);
   });
 
-  it('stacks blocks of one column with a gap and does not overlap them', () => {
-    const { sheet, at } = make([['position', 'S'], ['claim', 'A'], ['warrant', 'w1'], ['warrant', 'w2']]);
-    const g = layoutFlow(sheet, heights(at, { A: 40, w1: 50, w2: 20 }));
-    expect(g.tops.get(at('w1'))).toBe(40 + M.cellGap);
-    expect(g.tops.get(at('w2'))).toBe(40 + M.cellGap + 50 + M.cellGap);
+  it('lines of one cell touch; separate cells keep a small gap; nothing overlaps', () => {
+    const { sheet, at } = make([['position', 'S'], ['claim', 'A'], ['warrant', 'w1'], ['warrant', 'w2'], ['claim', 'A2', { speech: 'LOC' }], ['claim', 'A3', { speech: 'LOC' }]]);
+    const g = layoutFlow(sheet, heights(at, { A: 40, w1: 50, w2: 20, A2: 30, A3: 30 }));
+    expect(g.tops.get(at('w1'))).toBe(40);
+    expect(g.tops.get(at('w2'))).toBe(90); // (a line is at least one row tall)
+    expect(g.tops.get(at('A3'))).toBe(g.tops.get(at('A2'))! + 30 + M.cellGap);
+    // Each claim and its lines is one box; the two answers are two boxes.
+    const loc = g.groups[0].columns.get(2)!;
+    expect(loc).toHaveLength(2);
+    const pmc = g.groups[0].columns.get(1)!;
+    expect(pmc).toHaveLength(1);
+    expect(pmc[0].height).toBe(120);
   });
 
   it('an answer is centered on its argument but stays within the limit of its top', () => {

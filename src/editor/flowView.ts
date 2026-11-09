@@ -67,6 +67,8 @@ declare module '@tiptap/core' {
       /** Link mode: the selected claims (or the one the caret is in) will answer the argument you click next. */
       startLinking: () => ReturnType;
       cancelLinking: () => ReturnType;
+      /** The "+" under linked answers: a new empty answer to the same argument, inserted at `at`. */
+      addAnswer: (targetPos: number, at: number) => ReturnType;
       /** Take a linked claim out of its link (it goes back to its place in the document order). */
       unlinkBlock: (pos: number) => ReturnType;
     };
@@ -383,6 +385,19 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
           if (dispatch) tr.setMeta(flowKey, { linking: { ids: claims.map((x) => String(x.node!.attrs.id)), col: claims[0].p!.col } });
           return true;
         },
+      addAnswer:
+        (targetPos, at) =>
+        ({ state, tr, dispatch }) => {
+          const sheet = activeSheet(flowKey.getState(state));
+          const target = state.doc.nodeAt(targetPos);
+          const tp = sheet?.placements.find((p) => p.pos === targetPos);
+          if (!sheet || !target || !tp || !target.attrs.id || tp.col >= sheet.columns.length) return false;
+          if (dispatch) {
+            tr.insert(at, blockNode(state, { kind: 'claim', speech: sheet.columns[tp.col], answers: target.attrs.id as string }));
+            tr.setSelection(TextSelection.create(tr.doc, at + 1)).scrollIntoView();
+          }
+          return true;
+        },
       cancelLinking:
         () =>
         ({ tr, dispatch }) => {
@@ -583,34 +598,107 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
               );
             }
 
-            // Background for each cell of a row (and a click target if empty). Each speech column's
-            // box is only as tall as its own text.
+            // One box per cell (a claim and the lines under it), only as tall as its own text. Empty
+            // positions are see-through until hovered, and still click targets.
+            const textOf = (pos: number) => state.doc.nodeAt(pos)?.textContent.trim() ?? '';
+            type CellBox = { g: number; c: number; i: number; top: number; height: number; empty: boolean; blank: boolean; first: number; last: number };
+            const cellBoxes: CellBox[] = [];
+            const boxAt = new Map<number, CellBox>();
             for (const gm of geo?.groups ?? []) {
               const g = sheet.groups[gm.index];
               if (!g) continue;
               for (let c = 1; c <= cols; c++) {
-                const boxes = gm.columns.get(c) ?? [{ top: gm.top, height: DEFAULT_METRICS.rowHeight - DEFAULT_METRICS.cellGap, empty: true }];
+                const boxes = gm.columns.get(c) ?? [{ top: gm.top, height: DEFAULT_METRICS.rowHeight - DEFAULT_METRICS.cellGap, empty: true, first: -1, last: -1 }];
                 boxes.forEach((box, i) => {
-                  const top = Math.round(box.top * 10) / 10;
-                  const height = Math.round(box.height * 10) / 10;
-                  decos.push(
-                    Decoration.widget(
-                      g.from,
-                      () => {
-                        const el = document.createElement('div');
-                        el.className = `fl-cell fl-${sideOf(c)}` + (box.empty ? ' is-empty' : '');
-                        el.contentEditable = 'false';
-                        place(el, dc(c), top, height);
-                        el.dataset.col = String(c);
-                        el.dataset.target = 'group';
-                        el.dataset.group = String(g.index);
-                        return el;
-                      },
-                      { side: -1, key: `c-${g.index}-${c}-${i}-${dc(c)}-${top}-${height}-${box.empty ? 1 : 0}-${sideOf(c)}`, ignoreSelection: true },
-                    ),
-                  );
+                  const cb: CellBox = {
+                    g: g.index,
+                    c,
+                    i,
+                    top: Math.round(box.top * 10) / 10,
+                    height: Math.round(box.height * 10) / 10,
+                    empty: box.empty,
+                    blank: !box.empty && textOf(box.first) === '' && textOf(box.last) === '',
+                    first: box.first,
+                    last: box.last,
+                  };
+                  cellBoxes.push(cb);
+                  if (!cb.empty) for (const it of g.cells.get(c) ?? []) if (it.pos >= cb.first && it.pos <= cb.last) boxAt.set(it.pos, cb);
                 });
               }
+            }
+            // The caret is in an argument or one of its answers: that argument and all its answers light up.
+            const caret = state.selection.$from;
+            const here = caret.depth >= 1 ? caret.before(1) : -1;
+            const lit = new Set<number>();
+            for (const l of sheet.links) {
+              const a = boxAt.get(l.from);
+              const b = boxAt.get(l.to);
+              if (!a || !b) continue;
+              if ((here >= a.first && here <= a.last) || (here >= b.first && here <= b.last)) {
+                lit.add(a.first);
+                for (const l2 of sheet.links) if (l2.from === l.from) {
+                  const r = boxAt.get(l2.to);
+                  if (r) lit.add(r.first);
+                }
+              }
+            }
+            for (const cb of cellBoxes) {
+              const g = sheet.groups[cb.g];
+              const on = !cb.empty && lit.has(cb.first);
+              decos.push(
+                Decoration.widget(
+                  g.from,
+                  () => {
+                    const el = document.createElement('div');
+                    el.className = `fl-cell fl-${sideOf(cb.c)}` + (cb.empty ? ' is-empty' : cb.blank ? ' is-blank' : '') + (on ? ' is-lit' : '');
+                    el.contentEditable = 'false';
+                    place(el, dc(cb.c), cb.top, cb.height);
+                    el.dataset.col = String(cb.c);
+                    el.dataset.target = 'group';
+                    el.dataset.group = String(cb.g);
+                    if (!cb.empty) {
+                      el.dataset.first = String(cb.first);
+                      el.dataset.last = String(cb.last);
+                    }
+                    return el;
+                  },
+                  { side: -1, key: `c-${cb.g}-${cb.c}-${cb.i}-${dc(cb.c)}-${cb.top}-${cb.height}-${cb.empty ? 1 : cb.blank ? 2 : 0}-${on ? 1 : 0}-${cb.first}-${cb.last}-${sideOf(cb.c)}`, ignoreSelection: true },
+                ),
+              );
+            }
+
+            // "+" under the answers linked to an argument: add one more answer to it.
+            const byTarget = new Map<number, number[]>();
+            for (const l of sheet.links) byTarget.set(l.from, [...(byTarget.get(l.from) ?? []), l.to]);
+            for (const [target, answers] of byTarget) {
+              let low: CellBox | null = null;
+              for (const a of answers) {
+                const b = boxAt.get(a);
+                if (b && (!low || b.top > low.top)) low = b;
+              }
+              if (!low) continue;
+              const at = low.last + (state.doc.nodeAt(low.last)?.nodeSize ?? 0);
+              const y = Math.round((low.top + low.height + 3) * 10) / 10;
+              const col = low.c;
+              decos.push(
+                Decoration.widget(
+                  sheet.pos,
+                  () => {
+                    const el = document.createElement('button');
+                    el.type = 'button';
+                    el.className = 'fl-add-answer';
+                    el.contentEditable = 'false';
+                    el.title = 'Add another answer to this argument';
+                    el.setAttribute('aria-label', 'Add another answer to this argument');
+                    el.textContent = '+';
+                    place(el, dc(col), y);
+                    el.dataset.addTarget = String(target);
+                    el.dataset.addAt = String(at);
+                    return el;
+                  },
+                  { side: -1, key: `add-${target}-${dc(col)}-${y}-${at}`, ignoreSelection: true, stopEvent: () => true },
+                ),
+              );
             }
 
             // Runs of empty rows (blank rows kept above a row, and the empty
@@ -725,6 +813,12 @@ export const FlowView = Extension.create<{ pinPanel: HTMLElement | null }>({
         props: {
           handleDOMEvents: {
             mousedown(_view, event) {
+              const add = (event.target as HTMLElement | null)?.closest?.('.fl-add-answer') as HTMLElement | null;
+              if (add) {
+                event.preventDefault();
+                editor.chain().focus().addAnswer(Number(add.dataset.addTarget), Number(add.dataset.addAt)).run();
+                return true;
+              }
               const el = (event.target as HTMLElement | null)?.closest?.('.fl-cell.is-empty') as HTMLElement | null;
               if (!el) return false;
               event.preventDefault();

@@ -277,3 +277,24 @@ describe('linking responses to an argument', () => {
     expect(flowKey.getState(e.state)!.linking).toBeNull();
   });
 });
+
+describe('adding another answer to a linked argument', () => {
+  it('addAnswer inserts an empty answer linked to the same argument, right after the last one', async () => {
+    const { applyLink } = await import('../src/editor/flowView');
+    const e = make([['position', 'Case'], ['claim', 'A'], ['claim', 'first answer', { speech: 'LOC' }]]);
+    const aPos = rowOf(e, 'A').pos;
+    const ansPos = rowOf(e, 'first answer').pos;
+    e.view.dispatch(e.state.tr.setSelection(TextSelection.create(e.state.doc, ansPos + 1)));
+    e.commands.startLinking();
+    applyLink(e.view, aPos);
+    const at = ansPos + e.state.doc.nodeAt(ansPos)!.nodeSize;
+    expect(e.commands.addAnswer(aPos, at)).toBe(true);
+    const links = sheet(e).links;
+    expect(links).toHaveLength(2);
+    expect(links.every((l) => l.from === aPos)).toBe(true);
+    const added = e.state.doc.nodeAt(at)!;
+    expect(added.attrs.answers).toBe(e.state.doc.nodeAt(aPos)!.attrs.id);
+    expect(added.attrs.speech).toBe('LOC');
+    expect(added.textContent).toBe('');
+  });
+});

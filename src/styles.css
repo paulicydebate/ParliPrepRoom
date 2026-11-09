@@ -4032,3 +4032,152 @@ kbd {
 .pp-flow[data-measuring] > .fl-section {
   visibility: hidden;
 }
+
+/* ---------- Flow look: thin outlines, side-colored text, empty cells invisible (after the Flowist video) ---------- */
+:root {
+  --fl-gap: 44px; /* room for the threads between an argument and its answers */
+}
+.flow-wrap[data-flow-theme='night'] {
+  --surface: #161616;
+  --text: #e8e8e8;
+  --text-2: #a6a6a6;
+  --border: #3a3a3a;
+  --gov: var(--gov-d, #7aa7ff);
+  --opp: var(--opp-d, #ff7b72);
+  --band-a: transparent;
+  --band-b: color-mix(in srgb, #fff 3%, transparent);
+  background: var(--surface);
+  color: var(--text);
+}
+.flow-theme-opt {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+/* Column headings: colored text on a colored underline, no pill. */
+.flow-head .flow-col-head,
+.flow-head .flow-col-head.fl-opp {
+  background: transparent;
+  border-radius: 0;
+  text-align: left;
+  padding: 6px 2px 5px;
+  border-bottom: 2px solid currentColor;
+  font-size: 13px;
+}
+/* Cells: a plain outlined box, as tall as its text. Empty positions show nothing until hovered. */
+.pp-flow > .fl-cell,
+.pp-flow > .fl-cell.fl-opp {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--text) 20%, var(--surface));
+}
+.pp-flow > .fl-cell.is-empty,
+.pp-flow > .fl-cell.is-empty.fl-opp {
+  background: transparent;
+  border-color: transparent;
+}
+.pp-flow > .fl-cell.is-empty:hover {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--text) 35%, transparent);
+}
+.pp-flow > .fl-cell.is-empty:hover::after {
+  content: '+';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  font-size: 16px;
+}
+/* A cell you have just made and not typed in yet. */
+.pp-flow > .fl-cell.is-blank {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--text) 25%, transparent);
+}
+.pp-flow > .fl-cell.is-lit {
+  border-color: #5fbf6a;
+  box-shadow: 0 0 0 1px #5fbf6a;
+}
+.pp-flow > .fl-rows .fl-cell,
+.pp-flow > .fl-rows.is-ghost .fl-cell {
+  background: transparent;
+  border-color: transparent;
+}
+.pp-flow > .fl-rows .fl-cell:hover {
+  border: 1px dashed color-mix(in srgb, var(--text) 30%, transparent);
+}
+.pp-flow > .fl-rows {
+  grid-auto-rows: 34px; /* = DEFAULT_METRICS.rowHeight in src/model/flowLayout.ts */
+}
+/* Text: the side's color, small and even. */
+.pp-flow > .fl-item.fl-gov.pp-block {
+  color: var(--gov);
+}
+.pp-flow > .fl-item.fl-opp.pp-block {
+  color: var(--opp);
+}
+.pp-flow > .fl-item.pp-block[data-kind='claim'],
+.pp-flow > .fl-item.pp-block[data-kind='warrant'],
+.pp-flow > .fl-item.pp-block[data-kind='analytic'],
+.pp-flow > .fl-item.pp-block[data-kind='note'] {
+  font-size: 13.5px;
+  line-height: 1.35;
+  font-weight: 500;
+  padding: 5px 9px 4px;
+}
+.pp-flow > .fl-item.pp-block[data-kind='warrant'],
+.pp-flow > .fl-item.pp-block[data-kind='analytic'] {
+  font-weight: 400;
+  padding-left: 9px;
+  opacity: 0.9;
+}
+.pp-flow > .fl-item.pp-block[data-kind='warrant']::before,
+.pp-flow > .fl-item.pp-block[data-kind='analytic']::before {
+  display: none;
+}
+/* Threads: soft grey curves, green when the argument or one of its answers is selected. */
+.flow-threads .thread,
+.flow-threads .thread.fl-gov,
+.flow-threads .thread.fl-opp {
+  stroke: color-mix(in srgb, var(--text) 40%, transparent);
+  stroke-width: 1.5;
+  opacity: 1;
+}
+.flow-threads .thread.is-on {
+  stroke: #5fbf6a;
+  stroke-width: 2;
+}
+/* The + under linked answers. */
+.pp-flow > .fl-add-answer {
+  position: absolute;
+  left: calc((var(--c) - 1) * (var(--cw) + var(--fl-gap)));
+  width: var(--cw);
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: linear-gradient(to bottom, transparent 10px, currentColor 10px, currentColor 11px, transparent 11px);
+  color: color-mix(in srgb, var(--opp) 60%, transparent);
+  cursor: pointer;
+  z-index: 2;
+  font-size: 0;
+}
+.pp-flow > .fl-add-answer::after {
+  content: '+';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  line-height: 18px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  background: var(--surface);
+  font-size: 15px;
+  text-align: center;
+}
+.pp-flow > .fl-add-answer:hover {
+  color: var(--text);
+}

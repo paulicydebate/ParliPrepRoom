@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { blockWithChildren } from '../model/outline';
 import { useBoard } from '../store/pins';
 import { useLibrary } from './useLibrary';
+import { setFlowTheme, useFlowTheme } from '../store/flowTheme';
 import { useDocs } from './hooks';
 import { useRoundMode } from '../store/roundMode';
 import { toast } from '../editor/roundGuard';
@@ -61,8 +62,9 @@ export function FlowEditor({
     return () => onEditor(null);
   }, [editor, onEditor]);
 
+  const flowTheme = useFlowTheme();
   return (
-    <div className="flow-wrap">
+    <div className="flow-wrap" data-flow-theme={flowTheme}>
       {editor && <SheetTabs editor={editor} />}
       <div className="flow-scroll">
         {editor && <ColumnHeaders editor={editor} />}
@@ -295,6 +297,7 @@ function ColorsButton() {
 
 function ColorsDialog({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const flowTheme = useFlowTheme();
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
@@ -317,6 +320,10 @@ function ColorsDialog({ onClose }: { onClose: () => void }) {
       </div>
       <p className="muted">Saved in this browser. Your partner can pick different colors for the same flow.</p>
       <ColorwayPicker />
+      <label className="flow-theme-opt">
+        <input type="checkbox" checked={flowTheme === 'night'} onChange={(e) => setFlowTheme(e.target.checked ? 'night' : 'app')} />
+        Dark flow (a night-mode look for the flow, even in the light theme)
+      </label>
       <div className="settings-foot">
         <span />
         <button type="button" className="btn primary" onClick={onClose}>
@@ -404,26 +411,36 @@ function FlowThreads({ editor }: { editor: Editor }) {
     const origin = wrap.getBoundingClientRect();
     const $from = editor.state.selection.$from;
     const here = $from.depth >= 1 ? $from.before(1) : -1;
+    const boxes = [...editor.view.dom.querySelectorAll<HTMLElement>(':scope > .fl-cell[data-first]')].map((el) => ({
+      el,
+      first: Number(el.dataset.first),
+      last: Number(el.dataset.last),
+    }));
+    const boxOf = (pos: number) => boxes.find((b) => pos >= b.first && pos <= b.last);
     const out: { d: string; side: string; on: boolean; key: string }[] = [];
+    // Everything linked to one argument lights up together when you are in the argument or any of its answers.
+    const lit = new Set<number>();
     for (const l of sheet.links) {
-      const a = editor.view.nodeDOM(l.from) as HTMLElement | null;
-      const b = editor.view.nodeDOM(l.to) as HTMLElement | null;
-      if (!a || !b || !a.getBoundingClientRect || !b.getBoundingClientRect) continue;
-      const ra = a.getBoundingClientRect();
-      const rb = b.getBoundingClientRect();
+      const a = boxOf(l.from);
+      const b = boxOf(l.to);
+      if ((a && here >= a.first && here <= a.last) || (b && here >= b.first && here <= b.last)) lit.add(l.from);
+    }
+    for (const l of sheet.links) {
+      const a = boxOf(l.from);
+      const b = boxOf(l.to);
+      if (!a || !b) continue;
+      const ra = a.el.getBoundingClientRect();
+      const rb = b.el.getBoundingClientRect();
       if (!ra.width || !rb.width) continue;
+      // From the middle of the right edge of the argument to the middle of the left edge of the answer.
       const x1 = ra.right - origin.left;
-      const y1 = ra.top - origin.top + Math.min(16, ra.height / 2);
+      const y1 = ra.top - origin.top + Math.min(ra.height / 2, 18);
       const x2 = rb.left - origin.left;
-      const y2 = rb.top - origin.top + Math.min(16, rb.height / 2);
-      const xm = (x1 + x2) / 2;
-      const dy = y2 - y1;
-      const r = Math.min(5, Math.abs(dy) / 2, Math.max(1, (x2 - x1) / 2));
-      const d =
-        Math.abs(dy) < 2
-          ? `M ${x1} ${y1} L ${x2} ${y2}`
-          : `M ${x1} ${y1} H ${xm - r} Q ${xm} ${y1} ${xm} ${y1 + Math.sign(dy) * r} V ${y2 - Math.sign(dy) * r} Q ${xm} ${y2} ${xm + r} ${y2} H ${x2}`;
-      out.push({ d, side: a.classList.contains('fl-opp') ? 'opp' : 'gov', on: here === l.from || here === l.to, key: `${l.from}-${l.to}` });
+      const y2 = rb.top - origin.top + Math.min(rb.height / 2, 18);
+      const dx = Math.max(12, (x2 - x1) * 0.55);
+      const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      const on = lit.has(l.from);
+      out.push({ d, side: a.el.classList.contains('fl-opp') ? 'opp' : 'gov', on, key: `${l.from}-${l.to}` });
     }
     setPaths(out);
   }, [editor, tick]);

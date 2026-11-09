@@ -20,7 +20,7 @@ export interface LayoutMetrics {
   alignLimit: number;
 }
 
-export const DEFAULT_METRICS: LayoutMetrics = { cellGap: 4, groupGap: 6, rowHeight: 38, alignLimit: 76 };
+export const DEFAULT_METRICS: LayoutMetrics = { cellGap: 4, groupGap: 4, rowHeight: 34, alignLimit: 76 };
 
 export interface FlowGeometry {
   /** Top of each block, by document position. */
@@ -32,7 +32,7 @@ export interface FlowGeometry {
     top: number;
     height: number;
     /** Each speech column's own boxes in this group: one per run of blocks, or one empty position if the column has none. */
-    columns: Map<number, { top: number; height: number; empty: boolean }[]>;
+    columns: Map<number, { top: number; height: number; empty: boolean; first: number; last: number }[]>;
   }[];
   /** Blank rows kept above a group (flow rows skipped by clicking further down). */
   blanks: { before: number; top: number; count: number }[];
@@ -89,7 +89,7 @@ export function layoutFlow(sheet: FlowSheet, measured: ReadonlyMap<number, numbe
     const columns: FlowGeometry['groups'][number]['columns'] = new Map();
     for (const c of cols) {
       const list = g.cells.get(c)!;
-      const boxes: { top: number; height: number; empty: boolean }[] = [];
+      const boxes: { top: number; height: number; empty: boolean; first: number; last: number }[] = [];
       let prevBottom: number | null = null;
       list.forEach((item, i) => {
         const h = heightOf(item.pos);
@@ -112,12 +112,16 @@ export function layoutFlow(sheet: FlowSheet, measured: ReadonlyMap<number, numbe
         }
         let desired = anchorTop === null ? top : Math.max(top, alignedTop(anchorTop, anchorH, h, m.alignLimit));
         if (anchorTop === null && i === 0) desired = top;
-        const t = prevBottom === null ? desired : Math.max(desired, prevBottom + m.cellGap);
+        // Lines of one cell touch; separate cells keep a small gap.
+        const t = prevBottom === null ? desired : Math.max(desired, prevBottom + (item.head ? m.cellGap : 0));
         tops.set(item.pos, t);
         // A new box starts where an answer was lined up lower than the end of the stack above it.
         const last = boxes[boxes.length - 1];
-        if (!last || prevBottom === null || t > prevBottom + m.cellGap + 0.5) boxes.push({ top: t, height: h, empty: false });
-        else last.height = t + h - last.top;
+        if (!last || prevBottom === null || item.head || t > prevBottom + 0.5) boxes.push({ top: t, height: h, empty: false, first: item.pos, last: item.pos });
+        else {
+          last.height = t + h - last.top;
+          last.last = item.pos;
+        }
         prevBottom = t + h;
         bottom = Math.max(bottom, prevBottom);
       });
