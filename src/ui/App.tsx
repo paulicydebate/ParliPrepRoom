@@ -217,6 +217,12 @@ export function App() {
 
   // A flow gets most of the width when it opens beside other windows (it can be dragged back).
   const flowsSeen = useRef(new Set<string>());
+  const [docsOpen, setDocsOpen] = useState(true);
+  const isFlowPane = (p: { docId: string | null }) => {
+    const d = allDocs?.find((x) => x.id === p.docId);
+    return !!d && formatOf(d) === 'flow';
+  };
+  const hasFlow = layout.panes.some(isFlowPane);
   useEffect(() => {
     if (!allDocs) return;
     const fresh = layout.panes.filter((p) => {
@@ -237,8 +243,13 @@ export function App() {
           changed = true;
         }
       });
-      // ...and the doc list steps aside the first time (Ctrl/Cmd+\\ or the menu button brings it back).
-      return changed ? { ...l, weights, sidebar: false } : l;
+      if (!changed) return l;
+      // The flow comes first, with the docs in a panel on its right (as in Flowist's workspace).
+      const order = l.panes.map((p, i) => ({ p, w: weights[i], focusedKey: i === l.focused ? p.key : null, flow: keys.has(p.key) }));
+      order.sort((a, b) => Number(b.flow) - Number(a.flow));
+      const focusedKey = l.panes[l.focused]?.key;
+      // The doc list steps aside the first time (Ctrl/Cmd+\\ or the menu button brings it back).
+      return { ...l, panes: order.map((o) => o.p), weights: order.map((o) => o.w), focused: Math.max(0, order.findIndex((o) => o.p.key === focusedKey)), sidebar: false };
     });
   }, [layout.panes, allDocs]);
 
@@ -711,10 +722,10 @@ export function App() {
           {docs &&
             layout.panes.map((p, i) => (
               <Fragment key={p.key}>
-                {i > 0 && !narrow && !focusing && (
+                {i > 0 && !narrow && !focusing && (docsOpen || !hasFlow) && (
                   <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panes" onPointerDown={(e) => startResize(i - 1, e)} />
                 )}
-                <div className="pane-slot" style={{ flexGrow: layout.weights[i] ?? 1 }} hidden={(narrow || focusing) && i !== layout.focused}>
+                <div className="pane-slot" style={{ flexGrow: layout.weights[i] ?? 1 }} hidden={((narrow || focusing) && i !== layout.focused) || (hasFlow && !docsOpen && !isFlowPane(p))}>
                   <Pane
                     pane={p}
                     docs={docs}
@@ -742,6 +753,13 @@ export function App() {
                 </div>
               </Fragment>
             ))}
+          {hasFlow && layout.panes.some((p) => !isFlowPane(p)) && !focusing && (
+            <div className="docs-rail">
+              <button type="button" className={'docs-rail-btn' + (docsOpen ? ' is-on' : '')} aria-pressed={docsOpen} title={docsOpen ? 'Hide your docs beside the flow' : 'Show your docs beside the flow'} onClick={() => setDocsOpen((o) => !o)}>
+                <span>Docs</span>
+              </button>
+            </div>
+          )}
         </div>
         {pinsOpen && !compact && <PanelHandle panel={pinsWidth} edge="left" label="Resize pinned blocks" onCollapse={() => setPinsOpen(false)} />}
         {pinsOpen && (

@@ -4892,3 +4892,29 @@ kbd {
   pointer-events: none;
   background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 33px, color-mix(in srgb, var(--text) 7%, transparent) 33px, color-mix(in srgb, var(--text) 7%, transparent) 34px);
 }
+
+/* The rail at the right of the workspace: show or hide the docs beside the flow. */
+.docs-rail {
+  flex: none;
+  width: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0 0 6px;
+}
+.docs-rail-btn {
+  writing-mode: vertical-rl;
+  padding: 10px 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.docs-rail-btn.is-on,
+.docs-rail-btn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 35%, var(--border));
+}
