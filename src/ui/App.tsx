@@ -433,14 +433,18 @@ export function App() {
   // Import a file into a new reference doc (never into a round doc).
   const importReference = async (file: File) => {
     try {
-      const { importFile } = await import('../import/importFile');
-      const { title, json } = await importFile(file);
+      const { importFile, importSheets } = await import('../import/importFile');
       // A spreadsheet is a flow and stays a flow; Word, text and Markdown are docs.
-      const format: DocFormat = /\.(xlsx|csv)$/i.test(file.name) ? 'flow' : 'doc';
+      const grid = await importSheets(file);
+      const { title, json } = grid ? { title: grid.title, json: null } : await importFile(file);
+      const format: DocFormat = grid ? 'flow' : 'doc';
       const meta = await createDoc({ title, kind: 'reference', format });
       const { doc, ready } = acquireDoc(meta.id);
       await ready;
-      writeJSON(doc, json);
+      if (grid) {
+        const { importSheetsToFlow } = await import('../import/flowImport');
+        if (!importSheetsToFlow(doc, grid.sheets)) toast('That spreadsheet had nothing to put on a flow.');
+      } else writeJSON(doc, json!);
       releaseDoc(meta.id);
       openInFocused(meta.id);
       toast(`Imported “${title}” as a reference ${format === 'flow' ? 'flow' : 'doc'}.`);

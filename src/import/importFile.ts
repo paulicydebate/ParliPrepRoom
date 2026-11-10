@@ -83,7 +83,7 @@ export function parseDocx(bytes: Uint8Array): JSONContent {
 // ---------- Spreadsheets (flows) ----------
 
 /** Rows of one sheet as strings. */
-type Sheet = { name: string; rows: string[][] };
+export type Sheet = { name: string; rows: string[][] };
 
 const colIndex = (ref: string) => {
   const letters = ref.replace(/[0-9]/g, '');
@@ -229,4 +229,13 @@ export async function importFile(file: File): Promise<{ title: string; json: JSO
   if (ext === 'txt' || ext === 'md' || ext === 'markdown') return { title: name, json: parseText(await file.text()) };
   if (ext === 'doc') throw new Error('Old .doc files aren’t supported. Open it in Word or Google Docs and save as .docx.');
   throw new Error('Pick a Word (.docx), Excel (.xlsx), CSV, text or Markdown file. From Google Docs or Sheets: File → Download.');
+}
+
+/** A spreadsheet's rows, to read into a flow (null for any other kind of file). */
+export async function importSheets(file: File): Promise<{ title: string; sheets: Sheet[] } | null> {
+  const name = file.name.replace(/\.[^.]+$/, '');
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'xlsx') return { title: name, sheets: parseXlsx(new Uint8Array(await file.arrayBuffer())) };
+  if (ext === 'csv') return { title: name, sheets: [{ name, rows: parseCsv(await file.text()) }] };
+  return null;
 }

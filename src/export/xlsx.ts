@@ -8,19 +8,19 @@ import { runsOf, type Run } from './runs';
 // spreadsheet row per flow row, one column per speech, gov/opp tinted like
 // a paper flow. Opens in Excel, Google Sheets and Numbers.
 
-const esc = (s: string) =>
+export const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
 
-function colName(i: number) {
+export function colName(i: number) {
   let s = '';
   for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
   return s;
 }
 
 // Style ids in styles.xml below.
-const S = { headGov: 1, headOpp: 2, bodyGov: 3, bodyOpp: 4, section: 5 };
+export const S = { headGov: 1, headOpp: 2, bodyGov: 3, bodyOpp: 4, section: 5 };
 
-const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+export const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="12"/><name val="Calibri"/></font></fonts>
 <fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
@@ -39,7 +39,7 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
 
-function richCell(ref: string, style: number, lines: { runs: Run[]; claim: boolean }[]) {
+export function richCell(ref: string, style: number, lines: { runs: Run[]; claim: boolean }[]) {
   if (!lines.length) return `<c r="${ref}" s="${style}"/>`;
   const parts: string[] = [];
   lines.forEach((line, i) => {
@@ -56,7 +56,7 @@ function richCell(ref: string, style: number, lines: { runs: Run[]; claim: boole
   return `<c r="${ref}" s="${style}" t="inlineStr"><is>${parts.join('')}</is></c>`;
 }
 
-function sheetName(title: string, used: Set<string>) {
+export function sheetName(title: string, used: Set<string>) {
   let base = title.replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 28) || 'Sheet';
   let name = base;
   for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base.slice(0, 26)} ${i}`;
@@ -123,6 +123,11 @@ export function buildFlowXlsx(doc: PMNode): Uint8Array {
     );
   }
 
+  return packWorkbook(names, files);
+}
+
+/** Wrap worksheet files (xl/worksheets/sheetN.xml) and their names into a finished .xlsx. */
+export function packWorkbook(names: string[], files: Record<string, Uint8Array>): Uint8Array {
   const n = names.length;
   files['[Content_Types].xml'] = strToU8(
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names

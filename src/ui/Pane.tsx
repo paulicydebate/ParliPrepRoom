@@ -24,10 +24,15 @@ export interface PaneState {
 }
 
 /** Download the doc as Word, or its flow as Excel. */
-async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'xlsx') {
-  if (!editor) return;
+async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'xlsx', ydoc?: Y.Doc | null) {
   const { download, safeFilename } = await import('../export/runs');
   const name = safeFilename(title);
+  if (kind === 'xlsx' && ydoc) {
+    const [{ buildFlow2Xlsx }, { readFlow }] = await Promise.all([import('../export/flowXlsx'), import('../flow2/model')]);
+    download(new Uint8Array(buildFlow2Xlsx(readFlow(ydoc))), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return;
+  }
+  if (!editor) return;
   if (kind === 'docx') {
     const { buildDocx } = await import('../export/docx');
     download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -52,13 +57,13 @@ const closeMenu = (e: React.MouseEvent) => {
   if (d) d.open = false;
 };
 
-function ExportMenu({ editor, title, format }: { editor: Editor | null; title: string; format: DocFormat }) {
+function ExportMenu({ editor, title, format, ydoc }: { editor: Editor | null; title: string; format: DocFormat; ydoc: Y.Doc | null }) {
   const [busy, setBusy] = useState(false);
   const run = async (e: React.MouseEvent, kind: 'docx' | 'xlsx') => {
     closeMenu(e);
     setBusy(true);
     try {
-      await exportDoc(editor, title, kind);
+      await exportDoc(editor, title, kind, format === 'flow' ? ydoc : null);
     } finally {
       setBusy(false);
     }
@@ -432,7 +437,7 @@ export function Pane({
                 </button>
               )}
               {provider && <ShareButton docId={meta.id} />}
-              <ExportMenu editor={editor} title={meta.title} format={view} />
+              <ExportMenu editor={editor} title={meta.title} format={view} ydoc={ydoc} />
               <button
                 type="button"
                 className={'icon-btn' + (history ? ' is-on' : '')}
@@ -487,7 +492,7 @@ export function Pane({
                     Download Word (.docx)
                   </button>
                 ) : (
-                  <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx'))}>
+                  <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx', ydoc))}>
                     Download Excel flow (.xlsx)
                   </button>
                 )}
@@ -589,7 +594,7 @@ export function Pane({
                 <PanelHandle panel={outlineWidth} edge="right" label="Resize the outline" onCollapse={() => onChange({ ...pane, outline: false })} />
               </>
             )}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <Flow2Editor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} focus={pane.focus} onEditor={onEditor as (e: null) => void} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <Flow2Editor key={`flow-${meta.id}`} ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} focus={pane.focus} onEditor={onEditor as (e: null) => void} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} format={view} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
         </>

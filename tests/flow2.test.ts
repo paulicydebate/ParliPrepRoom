@@ -475,3 +475,47 @@ describe('flow search', () => {
     expect(searchFlow(entries, 'zebra')).toEqual([]);
   });
 });
+
+import { buildFlow2Xlsx, flowRows } from '../src/export/flowXlsx';
+import { importSheetsToFlow } from '../src/import/flowImport';
+import { parseXlsx } from '../src/import/importFile';
+
+describe('flow Excel export and import', () => {
+  it('writes a flow to Excel and reads it back as the same arguments and answers', () => {
+    const { doc, sheetId, type } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, 'Rubber bullets cause injuries');
+    const a1 = createChild(doc, sheetId, a)!;
+    type(a1, 'No evidence');
+    const a2 = createSibling(doc, sheetId, a1)!;
+    type(a2, 'Studies show it is safe');
+    const a1x = createChild(doc, sheetId, a1)!;
+    type(a1x, 'Turn: it is not safe');
+    setMark(doc, sheetId, [a], 'dropped');
+    const b = createRoot(doc, sheetId, 1, a)!;
+    type(b, 'Second point');
+
+    const rows = flowRows(readFlow(doc)[0].cells);
+    expect(rows.rows).toBe(3);
+    expect(rows.at.get(a)).toBe(0);
+    expect(rows.at.get(a2)).toBe(1);
+    expect(rows.at.get(b)).toBe(2);
+
+    const bytes = buildFlow2Xlsx(readFlow(doc));
+    const grid = parseXlsx(bytes);
+    expect(grid[0].rows[0].slice(0, 3)).toEqual(['PMC', 'LOC', 'MG']);
+    expect(grid[0].rows[1][0]).toContain('Rubber bullets');
+
+    const fresh = new Y.Doc();
+    expect(importSheetsToFlow(fresh, grid)).toBe(5);
+    const back = readFlow(fresh)[0];
+    const text = (id: string) => back.cells.find((c) => c.id === id)!.text;
+    const byText = (t: string) => back.cells.find((c) => c.text === t)!;
+    expect(byText('Rubber bullets cause injuries').mark).toBe('dropped');
+    expect(byText('No evidence').parent).toBe(byText('Rubber bullets cause injuries').id);
+    expect(byText('Studies show it is safe').parent).toBe(byText('Rubber bullets cause injuries').id);
+    expect(byText('Turn: it is not safe').parent).toBe(byText('No evidence').id);
+    expect(byText('Second point').parent).toBeNull();
+    expect(text(byText('Second point').id)).toBe('Second point');
+  });
+});
