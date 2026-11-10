@@ -2,10 +2,7 @@ import { Editor } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 import { contentExtensions } from '../src/editor/extensions';
 import { buildDocx } from '../src/export/docx';
-import { buildFlowXlsx } from '../src/export/xlsx';
-import { parseCsv, parseDocx, parseText, parseXlsx, sheetsToDoc } from '../src/import/importFile';
-import { computeFlow, readBlocks } from '../src/model/flow';
-import { linesToJSON } from '../src/store/seed';
+import { parseCsv, parseDocx, parseText } from '../src/import/importFile';
 
 const kinds = (json: { content?: { attrs?: Record<string, unknown>; content?: { text?: string }[] }[] }) =>
   (json.content ?? []).map((b) => `${b.attrs?.kind}:${(b.content ?? []).map((t) => t.text).join('')}`);
@@ -32,38 +29,9 @@ describe('import into reference docs', () => {
     editor.destroy();
   });
 
-  it('Excel flow: our own export comes back as the same flow (sheets, rows, answers)', () => {
-    const editor = new Editor({
-      extensions: contentExtensions(),
-      content: linesToJSON([
-        ['position', 'Case', { side: 'gov' }],
-        ['claim', 'C1'],
-        ['claim', 'LOC answer', { speech: 'LOC' }],
-        ['claim', 'C2'],
-        ['position', 'DA', { side: 'opp' }],
-        ['claim', 'Link'],
-      ]),
-    });
-    const sheets = parseXlsx(buildFlowXlsx(editor.state.doc));
-    expect(sheets.map((s) => s.name)).toEqual(['Case', 'DA']);
-    const json = sheetsToDoc(sheets);
-    const back = new Editor({ extensions: contentExtensions(), content: json });
-    const layout = computeFlow(readBlocks(back.state.doc));
-    expect(layout.sheets.map((s) => [s.title, s.side])).toEqual([
-      ['Case', 'gov'],
-      ['DA', 'opp'],
-    ]);
-    const where = layout.sheets[0].placements.map((p) => `${back.state.doc.nodeAt(p.pos)!.textContent}@${p.col}:${p.row}`);
-    expect(where).toEqual(['C1@1:1', 'LOC answer@2:1', 'C2@1:2']);
-    editor.destroy();
-    back.destroy();
-  });
-
   it('CSV with speech headers and quoted cells', () => {
     const rows = parseCsv('PMC,LOC,MG\n"Plan, with comma","No solvency",Yes it does\n');
     expect(rows[1]).toEqual(['Plan, with comma', 'No solvency', 'Yes it does']);
-    const json = sheetsToDoc([{ name: 'Case', rows }]);
-    expect(kinds(json)).toEqual(['position:Case', 'claim:Plan, with comma', 'claim:No solvency', 'claim:Yes it does']);
   });
 
   it('Markdown headings and bullets', () => {

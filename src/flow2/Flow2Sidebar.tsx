@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ColorsButton } from '../ui/FlowEditor';
+import { ColorsButton } from './ColorsDialog';
 import { IconChevronDown, IconChevronRight, IconMaximize, IconPlus, IconRestore, IconSidebar } from '../ui/icons';
 import type { FlowSheetData } from './model';
 

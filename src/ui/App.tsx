@@ -18,8 +18,6 @@ import { useYDoc } from './useYDoc';
 import { useLibrary } from './useLibrary';
 import { setLibraryView, usePinColumnsOpen } from '../store/flowPins';
 import type { Editor } from '@tiptap/react';
-import { activeSheet, flowKey } from '../editor/flowView';
-import { baseSpeech } from '../model/speeches';
 import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
 import { SAMPLE_FLOW, SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
@@ -600,16 +598,8 @@ export function App() {
       toast(editor ? 'That block is still loading. Try again in a moment.' : 'Click into the doc you want to insert into first.');
       return;
     }
-    // In a flow, the copy goes in the column the caret is in.
-    let speech: string | null = null;
-    const flow = flowKey.getState(editor.state);
-    const sheet = flow ? activeSheet(flow) : null;
     const { $from } = editor.state.selection;
-    if (sheet && $from.depth >= 1) {
-      const p = sheet.placements.find((x) => x.pos === $from.before(1));
-      if (p && p.speech && p.speech !== baseSpeech(sheet.side)) speech = p.speech;
-    }
-    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, answers: null, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech } }));
+    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, answers: null, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech: null } }));
     const at = $from.depth >= 1 ? $from.after(1) : editor.state.doc.content.size;
     editor.chain().focus().insertContentAt(at, copies).run();
     toast(`Inserted into “${focusedMeta!.title}”.`);

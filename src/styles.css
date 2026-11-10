@@ -1281,45 +1281,11 @@ del {
   display: flex;
   flex-direction: column;
 }
-.sheet-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: thin;
-  flex: none;
-}
-.sheet-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text-2);
-  white-space: nowrap;
-  font-weight: 500;
-}
-.sheet-tab:hover {
-  background: var(--surface-2);
-}
-.sheet-tab.is-on {
-  background: var(--surface);
-  border-color: var(--border-strong);
-  color: var(--text);
-  font-weight: 600;
-  box-shadow: var(--shadow);
-}
-.sheet-name {
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+
+
+
+
+
 .sheet-dot {
   flex: none;
   width: 8px;
@@ -1327,9 +1293,7 @@ del {
   border-radius: 50%;
   background: var(--gov);
 }
-.sheet-tab.fl-opp .sheet-dot {
-  background: var(--opp);
-}
+
 .sheet-rename {
   height: 30px;
   width: 140px;
@@ -1338,36 +1302,16 @@ del {
   padding: 0 8px;
   background: var(--surface);
 }
-.sheet-side select {
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--surface-2);
-  color: var(--text-2);
-  padding: 0 4px;
-  margin-left: 4px;
-  font-size: 12.5px;
-}
-.flow-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 0 12px 40vh;
-}
-.flow-head,
+
+
+
 .pp-flow {
   display: grid;
   grid-template-columns: repeat(var(--fl-cols, 6), minmax(var(--fl-min), 1fr));
   column-gap: var(--fl-gap);
   min-width: calc(var(--fl-cols, 6) * (var(--fl-min) + var(--fl-gap)));
 }
-.flow-head {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  padding: 10px 0 8px;
-  background: var(--surface);
-}
+
 .flow-col-head {
   text-align: center;
   font-size: 12px;
@@ -1382,14 +1326,8 @@ del {
   color: var(--opp);
   background: color-mix(in srgb, var(--opp) 12%, var(--surface));
 }
-.flow-empty {
-  padding: 30px 8px;
-  color: var(--text-2);
-  max-width: 520px;
-}
-.flow-grid-host {
-  min-width: 0;
-}
+
+
 .pp-flow {
   outline: none;
   align-items: start;
@@ -1398,76 +1336,21 @@ del {
 }
 
 /* Cell backgrounds sit under the text; each spans its row group. */
-.fl-cell {
-  position: relative;
-  z-index: 0;
-  align-self: stretch;
-  margin-top: 6px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--gov) 5%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--gov) 16%, var(--border));
-  min-height: 34px;
-  user-select: none;
-}
-.fl-cell.fl-opp {
-  background: color-mix(in srgb, var(--opp) 5%, var(--surface));
-  border-color: color-mix(in srgb, var(--opp) 16%, var(--border));
-}
-.fl-cell.is-empty {
-  background: transparent;
-  border-style: dashed;
-  border-color: var(--border);
-  cursor: text;
-}
-.fl-cell.is-empty:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.fl-cell.is-empty:hover::after {
-  content: '+';
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--accent);
-  font-size: 18px;
-}
-.fl-rows {
-  display: grid;
-  grid-template-columns: subgrid;
-  grid-auto-rows: auto;
-  column-gap: inherit;
-  user-select: none;
-}
-.fl-rows .fl-cell {
-  min-height: 30px;
-  margin-top: 4px;
-  border-color: color-mix(in srgb, var(--border) 75%, transparent);
-}
-.fl-rows.is-ghost .fl-cell {
-  border-style: solid;
-  border-color: color-mix(in srgb, var(--border) 55%, transparent);
-}
+
+
+
+
+
+
+
 /* Column selection: only the column you started in is highlighted and copied. */
 .pp-flow[data-colsel] ::selection {
   background: transparent;
 }
-.pp-flow > .fl-colsel {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  border-radius: 4px;
-}
 
-.pp-flow > .fl-item {
-  position: relative;
-  z-index: 1;
-  padding: 3px 10px;
-  margin: 0;
-  min-width: 0;
-}
+
+
 /* First line of a group gets the cell's top padding. */
-.pp-flow > .fl-item {
-  margin-top: 0;
-}
 .pp-flow > .pp-block[data-kind='claim'] {
   font-size: calc(var(--pp-claim-size) * 0.86);
 }
@@ -1488,32 +1371,10 @@ del {
   margin: 4px 6px;
   padding: 3px 6px;
 }
-.pp-flow > .fl-section {
-  position: relative;
-  z-index: 1;
-  margin: 16px 0 2px;
-  padding: 4px 4px 4px 2px;
-  font-size: calc(var(--pp-section-size) * 0.8);
-  /* A section title stays inside its own column and wraps there... */
-  overflow-wrap: anywhere;
-}
+
 /* ...while its divider line still runs across every column. */
-.pp-flow > .fl-section::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 1px;
-  width: calc(var(--fl-cols, 6) * 100% + (var(--fl-cols, 6) - 1) * var(--fl-gap));
-  background: var(--border);
-  pointer-events: none;
-}
-.pp-flow > .fl-section .pp-toggle {
-  display: none;
-}
-.is-narrow .flow-scroll {
-  padding: 0 8px 40vh;
-}
+
+
 .is-narrow {
   --fl-min: 70vw;
 }
@@ -2489,17 +2350,9 @@ del {
   font-size: 12px;
 }
 
-.sheet-delete {
-  color: var(--text-3);
-}
-.sheet-delete:hover:not(:disabled) {
-  color: var(--danger);
-}
-.sheet-delete.confirm {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: #fff;
-}
+
+
+
 
 /* Pins column inside the flow */
 .flow-col-head {
@@ -2508,136 +2361,32 @@ del {
   align-items: center;
   justify-content: center;
 }
-.col-pin-btn {
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  opacity: 0.45;
-  cursor: pointer;
-}
-.col-pin-btn:hover,
-.col-pin-btn.is-on {
-  opacity: 1;
-  background: color-mix(in srgb, currentColor 14%, transparent);
-}
+
+
 .flow-col-head.pins-head {
   color: var(--accent);
   background: var(--accent-soft);
 }
-.pp-flow > .fl-pins {
-  position: relative;
-  z-index: 2;
-  align-self: stretch;
-  margin-top: 6px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
-  user-select: none;
-}
-.fl-pins-inner {
-  position: sticky;
-  top: 48px;
-  max-height: calc(100vh - 220px);
-  overflow-y: auto;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.fl-pins-inner p {
-  margin: 4px;
-}
-.fl-pin {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  padding: 6px 8px;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-}
-.fl-pin:hover {
-  border-color: var(--accent);
-}
-.fl-pin .pin-num {
-  margin-top: 2px;
-}
-.fl-pin-body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  line-height: 1.35;
-}
-.fl-pin-body .pp-block {
-  display: block;
-  font-size: 13px;
-}
-.fl-pin-body .pp-block[data-kind='section'] {
-  font-family: var(--pp-section-font);
-  font-weight: 700;
-  color: var(--pp-section-color, var(--section-color));
-  font-size: 13.5px;
-}
-.fl-pin-body .pp-block[data-kind='claim'] {
-  font-family: var(--pp-claim-font);
-  font-weight: 700;
-  margin-top: 2px;
-}
-.fl-pin-body .pp-block[data-kind='warrant'],
-.fl-pin-body .pp-block[data-kind='analytic'] {
-  font-family: var(--pp-warrant-font);
-  padding-left: 10px;
-  color: var(--text-2);
-}
-.fl-pin-body .pp-block[data-kind='warrant']::before,
-.fl-pin-body .pp-block[data-kind='analytic']::before {
-  display: none;
-}
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* Alternating column stripes in the flow */
-.pp-flow > .fl-band {
-  position: relative;
-  z-index: 0;
-  align-self: stretch;
-  margin: 0 -3px;
-  background: var(--band-a);
-  pointer-events: none;
-}
-.pp-flow > .fl-band.is-alt {
-  background: var(--band-b);
-}
-.pp-flow > .fl-band:first-child {
-  border-radius: 10px 0 0 10px;
-}
+
+
 /* Cells sit on the stripes; empty ones stay see-through so the stripe shows. */
-.pp-flow > .fl-cell,
-.pp-flow > .fl-rows {
-  position: relative;
-  z-index: 1;
-}
-.pp-flow > .fl-item,
-.pp-flow > .fl-section {
-  z-index: 2;
-}
-.pp-flow > .fl-pins {
-  z-index: 3;
-}
-.flow-head .flow-col-head {
-  position: relative;
-}
+
+
+
 
 /* ---------- Colorways ---------- */
 .colorway-grid {
@@ -2910,9 +2659,7 @@ del {
   .seg button {
     padding: 7px 12px;
   }
-  .sheet-tab {
-    height: 36px;
-  }
+  
   .menu button {
     padding: 10px 12px;
   }
@@ -3708,12 +3455,8 @@ body.is-resizing .pp-doc {
     --fl-min: 138px;
   }
 }
-:root[data-spacing='tight'] .flow-scroll {
-  padding: 0 4px 40vh;
-}
-:root[data-spacing='tight'] .flow-head {
-  padding: 4px 0;
-}
+
+
 :root[data-spacing='tight'] .sidebar,
 :root[data-spacing='tight'] .outline {
   padding: 8px 6px;
@@ -3924,63 +3667,24 @@ kbd {
 }
 
 /* ---------- Flow threads (argument to answers) ---------- */
-.flow-grid-wrap {
-  position: relative;
-}
-.flow-threads {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-  z-index: 2;
-}
-.flow-threads .thread {
-  fill: none;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  opacity: 0.75;
-}
-.flow-threads .thread.fl-gov {
-  stroke: var(--gov);
-}
-.flow-threads .thread.fl-opp {
-  stroke: var(--opp);
-}
-.flow-threads .thread.is-on {
-  stroke-width: 2.2;
-  opacity: 1;
-}
+
+
+
+
+
 .link-btn.is-on {
   color: var(--accent);
   border-color: var(--accent);
 }
-.link-hint {
-  font-size: 12.5px;
-  color: var(--accent);
-  white-space: nowrap;
-}
-.pp-flow > .fl-linking {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  border-radius: 4px;
-}
-.pp-flow[data-linking] > .fl-linkable {
-  cursor: pointer;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-radius: 4px;
-}
-.pp-flow[data-linking] > .fl-linkable:hover {
-  outline: 2px dashed var(--accent);
-  outline-offset: -2px;
-}
+
+
+
+
 
 /* ---------- Flow layout: every cell grows on its own (adapted from Flowist's idea) ---------- */
 /* The sheet is a grid only for its column widths (unused speeches stay narrow, see columnTracks in
    src/model/flowLayout.ts). Blocks and backgrounds sit inside their column (--c) at a top set by
-   the layout (src/model/flowLayout.ts), so every cell is as tall as its own text. */
-.flow-head,
+   the layout (src/model/flowLayout.ts),
 .pp-flow {
   grid-template-columns: var(--fl-template, repeat(var(--fl-cols, 6), minmax(var(--fl-min), 1fr)));
   min-width: var(--fl-minw, 0px);
@@ -3990,72 +3694,20 @@ kbd {
   position: relative;
   grid-template-rows: none;
 }
-.pp-flow > .fl-item,
-.pp-flow > .fl-section,
-.pp-flow > .fl-cell,
-.pp-flow > .fl-pins,
-.pp-flow > .fl-add-answer {
-  position: absolute;
-  box-sizing: border-box;
-  grid-column: var(--c) / span 1;
-  grid-row: auto;
-  left: 0;
-  right: 0;
-  width: auto;
-  margin: 0;
-}
-.pp-flow > .fl-item.pp-block,
-.pp-flow > .fl-section {
-  margin: 0;
-}
-.pp-flow > .fl-item {
-  padding: 5px 10px 4px;
-}
+
+
+
 /* A section title: its text stays about one column wide, its line runs across the sheet. */
-.pp-flow > .fl-section {
-  grid-column: 1 / -1;
-  padding: 4px calc(100% - var(--fl-min)) 4px 2px;
-}
-.pp-flow > .fl-cell {
-  min-height: 0;
-}
-.pp-flow > .fl-pins {
-  top: 0;
-  height: 100%;
-}
-.pp-flow > .fl-band {
-  position: absolute;
-  box-sizing: border-box;
-  grid-column: var(--c) / span 1;
-  grid-row: auto;
-  top: 0;
-  height: 100%;
-  margin: 0;
-  left: calc(var(--fl-gap) / -2);
-  right: calc(var(--fl-gap) / -2);
-  width: auto;
-}
-.pp-flow > .fl-rows {
-  position: absolute;
-  grid-column: 1 / -1;
-  grid-row: auto;
-  left: 0;
-  right: 0;
-  display: grid;
-  grid-auto-rows: 34px; /* = DEFAULT_METRICS.rowHeight in src/model/flowLayout.ts */
-  column-gap: var(--fl-gap);
-}
-.pp-flow[data-measuring] > .fl-item,
-.pp-flow[data-measuring] > .fl-section {
-  visibility: hidden;
-}
+
+
+
+
+
 /* An unused speech column stays narrow; its heading shrinks to fit. */
 .flow-col-head.is-narrow {
   opacity: 0.7;
 }
-.flow-col-head.is-narrow .col-pin-btn {
-  display: none;
-}
+
 
 /* ---------- Flow look: thin outlines, side-colored text, empty cells invisible (after the Flowist video) ---------- */
 :root {
@@ -4081,142 +3733,28 @@ kbd {
   font-size: 13px;
 }
 /* Column headings: colored text on a colored underline, no pill. */
-.flow-head .flow-col-head,
-.flow-head .flow-col-head.fl-opp {
-  background: transparent;
-  border-radius: 0;
-  text-align: left;
-  padding: 6px 2px 5px;
-  border-bottom: 2px solid currentColor;
-  font-size: 13px;
-}
 /* Cells: a plain outlined box, as tall as its text. Empty positions show nothing until hovered. */
-.pp-flow > .fl-cell,
-.pp-flow > .fl-cell.fl-opp {
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--text) 8%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--text) 20%, var(--surface));
-}
-.pp-flow > .fl-cell.is-empty,
-.pp-flow > .fl-cell.is-empty.fl-opp {
-  background: transparent;
-  border-color: transparent;
-}
-.pp-flow > .fl-cell.is-empty:hover {
-  background: transparent;
-  border: 1px dashed color-mix(in srgb, var(--text) 35%, transparent);
-}
-.pp-flow > .fl-cell.is-empty:hover::after {
-  content: '+';
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--text-2);
-  font-size: 16px;
-}
+
+
+
 /* A cell you have just made and not typed in yet. */
-.pp-flow > .fl-cell.is-blank {
-  background: transparent;
-  border: 1px dashed color-mix(in srgb, var(--text) 25%, transparent);
-}
-.pp-flow > .fl-cell.is-lit {
-  border-color: #5fbf6a;
-  box-shadow: 0 0 0 1px #5fbf6a;
-}
-.pp-flow > .fl-rows .fl-cell,
-.pp-flow > .fl-rows.is-ghost .fl-cell {
-  background: transparent;
-  border-color: transparent;
-}
-.pp-flow > .fl-rows .fl-cell:hover {
-  border: 1px dashed color-mix(in srgb, var(--text) 30%, transparent);
-}
-.pp-flow > .fl-rows {
-  grid-auto-rows: 34px; /* = DEFAULT_METRICS.rowHeight in src/model/flowLayout.ts */
-}
+
+
+
+
 /* Text: the side's color, small and even. */
-.pp-flow > .fl-item.fl-gov.pp-block {
-  color: var(--gov);
-}
-.pp-flow > .fl-item.fl-opp.pp-block {
-  color: var(--opp);
-}
-.pp-flow > .fl-item.pp-block[data-kind='claim'],
-.pp-flow > .fl-item.pp-block[data-kind='warrant'],
-.pp-flow > .fl-item.pp-block[data-kind='analytic'],
-.pp-flow > .fl-item.pp-block[data-kind='note'] {
-  font-size: 13.5px;
-  line-height: 1.35;
-  font-weight: 500;
-  padding: 5px 9px 4px;
-}
-.pp-flow > .fl-item.pp-block[data-kind='warrant'],
-.pp-flow > .fl-item.pp-block[data-kind='analytic'] {
-  font-weight: 400;
-  padding-left: 9px;
-  opacity: 0.9;
-}
-.pp-flow > .fl-item.pp-block[data-kind='warrant']::before,
-.pp-flow > .fl-item.pp-block[data-kind='analytic']::before {
-  display: none;
-}
+
+
+
+
 /* Threads: soft grey curves, green when the argument or one of its answers is selected. */
-.flow-threads .thread,
-.flow-threads .thread.fl-gov,
-.flow-threads .thread.fl-opp {
-  stroke: color-mix(in srgb, var(--text) 40%, transparent);
-  stroke-width: 1.5;
-  opacity: 1;
-}
-.flow-threads .thread.is-on {
-  stroke: #5fbf6a;
-  stroke-width: 2;
-}
+
 /* The + under linked answers. */
-.pp-flow > .fl-add-answer {
-  height: 22px;
-  padding: 0;
-  border: 0;
-  background: linear-gradient(to bottom, transparent 10px, currentColor 10px, currentColor 11px, transparent 11px);
-  color: color-mix(in srgb, var(--opp) 60%, transparent);
-  cursor: pointer;
-  z-index: 2;
-  font-size: 0;
-}
-.pp-flow > .fl-add-answer::after {
-  content: '+';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 20px;
-  line-height: 18px;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-  background: var(--surface);
-  font-size: 15px;
-  text-align: center;
-}
-.pp-flow > .fl-add-answer:hover {
-  color: var(--text);
-}
+
+
 
 /* Box-select */
-.fl-marquee {
-  position: absolute;
-  z-index: 5;
-  pointer-events: none;
-  border: 1px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-radius: 3px;
-}
-.pp-flow > .fl-cell.is-picked {
-  background: color-mix(in srgb, var(--text) 17%, var(--surface));
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
+
 .build-stamp {
   display: block;
   padding: 6px 12px 2px;

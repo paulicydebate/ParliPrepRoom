@@ -1,8 +1,5 @@
+import type { Run } from './runs';
 import { strToU8, zipSync } from 'fflate';
-import type { Node as PMNode } from '@tiptap/pm/model';
-import { computeFlow, readBlocks } from '../model/flow';
-import { SPEECH_INFO } from '../model/speeches';
-import { runsOf, type Run } from './runs';
 
 // A small hand-written .xlsx writer: one worksheet per flow sheet, one
 // spreadsheet row per flow row, one column per speech, gov/opp tinted like
@@ -62,68 +59,6 @@ export function sheetName(title: string, used: Set<string>) {
   for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base.slice(0, 26)} ${i}`;
   used.add(name.toLowerCase());
   return name;
-}
-
-export function buildFlowXlsx(doc: PMNode): Uint8Array {
-  const layout = computeFlow(readBlocks(doc as never));
-  const files: Record<string, Uint8Array> = {};
-  const used = new Set<string>();
-  const sheets = layout.sheets.length ? layout.sheets : [];
-  const names: string[] = [];
-
-  sheets.forEach((sheet, si) => {
-    names.push(sheetName(sheet.title, used));
-    const rows: string[] = [];
-    const merges: string[] = [];
-    const lastCol = colName(sheet.columns.length - 1);
-    rows.push(
-      `<row r="1">${sheet.columns
-        .map((sp, i) => `<c r="${colName(i)}1" s="${SPEECH_INFO[sp].side === 'gov' ? S.headGov : S.headOpp}" t="inlineStr"><is><t>${sp}</t></is></c>`)
-        .join('')}</row>`,
-    );
-    let r = 2;
-    // Walk sections and groups in document order.
-    const items: ({ kind: 'section'; pos: number } | { kind: 'group'; index: number; pos: number })[] = [
-      ...sheet.placements.filter((p) => p.col === 0).map((p) => ({ kind: 'section' as const, pos: p.pos })),
-      ...sheet.groups.map((g) => ({ kind: 'group' as const, index: g.index, pos: g.from })),
-    ].sort((a, b) => a.pos - b.pos);
-    for (const item of items) {
-      if (item.kind === 'section') {
-        const node = doc.nodeAt(item.pos);
-        rows.push(`<row r="${r}">${richCell(`A${r}`, S.section, [{ runs: node ? runsOf(node.toJSON()) : [], claim: false }])}</row>`);
-        merges.push(`<mergeCell ref="A${r}:${lastCol}${r}"/>`);
-        r++;
-        continue;
-      }
-      const g = sheet.groups[item.index];
-      const cells = sheet.columns.map((sp, ci) => {
-        const list = g.cells.get(ci + 1) ?? [];
-        const lines = list.map((b) => {
-          const node = doc.nodeAt(b.pos)!;
-          const mark = ({ extend: '→ ', dropped: '[DROPPED] ', answered: '✓ ', key: '★ ' } as Record<string, string>)[String(node.attrs.mark)];
-          const runs = runsOf(node.toJSON());
-          return { runs: mark ? [{ text: mark, bold: true }, ...runs] : runs, claim: node.attrs.kind === 'claim' };
-        });
-        return richCell(`${colName(ci)}${r}`, SPEECH_INFO[sp].side === 'gov' ? S.bodyGov : S.bodyOpp, lines);
-      });
-      rows.push(`<row r="${r}">${cells.join('')}</row>`);
-      r++;
-    }
-    const cols = sheet.columns.map((_, i) => `<col min="${i + 1}" max="${i + 1}" width="38" customWidth="1"/>`).join('');
-    files[`xl/worksheets/sheet${si + 1}.xml`] = strToU8(
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cols}</cols><sheetData>${rows.join('')}</sheetData>${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}</worksheet>`,
-    );
-  });
-
-  if (!sheets.length) {
-    names.push('Flow');
-    files['xl/worksheets/sheet1.xml'] = strToU8(
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>No sheets yet: add a Position title.</t></is></c></row></sheetData></worksheet>`,
-    );
-  }
-
-  return packWorkbook(names, files);
 }
 
 /** Wrap worksheet files (xl/worksheets/sheetN.xml) and their names into a finished .xlsx. */

@@ -32,14 +32,9 @@ async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'x
     download(new Uint8Array(buildFlow2Xlsx(readFlow(ydoc))), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     return;
   }
-  if (!editor) return;
-  if (kind === 'docx') {
-    const { buildDocx } = await import('../export/docx');
-    download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  } else {
-    const { buildFlowXlsx } = await import('../export/xlsx');
-    download(new Uint8Array(buildFlowXlsx(editor.state.doc)), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  }
+  if (!editor || kind !== 'docx') return;
+  const { buildDocx } = await import('../export/docx');
+  download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 }
 
 async function copyShareLink(docId: string) {
