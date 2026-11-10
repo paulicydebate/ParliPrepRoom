@@ -35,6 +35,26 @@ export function editsOf(tr: Transaction): { inserted: string; removed: number; r
   return { inserted, removed, removedText };
 }
 
+/** Record one local edit in the typing log: what was removed, and what was put in (typed or all at once). */
+export function recordEdit(docId: string, inserted: string, removedText: string) {
+  if (removedText) logEvent(docId, { k: 'delete', n: removedText.length, s: removedText.slice(0, 500) });
+  if (inserted) {
+    if (inserted.length > LARGE_INSERT) logEvent(docId, { k: 'large', n: inserted.length, s: inserted.slice(0, 200) });
+    else logEvent(docId, { k: 'type', s: inserted });
+  }
+}
+
+/** A flow (or any editor) that is showing a round doc: its time in other apps or tabs is logged while it is open. */
+export function trackRoundDoc(docId: string, ydoc: Y.Doc | null): () => void {
+  listenAway();
+  openRound.set(docId, { count: (openRound.get(docId)?.count ?? 0) + 1, ydoc });
+  return () => {
+    const o = openRound.get(docId);
+    if (!o || o.count <= 1) openRound.delete(docId);
+    else openRound.set(docId, { ...o, count: o.count - 1 });
+  };
+}
+
 // Track which round docs are open, to log time spent in other apps or tabs.
 const openRound = new Map<string, { count: number; ydoc: Y.Doc | null }>();
 let listening = false;
@@ -65,11 +85,8 @@ export const RoundGuard = Extension.create<{ ydoc: Y.Doc | null; docId: string |
             if (!docId || !tr.docChanged || !round()) return null;
             if (tr.getMeta(ySyncPluginKey)?.isChangeOrigin) return null;
             const { inserted, removed, removedText } = editsOf(tr);
-            if (removed) logEvent(docId, { k: 'delete', n: removedText.length || removed, s: removedText.slice(0, 500) });
-            if (inserted) {
-              if (inserted.length > LARGE_INSERT) logEvent(docId, { k: 'large', n: inserted.length, s: inserted.slice(0, 200) });
-              else logEvent(docId, { k: 'type', s: inserted });
-            }
+            if (removed && !removedText) logEvent(docId, { k: 'delete', n: removed, s: '' });
+            recordEdit(docId, inserted, removedText);
             return null;
           },
         },

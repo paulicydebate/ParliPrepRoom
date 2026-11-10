@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, Fragment, useId, type ReactNode } from 'react';
 import * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
-import { toast } from '../editor/roundGuard';
+import { recordEdit, toast, trackRoundDoc } from '../editor/roundGuard';
+import { isRound } from '../store/roundDoc';
+import { logEvent } from '../store/typingLog';
 import { SPEECH_INFO } from '../model/speeches';
 import { useFlowColors, useFlowTheme } from '../store/flowTheme';
 import { IconChevronDown, IconChevronRight, IconMaximize, IconRestore, IconSidebar, IconThread } from '../ui/icons';
@@ -81,10 +83,40 @@ function useUndo(doc: Y.Doc) {
   );
 }
 
+type Peer = { name: string; color: string };
+
+/** Who else is in which cell right now (from the live connection's presence), by cell id. */
+function usePeers(provider: WebsocketProvider | null): ReadonlyMap<string, Peer[]> {
+  const [peers, setPeers] = useState<ReadonlyMap<string, Peer[]>>(new Map());
+  useEffect(() => {
+    if (!provider) return setPeers(new Map());
+    const aw = provider.awareness;
+    const read = () => {
+      const out = new Map<string, Peer[]>();
+      aw.getStates().forEach((state, client) => {
+        if (client === aw.clientID) return;
+        const at = (state as { flow2?: { cell?: string } | null }).flow2;
+        const user = (state as { user?: { name?: string; color?: string } }).user;
+        if (!at?.cell || !user) return;
+        out.set(at.cell, [...(out.get(at.cell) ?? []), { name: user.name || 'Someone', color: user.color || '#888' }]);
+      });
+      setPeers((prev) => {
+        const same = prev.size === out.size && [...out].every(([k, v]) => prev.get(k)?.map((p) => p.name + p.color).join() === v.map((p) => p.name + p.color).join());
+        return same ? prev : out;
+      });
+    };
+    read();
+    aw.on('change', read);
+    return () => aw.off('change', read);
+  }, [provider]);
+  return peers;
+}
+
 export function Flow2Editor({
   ydoc,
   provider,
   docId,
+  carets,
   onEditor,
 }: {
   ydoc: Y.Doc;
@@ -98,6 +130,13 @@ export function Flow2Editor({
   const colors = useFlowColors();
   const sheets = useFlow(ydoc);
   const undo = useUndo(ydoc);
+  const peers = usePeers(provider);
+  // Tell partners which cell you are in (only the first window on this doc shares its cursor, so two windows never fight).
+  const shareCell = (cell: string | null) => {
+    if (provider && carets) provider.awareness.setLocalStateField('flow2', cell ? { cell } : null);
+  };
+  useEffect(() => trackRoundDoc(docId, ydoc), [docId, ydoc]);
+  useEffect(() => () => provider?.awareness.setLocalStateField('flow2', null), [provider]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const sheet = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
@@ -208,7 +247,7 @@ export function Flow2Editor({
           </button>
         )}
         {maxSheet ? (
-          <SheetView key={maxSheet.id} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
+          <SheetView key={maxSheet.id} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
         ) : (
           <Flow2Canvas
             doc={ydoc}
@@ -219,7 +258,7 @@ export function Flow2Editor({
             collapsed={collapsed}
             renderCollapsed={(s) => <CollapsedBar sheet={s} onExpand={() => toggleCollapse(s.id)} />}
             renderLive={(s, zoom) => (
-              <SheetView doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id) }} jump={jump} onJump={onJump} />
+              <SheetView docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id) }} jump={jump} onJump={onJump} />
             )}
           />
         )}
@@ -267,7 +306,7 @@ export interface Maximized {
   onRestore: () => void;
 }
 
-export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
+export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus }: { docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -649,7 +688,13 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
               linkable={!!linking && c.col === linking.col - 1}
               want={want}
               onHeight={onHeight}
-              onFocus={() => setFocusId(c.id)}
+              docId={docId}
+              peers={peers.get(c.id) ?? []}
+              onFocus={() => {
+                setFocusId(c.id);
+                onCellFocus(c.id);
+              }}
+              onBlur={() => setTimeout(() => !document.activeElement?.closest('.f2-cell') && onCellFocus(null), 60)}
               onKeyDown={onCellKey}
               onMouseDown={onCellMouseDown}
             />
@@ -864,6 +909,9 @@ function Cell({
   measured,
   lit,
   picked,
+  docId,
+  peers,
+  onBlur,
   refs,
   onRefClick,
   onRefRemove,
@@ -887,6 +935,9 @@ function Cell({
   measured: boolean;
   lit: boolean;
   picked: boolean;
+  docId: string;
+  peers: Peer[];
+  onBlur: () => void;
   refs: (FlowRef & { text: string; missing: boolean })[];
   onRefClick: (r: FlowRef) => void;
   onRefRemove: (r: FlowRef) => void;
@@ -917,16 +968,42 @@ function Cell({
     const el = area.current;
     const text = yText(yCells(sheetsMapGet(doc, sheetId)).get(cell.id)!);
     if (!el || !text) return;
-    const off = bindText(el, text);
+    // In a round doc every local edit goes in the typing log, and pasting and dropping text in are blocked.
+    const off = bindText(el, text, (e) => {
+      if (isRound(doc)) recordEdit(docId, e.ins, e.deleted);
+    });
+    const block = (e: Event) => {
+      if (!isRound(doc)) return;
+      const kind = e.type === 'drop' || (e as InputEvent).inputType === 'insertFromDrop' ? 'drop-blocked' : 'paste-blocked';
+      e.preventDefault();
+      const size = (e as ClipboardEvent).clipboardData?.getData('text')?.length ?? (e as DragEvent).dataTransfer?.getData('text')?.length ?? 0;
+      logEvent(docId, { k: kind, n: size });
+      toast(kind === 'paste-blocked' ? 'Paste is off in round docs. Type it in.' : 'Drag and drop is off in round docs.');
+    };
+    const guardInput = (e: Event) => {
+      const t = (e as InputEvent).inputType;
+      if (t === 'insertFromPaste' || t === 'insertFromPasteAsQuotation' || t === 'insertFromYank' || t === 'insertFromDrop') block(e);
+    };
+    const allowDrop = (e: Event) => {
+      if (isRound(doc)) e.preventDefault();
+    };
+    el.addEventListener('paste', block);
+    el.addEventListener('drop', block);
+    el.addEventListener('dragover', allowDrop);
+    el.addEventListener('beforeinput', guardInput);
     el.addEventListener('input', fit);
     el.addEventListener('flow2-remote', fit);
     fit();
     return () => {
       off();
+      el.removeEventListener('paste', block);
+      el.removeEventListener('drop', block);
+      el.removeEventListener('dragover', allowDrop);
+      el.removeEventListener('beforeinput', guardInput);
       el.removeEventListener('input', fit);
       el.removeEventListener('flow2-remote', fit);
     };
-  }, [doc, sheetId, cell.id, fit]);
+  }, [doc, sheetId, cell.id, fit, docId]);
 
   // A cell's height depends on its width.
   const refSig = refs.map((r) => refKey(r) + r.text).join('|');
@@ -946,13 +1023,14 @@ function Cell({
   return (
     <div
       ref={wrap}
-      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
-      style={{ left: x, top: y, width: w }}
+      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (peers.length ? ' has-peer' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
+      style={{ left: x, top: y, width: w, ...(peers.length ? ({ ['--peer' as string]: peers[0].color } as React.CSSProperties) : {}) }}
       onMouseDown={(e) => onMouseDown(e, cell)}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
     >
-      <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onKeyDown={(e) => onKeyDown(e, cell)} />
+      {peers.length > 0 && <span className="f2-peer" style={{ background: peers[0].color }}>{peers.map((p) => p.name).join(', ')}</span>}
+      <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onBlur={onBlur} onKeyDown={(e) => onKeyDown(e, cell)} />
       {refs.length > 0 && (
         <div className="f2-refs">
           {refs.map((r) => (

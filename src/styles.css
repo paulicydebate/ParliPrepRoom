@@ -5115,3 +5115,25 @@ kbd {
 .home-date {
   margin-left: 10px;
 }
+
+/* A partner is in this cell: its outline and a name tag in their color. */
+.flow-wrap.f2 .f2-cell.has-peer {
+  outline: 2px solid var(--peer);
+  outline-offset: -1px;
+}
+.f2-peer {
+  position: absolute;
+  right: -1px;
+  top: -17px;
+  z-index: 4;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 3px 3px 0 0;
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

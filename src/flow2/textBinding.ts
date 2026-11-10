@@ -37,7 +37,15 @@ export function mapPosition(delta: Delta, pos: number): number {
   return Math.max(0, out);
 }
 
-export function bindText(el: HTMLTextAreaElement, text: Y.Text): () => void {
+/** What a person just did to a cell's text: where, how much they removed (and which text), and what they put in. */
+export interface LocalEdit {
+  at: number;
+  del: number;
+  deleted: string;
+  ins: string;
+}
+
+export function bindText(el: HTMLTextAreaElement, text: Y.Text, onLocal?: (e: LocalEdit) => void): () => void {
   const doc = text.doc;
   let composing = false;
   el.value = text.toString();
@@ -58,6 +66,7 @@ export function bindText(el: HTMLTextAreaElement, text: Y.Text): () => void {
     if (composing || !doc) return;
     const d = diffText(text.toString(), el.value);
     if (!d.del && !d.ins) return;
+    onLocal?.({ ...d, deleted: text.toString().slice(d.at, d.at + d.del) });
     doc.transact(() => {
       if (d.del) text.delete(d.at, d.del);
       if (d.ins) text.insert(d.at, d.ins);
