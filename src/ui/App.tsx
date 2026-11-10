@@ -6,7 +6,7 @@ import { setRound } from '../store/roundDoc';
 import { startTour } from '../store/tour';
 import { InviteBanner } from './Invites';
 import { HelpMenu, Tour } from './Tour';
-import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
+import { getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
 import { addSharedDoc, createDoc, deleteDoc, formatOf, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocFormat, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
@@ -20,7 +20,7 @@ import { setLibraryView, usePinColumnsOpen } from '../store/flowPins';
 import type { Editor } from '@tiptap/react';
 import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
-import { SAMPLE_FLOW, SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
+import { STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
 import { IconMenu, IconPin, IconSearch, IconSettings } from './icons';
@@ -64,46 +64,12 @@ async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: stri
   const meta = await createDoc({ title, kind, space, format });
   const { doc, ready } = acquireDoc(meta.id);
   await ready;
-  if (format === 'flow') {
-    // A flow is cells, not blocks: the sample is read in from rows; a new flow starts empty (the editor adds its first sheet).
-    if (lines === SAMPLE_FLOW) (await import('../import/flowImport')).importSheetsToFlow(doc, (await import('../flow2/sample')).SAMPLE_FLOW_SHEETS);
-  } else writeLines(doc, lines);
+  // A flow is cells, not blocks: it starts empty and the editor adds its first sheet.
+  if (format !== 'flow') writeLines(doc, lines);
   if (round) setRound(doc, meta.id, true);
   releaseDoc(meta.id);
   if (round) await setDocRound(meta.id, true);
   return meta;
-}
-
-/** First visit: add one sample reference doc and one sample prep doc, side by side. */
-async function seedFirstRun(): Promise<Layout | null> {
-  try {
-    if (localStorage.getItem('pp-seeded')) {
-      // Browsers that saw the first preview get the flow sample once.
-      if (!localStorage.getItem('pp-seeded-flow')) {
-        localStorage.setItem('pp-seeded-flow', '1');
-        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_FLOW, PERSONAL, false, 'flow');
-        return { panes: [{ key: paneKey(), docId: flow.id, outline: false }], weights: [1], focused: 0, sidebar: true };
-      }
-      return null;
-    }
-    localStorage.setItem('pp-seeded', '1');
-    localStorage.setItem('pp-seeded-flow', '1');
-  } catch {
-    return null;
-  }
-  if ((await listDocs()).length) return null;
-  const ref = await makeDoc('Sample brief: facial recognition', 'reference', SAMPLE_REFERENCE, PERSONAL);
-  const prep = await makeDoc('Sample prep: facial recognition', 'prep', SAMPLE_PREP, PERSONAL);
-  await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_FLOW, PERSONAL, false, 'flow');
-  return {
-    panes: [
-      { key: paneKey(), docId: ref.id, outline: false },
-      { key: paneKey(), docId: prep.id, outline: true },
-    ],
-    weights: [1, 1.25],
-    focused: 1,
-    sidebar: true,
-  };
 }
 
 function useMedia(query: string) {
@@ -259,7 +225,6 @@ export function App() {
   }, [layout.panes, allDocs]);
 
   // Links: #invite=<code> joins a team, #doc=<id> opens a doc (needs access).
-  // Otherwise, on a first visit, add the sample docs.
   useEffect(() => {
     const handleHash = async (): Promise<boolean> => {
       const invite = /^#invite=([A-Za-z0-9_-]{6,40})$/.exec(location.hash);
@@ -295,17 +260,7 @@ export function App() {
       await loadAccount();
       // First sign-in on this device: put its docs on the server (under My own docs).
       if (getAccount().user) void uploadLocalDocs();
-      if (await handleHash()) {
-        try {
-          localStorage.setItem('pp-seeded', '1');
-          localStorage.setItem('pp-seeded-flow', '1');
-        } catch {
-          // ignore
-        }
-        return;
-      }
-      const l = await seedFirstRun();
-      if (l) setLayout(l);
+      await handleHash();
     })();
     const onHash = () => void handleHash();
     window.addEventListener('hashchange', onHash);
