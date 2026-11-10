@@ -5315,3 +5315,46 @@ kbd {
 .f2-cell textarea {
   padding-right: 22px;
 }
+
+/* Minimize a speech column to a thin strip, and open it again (the idea is Flowist's, by Elli, used with permission). */
+.f2-col-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.f2-col-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+.flow-col-head:hover .f2-col-toggle,
+.f2-col-toggle:focus-visible,
+.flow-col-head.is-mini .f2-col-toggle {
+  opacity: 0.85;
+}
+.f2-col-toggle:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.flow-col-head.is-mini .f2-col-toggle {
+  right: 50%;
+  transform: translate(50%, -50%);
+}
+.f2-cell.is-minimized {
+  opacity: 0;
+  pointer-events: none;
+}
+.f2-band:has(+ .f2-band) {
+  transition: none;
+}

@@ -442,3 +442,17 @@ describe('flow2 marks and snap', () => {
     expect(readFlow(doc)[0].y).toBeNull();
   });
 });
+
+describe('flow2 minimized columns', () => {
+  it('gives a minimized column a thin strip, except where the caret is', () => {
+    const { doc, sheetId, type } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, 'x');
+    const sheet = readFlow(doc)[0];
+    const base = columnGeometry(sheet, null, null);
+    const min = columnGeometry(sheet, null, null, [1]);
+    expect(min.colW[0]).toBe(28);
+    expect(min.minWidth).toBeLessThan(base.minWidth);
+    expect(columnGeometry(sheet, 1, null, [1]).colW[0]).toBeGreaterThan(28);
+  });
+});

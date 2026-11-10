@@ -43,7 +43,7 @@ import {
   type FlowRef,
   type FlowSheetData,
 } from './model';
-import { columnGeometry, GAP_PX } from './columns';
+import { columnGeometry, GAP_PX, WIDE_MIN_PX } from './columns';
 import { Flow2Canvas } from './Flow2Canvas';
 import { Flow2Sidebar } from './Flow2Sidebar';
 import { FlowDock } from './FlowDock';
@@ -377,8 +377,29 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
 
   // Which speech columns are wide: the first, the one the caret is in, and any with text in it.
   const focused = focusId ? byId.get(focusId) : undefined;
-  const geo = columnGeometry(sheet, focused?.col ?? null, embedded ? null : width);
-  const { used, colX, colW, inner } = geo;
+  // Minimized columns are this window's view, not part of the shared flow.
+  const minKey = `pp-flow2-cols-${docId}-${sheet.id}`;
+  const [minCols, setMinCols] = useState<number[]>(() => {
+    try {
+      return (JSON.parse(localStorage.getItem(minKey) ?? '[]') as number[]).filter((n) => Number.isInteger(n));
+    } catch {
+      return [];
+    }
+  });
+  const setMini = (col: number, on: boolean) => {
+    if (on && document.activeElement instanceof HTMLElement && document.activeElement.closest('.f2-cell')) document.activeElement.blur();
+    setMinCols((prev) => {
+      const next = on ? [...new Set([...prev, col])] : prev.filter((c) => c !== col);
+      try {
+        localStorage.setItem(minKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
+  const geo = columnGeometry(sheet, focused?.col ?? null, embedded ? null : width, minCols);
+  const { used, mini, colX, colW, inner } = geo;
   const zoom = embedded?.zoom ?? 1;
 
   const layout = useMemo(() => layoutFlow(cells, heights, METRICS), [cells, heights]);
@@ -404,6 +425,8 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
   // Moving focus to a cell that may not exist on screen yet.
   const focusCell = (id: string | null, at: 'start' | 'end' = 'end') => {
     if (!id) return;
+    const col = byId.get(id)?.col;
+    if (col && minCols.includes(col)) setMini(col, false);
     want.current = { id, at };
     bump((n) => n + 1);
   };
@@ -646,7 +669,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
 
   // ---------- Threads and the + buttons ----------
   const paths: ConnectorPath[] = cells
-    .filter((c) => c.parent && byId.has(c.parent) && layout.tops.has(c.id) && layout.tops.has(c.parent))
+    .filter((c) => c.parent && byId.has(c.parent) && layout.tops.has(c.id) && layout.tops.has(c.parent) && !mini[c.col - 1] && !mini[byId.get(c.parent)!.col - 1])
     .sort((a, b) => top(a) - top(b))
     .map((c) => connectorPath(routeBetween(`${c.parent}:${c.id}`, rectOf(byId.get(c.parent!)!), rectOf(c), c.parent!, c.id)));
   const crossings = useMemo(() => connectorCrossings(paths, crossingShadowExtent(CROSSING_SHADOW_DEFAULTS)), [paths.map((p) => p.d).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -705,8 +728,19 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
       <div className="f2-inner" style={{ width: inner }}>
         <div className="f2-head">
           {sheet.columns.map((s, i) => (
-            <div key={s} className={`flow-col-head fl-${SPEECH_INFO[s].side}` + (used[i] ? '' : ' is-narrow')} style={{ left: colX[i], width: colW[i] }} title={SPEECH_INFO[s].name}>
-              <span>{s}</span>
+            <div key={s} className={`flow-col-head fl-${SPEECH_INFO[s].side}` + (used[i] ? '' : ' is-narrow') + (mini[i] ? ' is-mini' : '')} style={{ left: colX[i], width: colW[i] }} title={SPEECH_INFO[s].name}>
+              {!mini[i] && <span>{s}</span>}
+              <button
+                type="button"
+                className="f2-col-toggle"
+                aria-label={mini[i] ? `Expand ${s}` : `Minimize ${s}`}
+                aria-expanded={!mini[i]}
+                title={mini[i] ? `Expand ${SPEECH_INFO[s].name}` : `Minimize ${SPEECH_INFO[s].name}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setMini(i + 1, !mini[i])}
+              >
+                {mini[i] ? <IconChevronRight /> : <IconChevronDown />}
+              </button>
             </div>
           ))}
         </div>
@@ -744,7 +778,8 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
               sheetId={sheet.id}
               cell={c}
               x={colX[c.col - 1] ?? 0}
-              w={colW[c.col - 1] ?? 100}
+              w={mini[c.col - 1] ? WIDE_MIN_PX : colW[c.col - 1] ?? 100}
+              hidden={mini[c.col - 1]}
               y={top(c)}
               side={sideOf(c.col)}
               measured={heights.has(c.id)}
@@ -771,7 +806,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
               onMouseDown={onCellMouseDown}
             />
           ))}
-          {adds.map((k) => (
+          {adds.filter((k) => !mini[k.col - 1]).map((k) => (
             <button
               key={`add-${k.id}`}
               type="button"
@@ -787,7 +822,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
             />
           ))}
           {cells
-            .filter((c) => childrenOf(cells, c.id).length === 0 && c.col < sheet.columns.length && layout.tops.has(c.id) && !(linking || marquee))
+            .filter((c) => childrenOf(cells, c.id).length === 0 && c.col < sheet.columns.length && !mini[c.col - 1] && !mini[c.col] && layout.tops.has(c.id) && !(linking || marquee))
             .map((c) => (
               <button
                 key={`slot-${c.id}`}
@@ -922,6 +957,7 @@ function Cell({
   cell,
   x,
   w,
+  hidden,
   y,
   side,
   measured,
@@ -949,6 +985,7 @@ function Cell({
   cell: FlowCell;
   x: number;
   w: number;
+  hidden?: boolean;
   y: number;
   side: 'gov' | 'opp';
   measured: boolean;
@@ -1043,7 +1080,7 @@ function Cell({
   return (
     <div
       ref={wrap}
-      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (mark ? ` mark-${mark}` : '') + (peers.length ? ' has-peer' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
+      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (mark ? ` mark-${mark}` : '') + (hidden ? ' is-minimized' : '') + (peers.length ? ' has-peer' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
       style={{ left: x, top: y, width: w, ...(peers.length ? ({ ['--peer' as string]: peers[0].color } as React.CSSProperties) : {}) }}
       onMouseDown={(e) => onMouseDown(e, cell)}
       onMouseEnter={() => onHover(true)}
