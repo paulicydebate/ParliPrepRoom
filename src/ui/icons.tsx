@@ -186,3 +186,30 @@ export const IconFlowGrid = () => (
     <path d="M9.5 4v16M15 4v16M3.5 10h17M3.5 15h17" />
   </Svg>
 );
+
+export const IconMaximize = () => (
+  <Svg size={14}>
+    <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+  </Svg>
+);
+export const IconRestore = () => (
+  <Svg size={14}>
+    <path d="M20 10h-6V4M4 14h6v6M14 10l7-7M10 14l-7 7" />
+  </Svg>
+);
+export const IconChevronDown = () => (
+  <Svg size={14}>
+    <path d="M6 9l6 6 6-6" />
+  </Svg>
+);
+export const IconChevronRight = () => (
+  <Svg size={14}>
+    <path d="M9 6l6 6-6 6" />
+  </Svg>
+);
+export const IconSidebar = () => (
+  <Svg size={16}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+    <path d="M9.5 4.5v15" />
+  </Svg>
+);

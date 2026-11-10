@@ -31,6 +31,8 @@ export function Flow2Canvas({
   doc,
   sheets,
   renderLive,
+  collapsed,
+  renderCollapsed,
   activeId,
   onActive,
   fly,
@@ -39,13 +41,16 @@ export function Flow2Canvas({
   sheets: FlowSheetData[];
   /** Draws a sheet you can edit (the editor supplies it). */
   renderLive: (sheet: FlowSheetData, zoom: number) => React.ReactNode;
+  /** Sheets shown as a title bar only. */
+  collapsed: ReadonlySet<string>;
+  renderCollapsed: (sheet: FlowSheetData) => React.ReactNode;
   activeId: string | null;
   onActive: (id: string) => void;
   /** Ask the canvas to fly to a sheet: change `n` to ask again. */
   fly: { id: string; n: number } | null;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
-  const [camera, setCamera] = useState<Camera>({ x: 24, y: 24, zoom: 1 });
+  const [camera, setCamera] = useState<Camera>({ x: 16, y: 16, zoom: 1 });
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
   const [view, setView] = useState<Size>({ width: 1000, height: 700 });
@@ -123,18 +128,28 @@ export function Flow2Canvas({
     [view],
   );
 
-  // The first time sizes are known, show the first sheet; later, tabs ask the canvas to fly.
+  /** A camera with the sheet's top-left corner snapped near the view's top-left, at 100% (or smaller if it is wider than the view). */
+  const cornerCamera = useCallback(
+    (r: WorldRect): Camera => {
+      const pad = 16;
+      const zoom = Math.max(MIN_MANUAL_CANVAS_ZOOM, Math.min(1, (view.width - 2 * pad) / r.width));
+      return { zoom, x: pad - r.x * zoom, y: pad - r.y * zoom };
+    },
+    [view],
+  );
+
+  // The first time sizes are known, show the first sheet in the corner; later, tabs ask the canvas to fly.
   useEffect(() => {
     const first = sheets[0] && rects.get(sheets[0].id);
     if (!started.current && first && sizes.has(sheets[0].id)) {
       started.current = true;
-      setCameraNow(cameraFor(first));
+      setCameraNow(cornerCamera(first));
     }
-  }, [sheets, rects, sizes, cameraFor]);
+  }, [sheets, rects, sizes, cornerCamera]);
   useEffect(() => {
     if (!fly) return;
     const r = rects.get(fly.id);
-    if (r) animateTo(cameraFor(r));
+    if (r) animateTo(cornerCamera(r));
   }, [fly?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wheel: scroll pans, pinch zooms about the pointer.
@@ -254,7 +269,9 @@ export function Flow2Canvas({
           const live = near && camera.zoom >= LIVE_ZOOM;
           return (
             <Window key={s.id} sheet={s} rect={r} active={s.id === activeId} onSize={reportSize} onFocus={() => onActive(s.id)}>
-              {live ? (
+              {collapsed.has(s.id) ? (
+                renderCollapsed(s)
+              ) : live ? (
                 renderLive(s, camera.zoom)
               ) : near ? (
                 <SheetPreview sheet={s} />

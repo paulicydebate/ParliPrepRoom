@@ -4,8 +4,7 @@ import type { WebsocketProvider } from 'y-websocket';
 import { toast } from '../editor/roundGuard';
 import { SPEECH_INFO } from '../model/speeches';
 import { useFlowColors, useFlowTheme } from '../store/flowTheme';
-import { ColorsButton } from '../ui/FlowEditor';
-import { IconPlus, IconThread } from '../ui/icons';
+import { IconChevronDown, IconChevronRight, IconMaximize, IconRestore, IconSidebar, IconThread } from '../ui/icons';
 import { connectorPath, routeBetween, type ConnectorPath } from './connectors';
 import { connectorCrossings, CROSSING_SHADOW_DEFAULTS, crossingShadowExtent } from './connectorCrossings';
 import { layoutFlow, METRICS } from './layout';
@@ -41,6 +40,7 @@ import {
 } from './model';
 import { columnGeometry, GAP_PX } from './columns';
 import { Flow2Canvas } from './Flow2Canvas';
+import { Flow2Sidebar } from './Flow2Sidebar';
 import { directionalTarget } from './directionalTarget';
 import { bindText } from './textBinding';
 import './flowist/palette-0.css';
@@ -84,6 +84,7 @@ function useUndo(doc: Y.Doc) {
 export function Flow2Editor({
   ydoc,
   provider,
+  docId,
   onEditor,
 }: {
   ydoc: Y.Doc;
@@ -99,35 +100,47 @@ export function Flow2Editor({
   const undo = useUndo(ydoc);
   const [activeId, setActiveId] = useState<string | null>(null);
   const sheet = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
-  const [mode, setMode] = useState<'canvas' | 'page'>(() => {
-    try {
-      return localStorage.getItem('pp-flow2-view') === 'page' ? 'page' : 'canvas';
-    } catch {
-      return 'canvas';
-    }
-  });
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
   const [jump, setJump] = useState<Jump | null>(null);
-  const setViewMode = (m: 'canvas' | 'page') => {
-    setMode(m);
+  const [sideOpen, setSideOpen] = useState(true);
+
+  // What is minimized or maximized is this window's view of the flow, not part of the shared document.
+  const keyC = `pp-flow2-min-${docId}`;
+  const keyM = `pp-flow2-max-${docId}`;
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => {
     try {
-      localStorage.setItem('pp-flow2-view', m);
+      return new Set<string>(JSON.parse(localStorage.getItem(keyC) ?? '[]') as string[]);
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const [maximizedId, setMaximizedId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(keyM) || null;
+    } catch {
+      return null;
+    }
+  });
+  const remember = (c: ReadonlySet<string>, m: string | null) => {
+    try {
+      localStorage.setItem(keyC, JSON.stringify([...c]));
+      if (m) localStorage.setItem(keyM, m);
+      else localStorage.removeItem(keyM);
     } catch {
       /* ignore */
     }
   };
-
-  useEffect(() => {
-    const on = () => {
-      try {
-        setMode(localStorage.getItem('pp-flow2-view') === 'page' ? 'page' : 'canvas');
-      } catch {
-        /* ignore */
-      }
-    };
-    window.addEventListener('pp-flow2-view', on);
-    return () => window.removeEventListener('pp-flow2-view', on);
-  }, []);
+  const toggleCollapse = (id: string) => {
+    const next = new Set(collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCollapsed(next);
+    remember(next, maximizedId);
+  };
+  const setMax = (id: string | null) => {
+    setMaximizedId(id);
+    remember(collapsed, id);
+  };
 
   useEffect(() => onEditor(null), [onEditor]);
 
@@ -151,135 +164,82 @@ export function Flow2Editor({
   }, [ydoc, provider]);
 
   if (!sheet) return <div className="flow-wrap" data-flow-theme={theme} />;
+  const maxSheet = maximizedId ? sheets.find((s) => s.id === maximizedId) ?? null : null;
   const goTo = (id: string) => {
     setActiveId(id);
-    setFly((f) => ({ id, n: (f?.n ?? 0) + 1 }));
+    // While one sheet fills the view, the list switches which sheet that is (as in Flowist).
+    if (maxSheet) setMax(id);
+    else setFly((f) => ({ id, n: (f?.n ?? 0) + 1 }));
   };
   const onJump = (sheetId: string, cellId: string) => {
     goTo(sheetId);
     setJump((j) => ({ sheetId, cellId, n: (j?.n ?? 0) + 1 }));
   };
+  const toggleMax = (id: string) => (maximizedId === id ? setMax(null) : (setActiveId(id), setMax(id)));
+  const del = (id: string) => {
+    const rest = sheets.filter((s) => s.id !== id);
+    deleteSheet(ydoc, id);
+    if (activeId === id) setActiveId(rest[0]?.id ?? null);
+    if (maximizedId === id) setMax(rest[0]?.id ?? null);
+  };
+  const add = (side: 'gov' | 'opp') => goTo(addSheet(ydoc, side));
+
   return (
-    <div className="flow-wrap f2" data-flow-theme={theme} data-flow-colors={colors}>
-      {mode === 'canvas' ? (
-        <>
-          <NavBar doc={ydoc} sheets={sheets} activeId={sheet.id} onGo={goTo} mode={mode} onMode={setViewMode} />
+    <div className="flow-wrap f2 f2-workspace" data-flow-theme={theme} data-flow-colors={colors}>
+      {sideOpen && (
+        <Flow2Sidebar
+          sheets={sheets}
+          activeId={sheet.id}
+          maximizedId={maxSheet?.id ?? null}
+          collapsed={collapsed}
+          onGo={goTo}
+          onAdd={add}
+          onRename={(id, name) => renameSheet(ydoc, id, name)}
+          onDelete={del}
+          onToggleCollapse={toggleCollapse}
+          onToggleMaximize={toggleMax}
+          onClose={() => setSideOpen(false)}
+        />
+      )}
+      <div className="f2-main">
+        {!sideOpen && (
+          <button type="button" className="f2-side-open icon-btn small" aria-label="Show the sheet list" title="Show the sheet list" onClick={() => setSideOpen(true)}>
+            <IconSidebar />
+          </button>
+        )}
+        {maxSheet ? (
+          <SheetView key={maxSheet.id} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
+        ) : (
           <Flow2Canvas
             doc={ydoc}
             sheets={sheets}
             activeId={sheet.id}
             onActive={setActiveId}
             fly={fly}
-            renderLive={(s, zoom) => <SheetView doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom }} jump={jump} onJump={onJump} />}
+            collapsed={collapsed}
+            renderCollapsed={(s) => <CollapsedBar sheet={s} onExpand={() => toggleCollapse(s.id)} />}
+            renderLive={(s, zoom) => (
+              <SheetView doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id) }} jump={jump} onJump={onJump} />
+            )}
           />
-        </>
-      ) : (
-        <>
-          <SheetView key={sheet.id} doc={ydoc} sheets={sheets} sheet={sheet} undo={undo} onPick={setActiveId} jump={jump} onJump={onJump} />
-        </>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
-/** The canvas's top bar: a tab per sheet (click to fly there), new sheets, colors, and the view switch. */
-function NavBar({ doc, sheets, activeId, onGo, mode, onMode }: { doc: Y.Doc; sheets: FlowSheetData[]; activeId: string; onGo: (id: string) => void; mode: 'canvas' | 'page'; onMode: (m: 'canvas' | 'page') => void }) {
+/** A minimized sheet on the canvas: its title bar only. */
+function CollapsedBar({ sheet, onExpand }: { sheet: FlowSheetData; onExpand: () => void }) {
   return (
-    <div className="sheet-tabs" role="tablist" aria-label="Sheets">
-      {sheets.map((s) => (
-        <button key={s.id} type="button" role="tab" aria-selected={s.id === activeId} className={`sheet-tab fl-${s.side}` + (s.id === activeId ? ' is-on' : '')} title={`Go to ${s.name || 'Untitled'}`} onClick={() => onGo(s.id)}>
-          <span className="sheet-dot" />
-          <span className="sheet-name">{s.name || 'Untitled'}</span>
+    <div className="f2-window-body is-collapsed">
+      <div className={`f2-window-bar fl-${sheet.side}`} data-window-handle>
+        <span className="sheet-dot" />
+        <span className="f2-window-name">{sheet.name || 'Untitled'}</span>
+        <span className="tb-spacer" />
+        <button type="button" className="icon-btn small" aria-label={`Show ${sheet.name || 'Untitled'}`} title="Show the full sheet" onClick={onExpand}>
+          <IconChevronRight />
         </button>
-      ))}
-      <button type="button" className="btn ghost small" onClick={() => onGo(addSheet(doc, 'gov'))}>
-        <IconPlus /> Gov
-      </button>
-      <button type="button" className="btn ghost small" onClick={() => onGo(addSheet(doc, 'opp'))}>
-        <IconPlus /> Opp
-      </button>
-      <span className="tb-spacer" />
-      <ColorsButton />
-      <button type="button" className="btn ghost small" aria-pressed={mode === 'page'} title="Show one sheet at a time, filling the window" onClick={() => onMode(mode === 'canvas' ? 'page' : 'canvas')}>
-        {mode === 'canvas' ? 'Page view' : 'Canvas'}
-      </button>
-    </div>
-  );
-}
-
-// ---------- Sheet tabs and tools ----------
-
-function Tabs({ doc, sheets, sheet, onPick, tools }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; onPick: (id: string) => void; tools: ReactNode }) {
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState(false);
-  useEffect(() => setConfirm(false), [sheet.id]);
-  return (
-    <div className="sheet-tabs" role="tablist" aria-label="Sheets">
-      {sheets.map((s) =>
-        renaming === s.id ? (
-          <input
-            key={s.id}
-            className="sheet-rename"
-            autoFocus
-            defaultValue={s.name}
-            aria-label="Sheet name"
-            onBlur={(e) => {
-              renameSheet(doc, s.id, e.target.value.trim());
-              setRenaming(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-              if (e.key === 'Escape') setRenaming(null);
-            }}
-          />
-        ) : (
-          <button
-            key={s.id}
-            type="button"
-            role="tab"
-            aria-selected={s.id === sheet.id}
-            className={`sheet-tab fl-${s.side}` + (s.id === sheet.id ? ' is-on' : '')}
-            title={`${s.name || 'Untitled'} (double-click to rename)`}
-            onClick={(e) => (e.detail >= 2 ? setRenaming(s.id) : onPick(s.id))}
-          >
-            <span className="sheet-dot" />
-            <span className="sheet-name">{s.name || 'Untitled'}</span>
-          </button>
-        ),
-      )}
-      <label className="sheet-side" title="Whose sheet this is (can only change while the sheet is empty)">
-        <span className="sr-only">Side of this sheet</span>
-        <select value={sheet.side} disabled={sheet.cells.length > 0} onChange={(e) => setSheetSide(doc, sheet.id, e.target.value as 'gov' | 'opp')}>
-          <option value="gov">Gov sheet</option>
-          <option value="opp">Opp sheet</option>
-        </select>
-      </label>
-      {tools}
-      <ColorsButton />
-      <button
-        type="button"
-        className={'btn ghost small sheet-delete' + (confirm ? ' confirm' : '')}
-        title="Delete this sheet and everything on it (Undo brings it back)"
-        disabled={sheets.length < 2}
-        onClick={() => {
-          if (!confirm && sheet.cells.some((c) => c.text.trim())) return setConfirm(true);
-          setConfirm(false);
-          deleteSheet(doc, sheet.id);
-          onPick(sheets.find((s) => s.id !== sheet.id)!.id);
-        }}
-      >
-        {confirm ? `Delete “${sheet.name || 'Untitled'}” and everything on it?` : 'Delete sheet'}
-      </button>
-      <span className="tb-spacer" />
-      <button type="button" className="btn ghost small" title="Show every sheet on one canvas" onClick={() => { try { localStorage.setItem('pp-flow2-view', 'canvas'); } catch { /* ignore */ } window.dispatchEvent(new Event('pp-flow2-view')); }}>
-        Canvas
-      </button>
-      <button type="button" className="btn ghost small" onClick={() => onPick(addSheet(doc, 'gov'))}>
-        <IconPlus /> Gov
-      </button>
-      <button type="button" className="btn ghost small" onClick={() => onPick(addSheet(doc, 'opp'))}>
-        <IconPlus /> Opp
-      </button>
+      </div>
     </div>
   );
 }
@@ -298,9 +258,16 @@ export interface Jump {
 export interface Embedded {
   /** Canvas zoom (the sheet is drawn scaled; mouse positions are divided by it). */
   zoom: number;
+  onCollapse: () => void;
+  onMaximize: () => void;
 }
 
-export function SheetView({ doc, sheets, sheet, undo, onPick, embedded, jump, onJump }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
+/** One sheet filling the whole view. */
+export interface Maximized {
+  onRestore: () => void;
+}
+
+export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -335,7 +302,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded, jump, on
   const { used, colX, colW, inner } = geo;
   const zoom = embedded?.zoom ?? 1;
 
-  const layout = useMemo(() => layoutFlow(cells, heights, embedded ? { ...METRICS, ghostRows: 6 } : METRICS), [cells, heights, embedded]);
+  const layout = useMemo(() => layoutFlow(cells, heights, METRICS), [cells, heights]);
   const top = (c: FlowCell) => layout.tops.get(c.id) ?? 0;
   const labelFor = (r: FlowRef) => {
     const owner = sheets.find((x) => x.id === r.sheet);
@@ -637,6 +604,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded, jump, on
           {sheet.columns.map((s, i) => (
             <div key={s} className={'f2-band' + (i % 2 ? ' is-alt' : '')} style={{ left: colX[i] - GAP_PX / 2, width: colW[i] + GAP_PX }} />
           ))}
+          <div className="f2-ghost-rows" style={{ top: layout.ghostTop, height: METRICS.ghostRows * METRICS.rowHeight }} aria-hidden="true" />
           {empty && <div className="f2-hint">Click here, or press Enter, to start. Tab moves to the next speech.</div>}
           <svg className={'f2-threads' + (settling ? ' is-settling' : '')} aria-hidden="true" focusable="false">
             {paths.map((p) => (
@@ -746,30 +714,39 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded, jump, on
         </div>
       </div>
   );
-  if (embedded) {
+  const bar = (
+    <WindowBar
+      doc={doc}
+      sheet={sheet}
+      tools={tools}
+      onCollapse={embedded?.onCollapse}
+      onMaximize={embedded?.onMaximize}
+      onRestore={maximized?.onRestore}
+    />
+  );
+  if (maximized) {
     return (
-      <div className="f2-window-body" data-linking={linking ? 'true' : undefined}>
-        <WindowBar doc={doc} sheet={sheet} tools={tools} canDelete={sheets.length > 1} onDeleted={() => onPick(sheets.find((s) => s.id !== sheet.id)!.id)} />
-        {body}
+      <div className="f2-window-body is-maximized" data-linking={linking ? 'true' : undefined}>
+        {bar}
+        <div className="f2-scroll" ref={scroll}>
+          {body}
+        </div>
       </div>
     );
   }
   return (
-    <>
-      <Tabs doc={doc} sheets={sheets} sheet={sheet} onPick={onPick} tools={tools} />
-      <div className="f2-scroll" ref={scroll} data-linking={linking ? 'true' : undefined}>
-        {body}
-      </div>
-    </>
+    <div className="f2-window-body" data-linking={linking ? 'true' : undefined}>
+      {bar}
+      {body}
+    </div>
   );
 }
 
-/** A sheet's title bar on the canvas: drag it to move the sheet; name, side, Link and delete live here. */
-function WindowBar({ doc, sheet, tools, canDelete, onDeleted }: { doc: Y.Doc; sheet: FlowSheetData; tools: ReactNode; canDelete: boolean; onDeleted: () => void }) {
+/** A sheet's title bar: drag it to move the sheet; name, side, Link and the minimize and maximize buttons live here. */
+function WindowBar({ doc, sheet, tools, onCollapse, onMaximize, onRestore }: { doc: Y.Doc; sheet: FlowSheetData; tools: ReactNode; onCollapse?: () => void; onMaximize?: () => void; onRestore?: () => void }) {
   const [renaming, setRenaming] = useState(false);
-  const [confirm, setConfirm] = useState(false);
   return (
-    <div className={`f2-window-bar fl-${sheet.side}`} data-window-handle>
+    <div className={`f2-window-bar fl-${sheet.side}`} data-window-handle onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.f2-window-bar') === e.currentTarget && !(e.target as HTMLElement).closest('button, input, select, .f2-window-name')) (onRestore ?? onMaximize)?.(); }}>
       <span className="sheet-dot" />
       {renaming ? (
         <input
@@ -787,7 +764,7 @@ function WindowBar({ doc, sheet, tools, canDelete, onDeleted }: { doc: Y.Doc; sh
           }}
         />
       ) : (
-        <span className="f2-window-name" onDoubleClick={() => setRenaming(true)} title="Drag to move this sheet; double-click to rename">
+        <span className="f2-window-name" onDoubleClick={() => setRenaming(true)} title="Drag to move this sheet; double-click the name to rename">
           {sheet.name || 'Untitled'}
         </span>
       )}
@@ -797,24 +774,48 @@ function WindowBar({ doc, sheet, tools, canDelete, onDeleted }: { doc: Y.Doc; sh
       </select>
       <span className="tb-spacer" />
       {tools}
-      <button
-        type="button"
-        className={'btn ghost small sheet-delete' + (confirm ? ' confirm' : '')}
-        disabled={!canDelete}
-        title="Delete this sheet and everything on it (Undo brings it back)"
-        onClick={() => {
-          if (!confirm && sheet.cells.some((c) => c.text.trim())) return setConfirm(true);
-          deleteSheet(doc, sheet.id);
-          onDeleted();
-        }}
-      >
-        {confirm ? 'Delete it?' : 'Delete'}
-      </button>
+      {onCollapse && (
+        <button type="button" className="icon-btn small" aria-label={`Minimize ${sheet.name || 'Untitled'}`} title="Minimize this sheet to its title bar" onClick={onCollapse}>
+          <IconChevronDown />
+        </button>
+      )}
+      {onMaximize && (
+        <button type="button" className="icon-btn small" aria-label={`Maximize ${sheet.name || 'Untitled'}`} title="Fill the whole view with this sheet" onClick={onMaximize}>
+          <IconMaximize />
+        </button>
+      )}
+      {onRestore && (
+        <button type="button" className="icon-btn small" aria-label={`Restore ${sheet.name || 'Untitled'}`} title="Back to the canvas" onClick={onRestore}>
+          <IconRestore />
+        </button>
+      )}
     </div>
   );
 }
 
-function LinkButtons({ linking, canUnlink, onToggle, onUnlink, canGroup, canUngroup, onGroup, onUngroup, canRef, onRef }: { canRef: boolean; onRef: (k: 'x' | 'e') => void; linking: boolean; canUnlink: boolean; onToggle: () => void; onUnlink: () => void; canGroup: boolean; canUngroup: boolean; onGroup: () => void; onUngroup: () => void }) {
+function LinkButtons({
+  linking,
+  canUnlink,
+  onToggle,
+  onUnlink,
+  canGroup,
+  canUngroup,
+  onGroup,
+  onUngroup,
+  canRef,
+  onRef,
+}: {
+  linking: boolean;
+  canUnlink: boolean;
+  onToggle: () => void;
+  onUnlink: () => void;
+  canGroup: boolean;
+  canUngroup: boolean;
+  onGroup: () => void;
+  onUngroup: () => void;
+  canRef: boolean;
+  onRef: (k: 'x' | 'e') => void;
+}) {
   return (
     <>
       <button type="button" className={'btn ghost small link-btn' + (linking ? ' is-on' : '')} aria-pressed={linking} title="Link the selected cells to the argument they answer (Ctrl/⌘+Shift+L)" onMouseDown={(e) => e.preventDefault()} onClick={onToggle}>

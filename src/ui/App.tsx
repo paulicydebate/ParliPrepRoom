@@ -206,9 +206,41 @@ export function App() {
         else toggleSidebarRef.current();
       }
     };
+    const toggleFocus = () => setFocusMode((f) => !f);
     window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
+    window.addEventListener('pp-toggle-focus', toggleFocus);
+    return () => {
+      window.removeEventListener('keydown', on);
+      window.removeEventListener('pp-toggle-focus', toggleFocus);
+    };
   }, []);
+
+  // A flow gets most of the width when it opens beside other windows (it can be dragged back).
+  const flowsSeen = useRef(new Set<string>());
+  useEffect(() => {
+    if (!allDocs) return;
+    const fresh = layout.panes.filter((p) => {
+      const d = allDocs.find((x) => x.id === p.docId);
+      return d && formatOf(d) === 'flow' && !flowsSeen.current.has(p.key);
+    });
+    if (!fresh.length) return;
+    for (const p of fresh) flowsSeen.current.add(p.key);
+    const keys = new Set(fresh.map((p) => p.key));
+    setLayout((l) => {
+      const weights = [...l.weights];
+      let changed = false;
+      l.panes.forEach((p, i) => {
+        if (!keys.has(p.key)) return;
+        const others = Math.max(0, ...weights.filter((_, j) => j !== i));
+        if (others > 0 && weights[i] < others * 3.5) {
+          weights[i] = others * 3.5;
+          changed = true;
+        }
+      });
+      // ...and the doc list steps aside the first time (Ctrl/Cmd+\\ or the menu button brings it back).
+      return changed ? { ...l, weights, sidebar: false } : l;
+    });
+  }, [layout.panes, allDocs]);
 
   // Links: #invite=<code> joins a team, #doc=<id> opens a doc (needs access).
   // Otherwise, on a first visit, add the sample docs.
