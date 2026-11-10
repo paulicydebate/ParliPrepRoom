@@ -519,3 +519,18 @@ describe('flow Excel export and import', () => {
     expect(text(byText('Second point').id)).toBe('Second point');
   });
 });
+
+import { SAMPLE_FLOW_SHEETS } from '../src/flow2/sample';
+
+describe('sample flow', () => {
+  it('reads in as two sheets with arguments, answers and marks', () => {
+    const doc = new Y.Doc();
+    expect(importSheetsToFlow(doc, SAMPLE_FLOW_SHEETS)).toBeGreaterThan(10);
+    const sheets = readFlow(doc);
+    expect(sheets.map((s) => s.side)).toEqual(['gov', 'opp']);
+    const gov = sheets[0];
+    expect(gov.cells.some((c) => c.mark === 'dropped')).toBe(true);
+    expect(gov.cells.filter((c) => c.parent === null).length).toBe(2);
+    expect(gov.cells.some((c) => c.col === 4)).toBe(true);
+  });
+});

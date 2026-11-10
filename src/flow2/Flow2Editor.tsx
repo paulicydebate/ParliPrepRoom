@@ -45,6 +45,7 @@ import {
 } from './model';
 import { columnGeometry, GAP_PX, PINS_PX, WIDE_MIN_PX } from './columns';
 import { PinColumn } from './PinColumn';
+import { caretCoords } from './caret';
 import { publishFlow } from '../store/flowPins';
 import { useRoundMode } from '../store/roundMode';
 import { Flow2Canvas } from './Flow2Canvas';
@@ -93,7 +94,7 @@ function useUndo(doc: Y.Doc) {
 export const MARK_GLYPH: Record<FlowMark, string> = { extended: '→', dropped: '!', answered: '✓', key: '★' };
 export const MARK_LABEL: Record<FlowMark, string> = { extended: 'Extended', dropped: 'Dropped', answered: 'Answered', key: 'Key argument' };
 
-type Peer = { name: string; color: string };
+type Peer = { name: string; color: string; at?: number };
 
 /** Who else is in which cell right now (from the live connection's presence), by cell id. */
 function usePeers(provider: WebsocketProvider | null): ReadonlyMap<string, Peer[]> {
@@ -105,13 +106,13 @@ function usePeers(provider: WebsocketProvider | null): ReadonlyMap<string, Peer[
       const out = new Map<string, Peer[]>();
       aw.getStates().forEach((state, client) => {
         if (client === aw.clientID) return;
-        const at = (state as { flow2?: { cell?: string } | null }).flow2;
+        const at = (state as { flow2?: { cell?: string; at?: number } | null }).flow2;
         const user = (state as { user?: { name?: string; color?: string } }).user;
         if (!at?.cell || !user) return;
-        out.set(at.cell, [...(out.get(at.cell) ?? []), { name: user.name || 'Someone', color: user.color || '#888' }]);
+        out.set(at.cell, [...(out.get(at.cell) ?? []), { name: user.name || 'Someone', color: user.color || '#888', at: typeof at.at === 'number' ? at.at : undefined }]);
       });
       setPeers((prev) => {
-        const same = prev.size === out.size && [...out].every(([k, v]) => prev.get(k)?.map((p) => p.name + p.color).join() === v.map((p) => p.name + p.color).join());
+        const same = prev.size === out.size && [...out].every(([k, v]) => prev.get(k)?.map((p) => p.name + p.color + p.at).join() === v.map((p) => p.name + p.color + p.at).join());
         return same ? prev : out;
       });
     };
@@ -146,8 +147,8 @@ export function Flow2Editor({
   const undo = useUndo(ydoc);
   const peers = usePeers(provider);
   // Tell partners which cell you are in (only the first window on this doc shares its cursor, so two windows never fight).
-  const shareCell = (cell: string | null) => {
-    if (provider && carets) provider.awareness.setLocalStateField('flow2', cell ? { cell } : null);
+  const shareCell = (cell: string | null, at?: number) => {
+    if (provider && carets) provider.awareness.setLocalStateField('flow2', cell ? { cell, at } : null);
   };
   useEffect(() => trackRoundDoc(docId, ydoc), [docId, ydoc]);
   useEffect(() => () => provider?.awareness.setLocalStateField('flow2', null), [provider]);
@@ -369,7 +370,7 @@ export interface Maximized {
   onRestore: () => void;
 }
 
-export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { space: string; onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
+export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { space: string; onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null, at?: number) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -867,8 +868,9 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
               peers={peers.get(c.id) ?? []}
               onFocus={() => {
                 setFocusId(c.id);
-                onCellFocus(c.id);
+                onCellFocus(c.id, (document.activeElement as HTMLTextAreaElement | null)?.selectionStart ?? undefined);
               }}
+              onCaret={(at) => onCellFocus(c.id, at)}
               onBlur={() => setTimeout(() => !document.activeElement?.closest('.f2-cell') && onCellFocus(null), 60)}
               onKeyDown={onCellKey}
               onMouseDown={onCellMouseDown}
@@ -1034,6 +1036,7 @@ function Cell({
   docId,
   peers,
   onBlur,
+  onCaret,
   mark,
   refs,
   onRefClick,
@@ -1062,6 +1065,8 @@ function Cell({
   docId: string;
   peers: Peer[];
   onBlur: () => void;
+  /** The caret moved to this character (shared with partners). */
+  onCaret: (at: number) => void;
   mark: FlowMark | null;
   refs: (FlowRef & { text: string; missing: boolean })[];
   onRefClick: (r: FlowRef) => void;
@@ -1130,6 +1135,35 @@ function Cell({
     };
   }, [doc, sheetId, cell.id, fit, docId]);
 
+  // Tell partners where in the cell the caret is.
+  const caretRef = useRef(onCaret);
+  caretRef.current = onCaret;
+  useEffect(() => {
+    const el = area.current;
+    if (!el) return;
+    let last = -1;
+    const report = () => {
+      if (document.activeElement !== el || el.selectionStart === last) return;
+      last = el.selectionStart;
+      caretRef.current(last);
+    };
+    const events = ['keyup', 'mouseup', 'input', 'focus', 'select'] as const;
+    for (const e of events) el.addEventListener(e, report);
+    return () => {
+      for (const e of events) el.removeEventListener(e, report);
+    };
+  }, [cell.id]);
+
+  // Where a partner's caret is drawn inside this cell.
+  const peerAt = peers[0]?.at;
+  const [peerCaret, setPeerCaret] = useState<{ left: number; top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = area.current;
+    if (!el || peerAt === undefined) return setPeerCaret(null);
+    const c = caretCoords(el, peerAt);
+    setPeerCaret({ left: el.offsetLeft + c.left, top: el.offsetTop + c.top, height: c.height });
+  }, [peerAt, cell.text, w]);
+
   // A cell's height depends on its width.
   const refSig = refs.map((r) => refKey(r) + r.text).join('|');
   useLayoutEffect(fit, [w, fit, refSig]);
@@ -1160,6 +1194,7 @@ function Cell({
         </span>
       )}
       {peers.length > 0 && <span className="f2-peer" style={{ background: peers[0].color }}>{peers.map((p) => p.name).join(', ')}</span>}
+      {peers.length > 0 && peerCaret && <span className="f2-peer-caret" style={{ left: peerCaret.left, top: peerCaret.top, height: peerCaret.height, background: peers[0].color }} aria-hidden="true" />}
       <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onBlur={onBlur} onKeyDown={(e) => onKeyDown(e, cell)} />
       {refs.length > 0 && (
         <div className="f2-refs">

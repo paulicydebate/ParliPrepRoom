@@ -66,7 +66,10 @@ async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: stri
   const meta = await createDoc({ title, kind, space, format });
   const { doc, ready } = acquireDoc(meta.id);
   await ready;
-  writeLines(doc, lines);
+  if (format === 'flow') {
+    // A flow is cells, not blocks: the sample is read in from rows; a new flow starts empty (the editor adds its first sheet).
+    if (lines === SAMPLE_FLOW) (await import('../import/flowImport')).importSheetsToFlow(doc, (await import('../flow2/sample')).SAMPLE_FLOW_SHEETS);
+  } else writeLines(doc, lines);
   if (round) setRound(doc, meta.id, true);
   releaseDoc(meta.id);
   if (round) await setDocRound(meta.id, true);
