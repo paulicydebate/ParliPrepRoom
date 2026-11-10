@@ -307,6 +307,7 @@ export function Pane({
   onChange,
   onClose,
   onCreate,
+  onNewRound,
   focusMode,
   onFocusMode,
   showCarets,
@@ -326,6 +327,8 @@ export function Pane({
   onChange: (p: PaneState) => void;
   onClose: () => void;
   onCreate: (kind: DocMeta['kind'], format?: DocFormat) => void;
+  /** Open the New round dialog (shown on Home when signed in). */
+  onNewRound?: () => void;
   /** One window fills the screen. */
   focusMode: boolean;
   onFocusMode: () => void;
@@ -511,37 +514,54 @@ export function Pane({
       )}
 
       {!meta && (
-        <div className="pane-picker">
-          <p>Pick a document for this pane.</p>
-          <div className="picker-cols">
-            {(['prep', 'reference'] as const).map((kind) => (
-              <div key={kind}>
-                <h3>{kind === 'prep' ? 'Prep' : 'Reference'}</h3>
+        <div className="home">
+          <h2>Home</h2>
+          <div className="home-actions">
+            {onNewRound && (
+              <button type="button" className="btn primary" onClick={onNewRound}>
+                New round
+              </button>
+            )}
+            <button type="button" className="btn" onClick={() => onCreate('prep', 'flow')}>
+              {roundMode ? 'New round flow' : 'New flow'}
+            </button>
+            <button type="button" className="btn" onClick={() => onCreate('prep')}>
+              {roundMode ? 'New round doc' : 'New prep doc'}
+            </button>
+            {!roundMode && (
+              <button type="button" className="btn ghost" onClick={() => onCreate('reference')}>
+                New reference doc
+              </button>
+            )}
+          </div>
+          {[
+            { title: 'Flows', list: docs.filter((d) => formatOf(d) === 'flow' && (!roundMode || d.round)) },
+            { title: 'Prep docs', list: docs.filter((d) => formatOf(d) !== 'flow' && d.kind === 'prep' && (!roundMode || d.round)) },
+            { title: 'Reference', list: roundMode ? [] : docs.filter((d) => d.kind === 'reference') },
+          ]
+            .filter((g) => g.list.length)
+            .map((g) => (
+              <section key={g.title} className="home-group">
+                <h3>{g.title}</h3>
                 <ul>
-                  {docs
-                    .filter((d) => d.kind === kind && (!roundMode || d.round))
+                  {[...g.list]
+                    .sort((a, b) => b.createdAt - a.createdAt)
                     .map((d) => (
                       <li key={d.id}>
                         <button type="button" onClick={() => onChange({ ...pane, docId: d.id })}>
-                          {d.title}
-                          {formatOf(d) === 'flow' ? ' (flow)' : ''}
+                          <span className="home-title">{d.title || 'Untitled'}</span>
+                          <span className="home-meta">
+                            {d.round ? 'Round' : ''}
+                            {d.round && (d.roundLabel || d.tournamentName) ? ' · ' : ''}
+                            {[d.tournamentName, d.roundLabel].filter(Boolean).join(' ')}
+                            <span className="home-date">{new Date(d.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                          </span>
                         </button>
                       </li>
                     ))}
                 </ul>
-                {(kind === 'prep' || !roundMode) && (
-                  <button type="button" className="btn ghost small" onClick={() => onCreate(kind)}>
-                    + New {kind === 'prep' ? (roundMode ? 'round doc' : 'prep doc') : 'reference doc'}
-                  </button>
-                )}
-                {kind === 'prep' && (
-                  <button type="button" className="btn ghost small" onClick={() => onCreate(kind, 'flow')}>
-                    + New {roundMode ? 'round flow' : 'flow'}
-                  </button>
-                )}
-              </div>
+              </section>
             ))}
-          </div>
         </div>
       )}
 

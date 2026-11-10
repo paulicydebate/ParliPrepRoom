@@ -26,9 +26,9 @@ const STEPS: Step[] = [
     body: 'Prep docs are yours; Reference docs are coach briefs to read from. + makes a new one, the upload icon imports Word, Excel or text files, and you can drag to reorder or open ⋯ to rename or delete.',
   },
   {
-    target: ['.space-select'],
-    title: 'Teams',
-    body: 'Switch between your own docs and your team here. Coaches make a team from the account menu, then send the Students invite link from Team.',
+    target: ['.account-menu .avatar'],
+    title: 'Your menu: teams and Round Mode',
+    body: 'Your picture opens the menu: switch between your own docs and your team, open Team for invite links, start Round Mode, or sign out. Coaches make a team here, then send the Students invite link from Team.',
   },
   {
     target: ['.new-round-btn'],
@@ -43,7 +43,7 @@ const STEPS: Step[] = [
   {
     target: ['[data-tour="split"]'],
     title: 'Side by side',
-    body: 'Split view puts two or three windows next to each other: the reference doc beside your prep, or your prep doc beside your flow. Retype what you need; paste is blocked in round docs on purpose.',
+    body: 'The + in the tab bar opens another window next to this one (Home: your flows and docs). Up to three side by side: the reference doc beside your prep, or your prep doc beside your flow. Retype what you need; paste is blocked in round docs on purpose.',
   },
   {
     target: ['.new-menu', '.side-section .icon-btn'],
@@ -66,9 +66,9 @@ const STEPS: Step[] = [
     body: 'Pin a block by putting the cursor in a section, claim or analytic in your round doc and pressing Pin in the toolbar. They list here in reading order; pick which flow sheet each one answers and the list follows the sheet you are on. In the flow, the pin button on a column header (like LOC) opens a Pins column beside it.',
   },
   {
-    target: ['[data-tour="round-mode"]'],
+    target: ['[data-tour="round-mode"]', '.account-menu .avatar'],
     title: 'Round Mode',
-    body: 'Turn this on when the round starts. Only round docs stay available, the reference docs are hidden, and Ctrl/⌘+K searches what you typed. That is why pins belong in your round doc.',
+    body: 'Turn this on from your menu when the round starts (a purple pill shows while it is on). Only round docs stay available, the reference docs are hidden, and Ctrl/⌘+K searches what you typed. That is why pins belong in your round doc.',
   },
   {
     target: ['.pane .sync-check'],

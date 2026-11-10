@@ -10,6 +10,7 @@ import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, s
 import { addSharedDoc, createDoc, deleteDoc, formatOf, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocFormat, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
+import { RoundInfoPanel } from './RoundInfo';
 import { BlockFinder, PinBoard } from './RoundModeUI';
 import { NewRoundDialog } from './Rounds';
 import { Timer } from './Timer';
@@ -23,7 +24,7 @@ import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../st
 import { SAMPLE_FLOW, SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
-import { IconMenu, IconPin, IconSearch, IconSettings, IconSplit } from './icons';
+import { IconMenu, IconPin, IconSearch, IconSettings } from './icons';
 import { PanelHandle, usePanelWidth } from './PanelResize';
 import { Pane, type PaneState } from './Pane';
 import { NameDialog } from './NameDialog';
@@ -218,11 +219,13 @@ export function App() {
   // A flow gets most of the width when it opens beside other windows (it can be dragged back).
   const flowsSeen = useRef(new Set<string>());
   const [docsOpen, setDocsOpen] = useState(true);
+  const [roundInfoOpen, setRoundInfoOpen] = useState(false);
   const isFlowPane = (p: { docId: string | null }) => {
     const d = allDocs?.find((x) => x.id === p.docId);
     return !!d && formatOf(d) === 'flow';
   };
   const hasFlow = layout.panes.some(isFlowPane);
+  const infoMeta = (docs ?? allDocs ?? []).find((d) => d.id === (layout.panes.find(isFlowPane)?.docId ?? null)) ?? null;
   useEffect(() => {
     if (!allDocs) return;
     const fresh = layout.panes.filter((p) => {
@@ -647,24 +650,33 @@ export function App() {
           <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={22} height={22} />
           <span>ParliPrepRoom</span>
         </div>
-        {narrow && layout.panes.length > 1 && (
-          <div className="seg pane-tabs" role="tablist" aria-label="Panes">
-            {layout.panes.map((p, i) => (
-              <button key={p.key} type="button" role="tab" aria-selected={i === layout.focused} className={i === layout.focused ? 'is-on' : ''} onClick={() => setLayout((l) => ({ ...l, focused: i }))}>
-                {docs?.find((d) => d.id === p.docId)?.title ?? 'Empty'}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="tab-strip" role="tablist" aria-label="Open documents and Home">
+          {layout.panes.map((p, i) => {
+            const d = docs?.find((x) => x.id === p.docId);
+            return (
+              <div key={p.key} role="tab" aria-selected={i === layout.focused} tabIndex={0} className={'tab' + (i === layout.focused ? ' is-on' : '')} onClick={() => setLayout((l) => ({ ...l, focused: i }))} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setLayout((l) => ({ ...l, focused: i }))}>
+                <span className="tab-kind" aria-hidden="true">
+                  {d ? (formatOf(d) === 'flow' ? 'Flow' : d.kind === 'reference' ? 'Ref' : 'Doc') : 'Home'}
+                </span>
+                <span className="tab-title">{d?.title || (d ? 'Untitled' : 'Home')}</span>
+                {layout.panes.length > 1 && (
+                  <button type="button" className="tab-x" aria-label={`Close ${d?.title ?? 'Home'}`} onClick={(e) => (e.stopPropagation(), closePane(i))}>
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <button type="button" className="tab-add" data-tour="split" onClick={addPane} disabled={layout.panes.length >= maxPanes} aria-label="Open Home beside this" title="Open another window beside this one (Home: your flows and docs)">
+            +
+          </button>
+        </div>
         <span className="tb-spacer" />
         {focusMode && (
           <button type="button" className="btn small focus-exit" onClick={() => setFocusMode(false)} title="Show the doc list and all windows again (Ctrl/⌘+Shift+\)">
             Show all windows
           </button>
         )}
-        <button type="button" className="btn ghost" data-tour="split" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
-          <IconSplit /> <span className="hide-narrow">Split view</span>
-        </button>
         <TimerHost docId={timerDocId} />
         {acct.user && (
           <button type="button" className="btn ghost new-round-btn" onClick={() => setNewRoundOpen(true)} title="Start a round: round doc for you and your partner, prep timer, tournament">
@@ -678,6 +690,7 @@ export function App() {
         <button type="button" className={'icon-btn' + (pinsOpen ? ' is-on' : '')} aria-label="Pinned blocks" data-tour="pins" aria-pressed={pinsOpen} title="Pinned blocks for your speech" onClick={() => setPinsOpen((o) => !o)}>
           <IconPin />
         </button>
+        {(!acct.user || !acct.server || roundMode) && (
         <button
           type="button"
           className={'round-mode-btn' + (roundMode ? ' is-on' : '')}
@@ -688,7 +701,10 @@ export function App() {
         >
           <span className="switch" /> <span className="hide-narrow">Round Mode</span>
         </button>
+        )}
         <AccountBar
+          roundMode={roundMode}
+          onToggleRoundMode={toggleRoundMode}
           onOpenDoc={(id) =>
             void addSharedDoc(id).then((m) => {
               if (m) openInFocused(m.id);
@@ -743,6 +759,7 @@ export function App() {
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
                     onCreate={(k, f) => void create(k, i, f)}
+                    onNewRound={acct.user ? () => setNewRoundOpen(true) : undefined}
                     showCarets={layout.panes.findIndex((x) => x.docId === p.docId) === i}
                     focusMode={focusMode}
                     onFocusMode={() => {
@@ -753,10 +770,16 @@ export function App() {
                 </div>
               </Fragment>
             ))}
-          {hasFlow && layout.panes.some((p) => !isFlowPane(p)) && !focusing && (
+          {hasFlow && roundInfoOpen && infoMeta && !focusing && <RoundInfoPanel meta={infoMeta} hasServer={acct.server} onClose={() => setRoundInfoOpen(false)} />}
+          {hasFlow && !focusing && (
             <div className="docs-rail">
-              <button type="button" className={'docs-rail-btn' + (docsOpen ? ' is-on' : '')} aria-pressed={docsOpen} title={docsOpen ? 'Hide your docs beside the flow' : 'Show your docs beside the flow'} onClick={() => setDocsOpen((o) => !o)}>
-                <span>Docs</span>
+              {layout.panes.some((p) => !isFlowPane(p)) && (
+                <button type="button" className={'docs-rail-btn' + (docsOpen ? ' is-on' : '')} aria-pressed={docsOpen} title={docsOpen ? 'Hide your docs beside the flow' : 'Show your docs beside the flow'} onClick={() => setDocsOpen((o) => !o)}>
+                  <span>Docs</span>
+                </button>
+              )}
+              <button type="button" className={'docs-rail-btn' + (roundInfoOpen ? ' is-on' : '')} aria-pressed={roundInfoOpen} title="This round's details: name, tournament, partners, check link" onClick={() => setRoundInfoOpen((o) => !o)}>
+                <span>Round info</span>
               </button>
             </div>
           )}
