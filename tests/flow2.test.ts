@@ -456,3 +456,22 @@ describe('flow2 minimized columns', () => {
     expect(columnGeometry(sheet, 1, null, [1]).colW[0]).toBeGreaterThan(28);
   });
 });
+
+import { flowEntries, searchFlow } from '../src/model/flowSearch';
+
+describe('flow search', () => {
+  it('finds cells by every word, allows a misspelling, and ranks the cell itself first', () => {
+    const { doc, sheetId, type } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, 'Rubber bullets cause injuries');
+    const b = createChild(doc, sheetId, a)!;
+    type(b, 'No evidence of injury');
+    const entries = flowEntries(readFlow(doc));
+    expect(entries.length).toBe(2);
+    expect(searchFlow(entries, 'rubber injuries')[0].entry.cellId).toBe(a);
+    expect(searchFlow(entries, 'rubbr')[0].entry.cellId).toBe(a);
+    const second = searchFlow(entries, 'rubber evidence');
+    expect(second.map((h) => h.entry.cellId)).toEqual([b]);
+    expect(searchFlow(entries, 'zebra')).toEqual([]);
+  });
+});

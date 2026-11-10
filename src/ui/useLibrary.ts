@@ -2,6 +2,8 @@ import type { JSONContent } from '@tiptap/core';
 import { yXmlFragmentToProsemirrorJSON } from '@tiptap/y-tiptap';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BODY_FIELD } from '../editor/extensions';
+import { readFlow } from '../flow2/model';
+import { flowEntries, type FlowEntry } from '../model/flowSearch';
 import { blockWithChildren, outlineEntries, type OutlineEntry } from '../model/outline';
 import { acquireDoc, releaseDoc } from '../store/registry';
 
@@ -14,12 +16,15 @@ const MAX_DOCS = 40;
  */
 export interface Library {
   index: Map<string, OutlineEntry[]>;
+  /** What is written on each flow doc's cells. */
+  flowIndex: Map<string, FlowEntry[]>;
   /** The full content (with formatting) of a block and everything under it. */
   blockContent: (docId: string, blockId: string) => JSONContent[];
 }
 
 export function useLibrary(docIds: string[], active: boolean): Library {
   const [index, setIndex] = useState<Map<string, OutlineEntry[]>>(new Map());
+  const [flowIndex, setFlowIndex] = useState<Map<string, FlowEntry[]>>(new Map());
   const jsonRef = useRef(new Map<string, JSONContent>());
   const key = docIds.slice(0, MAX_DOCS).join(',');
 
@@ -37,6 +42,7 @@ export function useLibrary(docIds: string[], active: boolean): Library {
         jsonRef.current.set(id, json);
         const entries = outlineEntries(json);
         setIndex((prev) => new Map(prev).set(id, entries));
+        setFlowIndex((prev) => new Map(prev).set(id, flowEntries(readFlow(doc))));
       };
       const onUpdate = () => {
         if (timer) clearTimeout(timer);
@@ -54,6 +60,7 @@ export function useLibrary(docIds: string[], active: boolean): Library {
     }
     // Forget docs no longer in the list.
     setIndex((prev) => new Map([...prev].filter(([id]) => ids.includes(id))));
+    setFlowIndex((prev) => new Map([...prev].filter(([id]) => ids.includes(id))));
     return () => {
       live = false;
       for (const c of cleanups) c();
@@ -67,5 +74,5 @@ export function useLibrary(docIds: string[], active: boolean): Library {
     return blockWithChildren(entries, blockId).map((e) => json.content![e.index]);
   }, [index]);
 
-  return { index, blockContent };
+  return { index, flowIndex, blockContent };
 }

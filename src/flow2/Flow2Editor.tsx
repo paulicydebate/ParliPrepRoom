@@ -6,7 +6,7 @@ import { isRound } from '../store/roundDoc';
 import { logEvent } from '../store/typingLog';
 import { SPEECH_INFO } from '../model/speeches';
 import { useFlowColors, useFlowTheme } from '../store/flowTheme';
-import { IconChevronDown, IconChevronRight, IconMaximize, IconRestore, IconSidebar, IconSnap } from '../ui/icons';
+import { IconChevronDown, IconChevronRight, IconPin, IconMaximize, IconRestore, IconSidebar, IconSnap } from '../ui/icons';
 import { connectorPath, routeBetween, type ConnectorPath } from './connectors';
 import { connectorCrossings, CROSSING_SHADOW_DEFAULTS, crossingShadowExtent } from './connectorCrossings';
 import { layoutFlow, METRICS } from './layout';
@@ -43,7 +43,10 @@ import {
   type FlowRef,
   type FlowSheetData,
 } from './model';
-import { columnGeometry, GAP_PX, WIDE_MIN_PX } from './columns';
+import { columnGeometry, GAP_PX, PINS_PX, WIDE_MIN_PX } from './columns';
+import { PinColumn } from './PinColumn';
+import { publishFlow } from '../store/flowPins';
+import { useRoundMode } from '../store/roundMode';
 import { Flow2Canvas } from './Flow2Canvas';
 import { Flow2Sidebar } from './Flow2Sidebar';
 import { FlowDock } from './FlowDock';
@@ -123,7 +126,9 @@ export function Flow2Editor({
   ydoc,
   provider,
   docId,
+  space,
   carets,
+  focus,
   onEditor,
 }: {
   ydoc: Y.Doc;
@@ -131,6 +136,8 @@ export function Flow2Editor({
   docId: string;
   space: string;
   carets: boolean;
+  /** A request from search or the pin board to open a cell (n changes each time). */
+  focus?: { blockId: string; n: number };
   onEditor: (e: null) => void;
 }) {
   const theme = useFlowTheme();
@@ -149,6 +156,12 @@ export function Flow2Editor({
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
   const [jump, setJump] = useState<Jump | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
+  // The pin board follows the sheet in view and offers these sheet names.
+  const namesKey = sheets.map((s) => s.name.trim()).join('\u0000');
+  useEffect(() => {
+    publishFlow(docId, { sheets: sheets.map((s) => s.name.trim()).filter(Boolean), active: (sheet?.name ?? '').trim() });
+  }, [docId, namesKey, sheet?.id, sheet?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => publishFlow(docId, null), [docId]);
   const [dock, setDock] = useState<Dock | null>(null);
   const onDock = useCallback((id: string, d: Dock | null) => setDock((cur) => (d ? d : cur?.sheetId === id ? null : cur)), []);
 
@@ -211,6 +224,16 @@ export function Flow2Editor({
     };
   }, [ydoc, provider]);
 
+  // Search and the pin board open a cell by id: find its sheet and go there.
+  useEffect(() => {
+    if (!focus) return;
+    const hit = sheets.find((s) => s.cells.some((c) => c.id === focus.blockId));
+    if (hit) {
+      if (collapsed.has(hit.id)) toggleCollapse(hit.id);
+      onJump(hit.id, focus.blockId);
+    }
+  }, [focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!sheet) return <div className="flow-wrap" data-flow-theme={theme} />;
   const maxSheet = maximizedId ? sheets.find((s) => s.id === maximizedId) ?? null : null;
   const goTo = (id: string) => {
@@ -262,7 +285,7 @@ export function Flow2Editor({
           </button>
         )}
         {maxSheet ? (
-          <SheetView key={maxSheet.id} onDock={onDock} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
+          <SheetView space={space} key={maxSheet.id} onDock={onDock} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
         ) : (
           <Flow2Canvas
             doc={ydoc}
@@ -273,7 +296,7 @@ export function Flow2Editor({
             collapsed={collapsed}
             renderCollapsed={(s) => <CollapsedBar sheet={s} onExpand={() => toggleCollapse(s.id)} />}
             renderLive={(s, zoom) => (
-              <SheetView onDock={onDock} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id), onSnap: () => snap(s.id) }} jump={jump} onJump={onJump} />
+              <SheetView space={space} onDock={onDock} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id), onSnap: () => snap(s.id) }} jump={jump} onJump={onJump} />
             )}
           />
         )}
@@ -346,7 +369,7 @@ export interface Maximized {
   onRestore: () => void;
 }
 
-export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
+export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { space: string; onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -398,8 +421,30 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
       return next;
     });
   };
-  const geo = columnGeometry(sheet, focused?.col ?? null, embedded ? null : width, minCols);
-  const { used, mini, colX, colW, inner } = geo;
+  // The pins column: opens after the speech column whose pin button was pressed (also this window's own view).
+  const pinKey = `pp-flow2-pincol-${docId}-${sheet.id}`;
+  const roundMode = useRoundMode();
+  const [pinCol, setPinCol] = useState<number | null>(() => {
+    try {
+      const n = Number(localStorage.getItem(pinKey));
+      return Number.isInteger(n) && n >= 1 && n <= sheet.columns.length ? n : null;
+    } catch {
+      return null;
+    }
+  });
+  const togglePinCol = (col: number) =>
+    setPinCol((cur) => {
+      const next = cur === col ? null : col;
+      try {
+        if (next) localStorage.setItem(pinKey, String(next));
+        else localStorage.removeItem(pinKey);
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  const geo = columnGeometry(sheet, focused?.col ?? null, embedded ? null : width, minCols, pinCol);
+  const { used, mini, colX, colW, inner, pinX } = geo;
   const zoom = embedded?.zoom ?? 1;
 
   const layout = useMemo(() => layoutFlow(cells, heights, METRICS), [cells, heights]);
@@ -730,6 +775,19 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
           {sheet.columns.map((s, i) => (
             <div key={s} className={`flow-col-head fl-${SPEECH_INFO[s].side}` + (used[i] ? '' : ' is-narrow') + (mini[i] ? ' is-mini' : '')} style={{ left: colX[i], width: colW[i] }} title={SPEECH_INFO[s].name}>
               {!mini[i] && <span>{s}</span>}
+              {!mini[i] && (
+                <button
+                  type="button"
+                  className={'f2-col-toggle f2-col-pin' + (pinCol === i + 1 ? ' is-on' : '')}
+                  aria-label={pinCol === i + 1 ? `Close the pins column after ${s}` : `Show pinned blocks after ${s}`}
+                  aria-pressed={pinCol === i + 1}
+                  title={pinCol === i + 1 ? 'Close the pins column' : 'Show your pinned blocks for this sheet in a column after this one'}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => togglePinCol(i + 1)}
+                >
+                  <IconPin />
+                </button>
+              )}
               <button
                 type="button"
                 className="f2-col-toggle"
@@ -744,7 +802,17 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
             </div>
           ))}
         </div>
+        {pinX !== null && (
+          <div className="flow-col-head f2-pins-head" style={{ left: pinX, width: PINS_PX }}>
+            <span>Pins</span>
+          </div>
+        )}
         <div className="f2-canvas" ref={canvas} style={{ height: total }} onMouseDown={onBackground}>
+          {pinX !== null && (
+            <div className="f2-pins-wrap" style={{ left: pinX, width: PINS_PX, height: total }} onMouseDown={(e) => e.stopPropagation()}>
+              <PinColumn space={space} sheetName={sheet.name} hostKey={`${docId}:${sheet.id}`} roundMode={roundMode} />
+            </div>
+          )}
           {sheet.columns.map((s, i) => (
             <div key={s} className={'f2-band' + (i % 2 ? ' is-alt' : '')} style={{ left: colX[i] - GAP_PX / 2, width: colW[i] + GAP_PX }} />
           ))}

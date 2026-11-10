@@ -589,7 +589,7 @@ export function Pane({
                 <PanelHandle panel={outlineWidth} edge="right" label="Resize the outline" onCollapse={() => onChange({ ...pane, outline: false })} />
               </>
             )}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <Flow2Editor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} onEditor={onEditor as (e: null) => void} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <Flow2Editor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} focus={pane.focus} onEditor={onEditor as (e: null) => void} />}
           </div>
           {history && <HistoryView docId={meta.id} ydoc={ydoc} format={view} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
         </>

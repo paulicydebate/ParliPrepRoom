@@ -16,6 +16,7 @@ import { NewRoundDialog } from './Rounds';
 import { Timer } from './Timer';
 import { useYDoc } from './useYDoc';
 import { useLibrary } from './useLibrary';
+import { setLibraryView, usePinColumnsOpen } from '../store/flowPins';
 import type { Editor } from '@tiptap/react';
 import { activeSheet, flowKey } from '../editor/flowView';
 import { baseSpeech } from '../model/speeches';
@@ -536,10 +537,15 @@ export function App() {
   /** Docs in this list that are mine to delete (not ones teammates shared with me). */
   const myDocs = (spaceDocs ?? []).filter((d) => !d.ownerId || d.ownerId === acct.user?.id);
 
-  const { index: library, blockContent } = useLibrary(
+  const pinColumnsOpen = usePinColumnsOpen();
+  const { index: library, flowIndex, blockContent } = useLibrary(
     searchable.map((d) => d.id),
-    findOpen || pinsOpen,
+    findOpen || pinsOpen || pinColumnsOpen,
   );
+  // The pins column inside a flow reads the same index.
+  useEffect(() => {
+    setLibraryView({ docs: searchable, index: library });
+  }, [searchable, library]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Open a doc at a block. keepFocused: don't replace the pane you're in (e.g. the flow); use another pane or open one. */
   const jumpTo = (docId: string, blockId: string, keepFocused = false) => {
     setLayout((l) => {
@@ -566,13 +572,9 @@ export function App() {
   // Inserting a prepped block: a copy, so it's only allowed outside Round
   // Mode and never into a round doc (that would be pasting into prep).
   const editors = useRef(new Map<string, Editor>());
-  // Re-render when a pane's editor appears, so the pin board can follow it.
-  const [editorTick, setEditorTick] = useState(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const allEditors = useMemo(() => [...editors.current.values()], [editorTick]);
+  const [, setEditorTick] = useState(0);
   const focusedPane = layout.panes[Math.min(layout.focused, layout.panes.length - 1)];
   const focusedMeta = docs?.find((d) => d.id === focusedPane?.docId) ?? null;
-  const focusedEditor = focusedPane ? editors.current.get(focusedPane.key) ?? null : null;
   const insertBlocked: string | null = roundMode
     ? 'Turn off Round Mode to insert blocks.'
     : !focusedMeta
@@ -790,8 +792,7 @@ export function App() {
             space={acct.space}
             docs={searchable}
             index={library}
-            followEditor={focusedEditor}
-            allEditors={allEditors}
+            followDocId={focusedPane?.docId ?? null}
             onJump={jumpTo}
             onInsert={insertBlock}
             insertBlocked={insertBlocked}
@@ -801,7 +802,7 @@ export function App() {
       </div>
       {newRoundOpen && <NewRoundDialog onCreated={openNewRound} onClose={() => setNewRoundOpen(false)} />}
       {findOpen && (
-        <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
+        <BlockFinder docs={searchable} index={library} flowIndex={flowIndex} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       <Tour />

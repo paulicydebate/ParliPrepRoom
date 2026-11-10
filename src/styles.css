@@ -5358,3 +5358,56 @@ kbd {
 .f2-band:has(+ .f2-band) {
   transition: none;
 }
+
+/* Pins column inside a flow */
+.f2-col-pin {
+  right: 24px;
+}
+.f2-col-pin.is-on {
+  opacity: 0.95;
+}
+.flow-col-head.is-mini .f2-col-pin {
+  display: none;
+}
+.f2-pins-head {
+  text-align: center;
+}
+.f2-pins-wrap {
+  position: absolute;
+  top: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 0;
+  z-index: 1;
+}
+.f2-pins {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.f2-pins-empty {
+  margin: 4px 6px;
+  line-height: 1.35;
+}
+.f2-pin {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--text, #ddd) 22%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text, #ddd) 6%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.f2-pin:hover {
+  border-color: color-mix(in srgb, var(--text, #ddd) 45%, transparent);
+}
+.f2-pin-block[data-kind='position'],
+.f2-pin-block[data-kind='section'],
+.f2-pin-block[data-kind='claim'] {
+  font-weight: 600;
+}
