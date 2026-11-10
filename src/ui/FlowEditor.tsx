@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
 import { blockWithChildren } from '../model/outline';
 import { useBoard } from '../store/pins';
 import { useLibrary } from './useLibrary';
-import { setFlowTheme, useFlowTheme } from '../store/flowTheme';
+import { setFlowColors, setFlowTheme, useFlowColors, useFlowTheme } from '../store/flowTheme';
 import { useDocs } from './hooks';
 import { useRoundMode } from '../store/roundMode';
 import { toast } from '../editor/roundGuard';
@@ -299,6 +299,7 @@ export function ColorsButton() {
 function ColorsDialog({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const flowTheme = useFlowTheme();
+  const flowColors = useFlowColors();
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
@@ -320,6 +321,16 @@ function ColorsDialog({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <p className="muted">Saved in this browser. Your partner can pick different colors for the same flow.</p>
+      <div className="flow-colors-opt" role="radiogroup" aria-label="Which colors the flow uses">
+        <label>
+          <input type="radio" name="flow-colors" checked={flowColors === 'flowist'} onChange={() => setFlowColors('flowist')} />
+          Flowist: cyan and red
+        </label>
+        <label>
+          <input type="radio" name="flow-colors" checked={flowColors === 'colorway'} onChange={() => setFlowColors('colorway')} />
+          My colors: the pair picked below
+        </label>
+      </div>
       <ColorwayPicker />
       <label className="flow-theme-opt">
         <input type="checkbox" checked={flowTheme === 'night'} onChange={(e) => setFlowTheme(e.target.checked ? 'night' : 'app')} />

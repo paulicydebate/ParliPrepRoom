@@ -122,7 +122,7 @@ describe('flow2 model', () => {
   });
 });
 
-const cell = (id: string, col: number, parent: string | null, order: number, gap = 0, group: string | null = null) => ({ id, col, parent, order, gap, group, text: id });
+const cell = (id: string, col: number, parent: string | null, order: number, gap = 0, group: string | null = null) => ({ id, col, parent, order, gap, group, refs: [], text: id });
 
 describe('flow2 layout', () => {
   it('stacks roots with a small gap; each cell is as tall as its own text', () => {
@@ -362,5 +362,58 @@ describe('flow2 arrow navigation (from Flowist)', () => {
   it('cycles through a list', () => {
     expect(cycleTarget(['a', 'b', 'c'], 2, false)).toBe('a');
     expect(cycleTarget(['a', 'b', 'c'], 0, true)).toBe('c');
+  });
+});
+
+import { addRef, removeRef, refKey } from '../src/flow2/model';
+import { createTrackpadClock, createTrackpadPath } from '../src/flow2/trackpadPath';
+
+describe('flow2 cross-applications and extensions', () => {
+  it('a cell can point at a cell on another sheet (x) or an earlier one on its own sheet (e), once each', () => {
+    const { doc, sheetId, cells } = setup();
+    const other = addSheet(doc, 'opp');
+    const mine = createRoot(doc, sheetId, 1, null, 0, 'Econ Bad')!;
+    const theirs = createRoot(doc, other, 2, null, 0, 'Their K')!;
+    expect(addRef(doc, other, theirs, { kind: 'x', sheet: sheetId, cell: mine })).toBe(true);
+    expect(addRef(doc, other, theirs, { kind: 'x', sheet: sheetId, cell: mine })).toBe(true); // again: no duplicate
+    const t = readFlow(doc)[1].cells.find((c) => c.id === theirs)!;
+    expect(t.refs).toEqual([{ kind: 'x', sheet: sheetId, cell: mine }]);
+    // a cell cannot point at itself
+    expect(addRef(doc, sheetId, mine, { kind: 'e', sheet: sheetId, cell: mine })).toBe(false);
+    const ext = createChild(doc, sheetId, mine)!;
+    expect(addRef(doc, sheetId, ext, { kind: 'e', sheet: sheetId, cell: mine })).toBe(true);
+    expect(cells().find((c) => c.id === ext)!.refs.map(refKey)).toEqual([`e:${sheetId}:${mine}`]);
+    removeRef(doc, sheetId, ext, { kind: 'e', sheet: sheetId, cell: mine });
+    expect(cells().find((c) => c.id === ext)!.refs).toEqual([]);
+  });
+
+  it('refs merge between two people', () => {
+    const a = setup();
+    const cell1 = createRoot(a.doc, a.sheetId, 1, null, 0, 'one')!;
+    const cell2 = createRoot(a.doc, a.sheetId, 1, cell1, 0, 'two')!;
+    const b = new Y.Doc();
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a.doc));
+    addRef(a.doc, a.sheetId, cell2, { kind: 'e', sheet: a.sheetId, cell: cell1 });
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a.doc));
+    expect(readFlow(b)[0].cells.find((c) => c.id === cell2)!.refs).toHaveLength(1);
+  });
+});
+
+describe('flow2 trackpad path (from Flowist)', () => {
+  it('draws a pan between the events it has, never past the newest, and settles on it', () => {
+    const clock = createTrackpadClock();
+    const t0 = 1000;
+    const t = clock.stamped(t0, t0 + 2);
+    const path = createTrackpadPath(clock, { x: 0, y: 0 }, { x: 0, y: -20 }, t);
+    const t1 = clock.stamped(t0 + 16.7, t0 + 18);
+    path.add({ x: 0, y: -40 }, t1);
+    let last = { x: 0, y: 0 };
+    for (let now = t0 + 20; now < t0 + 200; now += 16.7) {
+      const p = path.draw(now);
+      expect(p.y).toBeLessThanOrEqual(last.y + 1e-6); // moving up the page, never back
+      expect(p.y).toBeGreaterThanOrEqual(-40 - 1e-6); // never past the newest event
+      last = p;
+    }
+    expect(last.y).toBeCloseTo(-40, 5);
   });
 });

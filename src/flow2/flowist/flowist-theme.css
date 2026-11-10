@@ -140,3 +140,18 @@
 .flow-wrap.f2 .f2-add::after {
   background: var(--sheet-background);
 }
+
+/* "My colors": the side colors come from the app's Gov and Opp colorway (Colors window) instead of Flowist's
+ * cyan and red. In the dark flow they are the colorway's dark-theme steps (styles.css). */
+.flow-wrap.f2[data-flow-colors='colorway'] .fl-gov {
+  --column-text: var(--gov);
+  --column-heading: var(--gov);
+  --response-color: var(--gov);
+  --response-hover-color: color-mix(in srgb, var(--gov) 70%, var(--text));
+}
+.flow-wrap.f2[data-flow-colors='colorway'] .fl-opp {
+  --column-text: var(--opp);
+  --column-heading: var(--opp);
+  --response-color: var(--opp);
+  --response-hover-color: color-mix(in srgb, var(--opp) 70%, var(--text));
+}

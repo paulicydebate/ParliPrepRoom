@@ -12,6 +12,7 @@ import {
   type WorldRect,
 } from './canvasGeometry';
 import { readWheelIntent } from './canvasWheel';
+import { createTrackpadClock, createTrackpadPath, GESTURE_GAP_MS } from './trackpadPath';
 import { columnGeometry } from './columns';
 import { layoutFlow, METRICS } from './layout';
 import { moveSheet, type FlowSheetData } from './model';
@@ -52,6 +53,16 @@ export function Flow2Canvas({
   const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
   const anim = useRef(0);
   const started = useRef(false);
+  // A trackpad pan is drawn along the path its events stamp (Flowist's trackpad-path), not event by event.
+  const clock = useRef(createTrackpadClock());
+  const path = useRef<ReturnType<typeof createTrackpadPath> | null>(null);
+  const pathLoop = useRef(0);
+  const lastWheel = useRef(0);
+  const stopPath = () => {
+    cancelAnimationFrame(pathLoop.current);
+    pathLoop.current = 0;
+    path.current = null;
+  };
 
   useLayoutEffect(() => {
     const el = viewport.current;
@@ -77,11 +88,15 @@ export function Flow2Canvas({
   }, [sheets, sizes, drag]);
 
   const setCameraNow = (c: Camera) => {
+    stopPath();
     cancelAnimationFrame(anim.current);
     setCamera(c);
   };
 
   const animateTo = useCallback((to: Camera, ms = 280) => {
+    cancelAnimationFrame(pathLoop.current);
+    pathLoop.current = 0;
+    path.current = null;
     cancelAnimationFrame(anim.current);
     const from = cameraRef.current;
     const t0 = performance.now();
@@ -131,8 +146,35 @@ export function Flow2Canvas({
       const rect = el.getBoundingClientRect();
       const intent = readWheelIntent(e, rect.height);
       cancelAnimationFrame(anim.current);
-      if (intent.kind === 'pan') setCamera((c) => ({ ...c, x: c.x + intent.dx, y: c.y + intent.dy }));
-      else setCamera((c) => zoomAt(c, { x: intent.anchor.x - rect.left, y: intent.anchor.y - rect.top }, c.zoom * intent.factor));
+      if (intent.kind === 'pan') {
+        const now = performance.now();
+        const t = clock.current.stamped(e.timeStamp, now);
+        lastWheel.current = now;
+        const cam = cameraRef.current;
+        if (path.current) {
+          const n = path.current.newest();
+          path.current.add({ x: n.x + intent.dx, y: n.y + intent.dy }, t);
+        } else path.current = createTrackpadPath(clock.current, { x: cam.x, y: cam.y }, { x: cam.x + intent.dx, y: cam.y + intent.dy }, t);
+        if (!pathLoop.current) {
+          const tick = (frame: number) => {
+            pathLoop.current = 0;
+            const p = path.current;
+            if (!p) return;
+            const at = p.draw(frame);
+            setCamera((c) => ({ ...c, x: at.x, y: at.y }));
+            const n = p.newest();
+            if (frame - lastWheel.current > GESTURE_GAP_MS * 3 && Math.abs(at.x - n.x) < 0.5 && Math.abs(at.y - n.y) < 0.5) {
+              path.current = null;
+              return;
+            }
+            pathLoop.current = requestAnimationFrame(tick);
+          };
+          pathLoop.current = requestAnimationFrame(tick);
+        }
+      } else {
+        stopPath();
+        setCamera((c) => zoomAt(c, { x: intent.anchor.x - rect.left, y: intent.anchor.y - rect.top }, c.zoom * intent.factor));
+      }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -173,6 +215,7 @@ export function Flow2Canvas({
     }
     if (target.closest('.f2-window')) return;
     e.preventDefault();
+    stopPath();
     cancelAnimationFrame(anim.current);
     const x0 = e.clientX;
     const y0 = e.clientY;
@@ -199,6 +242,7 @@ export function Flow2Canvas({
     const bottom = Math.max(...all.map((r) => r.y + r.height));
     animateTo(cameraFor({ x, y, width: right - x, height: bottom - y }));
   };
+  useEffect(() => () => stopPath(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const zoomBy = (dir: 'in' | 'out') => animateTo(zoomAt(cameraRef.current, { x: view.width / 2, y: view.height / 2 }, stepZoom(cameraRef.current.zoom, dir)), 160);
 
   return (

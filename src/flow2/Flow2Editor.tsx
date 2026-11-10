@@ -3,13 +3,14 @@ import * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
 import { toast } from '../editor/roundGuard';
 import { SPEECH_INFO } from '../model/speeches';
-import { useFlowTheme } from '../store/flowTheme';
+import { useFlowColors, useFlowTheme } from '../store/flowTheme';
 import { ColorsButton } from '../ui/FlowEditor';
 import { IconPlus, IconThread } from '../ui/icons';
 import { connectorPath, routeBetween, type ConnectorPath } from './connectors';
 import { connectorCrossings, CROSSING_SHADOW_DEFAULTS, crossingShadowExtent } from './connectorCrossings';
 import { layoutFlow, METRICS } from './layout';
 import {
+  addRef,
   addSheet,
   childrenOf,
   createChild,
@@ -24,6 +25,8 @@ import {
   observeFlow,
   ORIGIN_LOCAL,
   readFlow,
+  refKey,
+  removeRef,
   renameSheet,
   rootsOf,
   setSheetSide,
@@ -33,6 +36,7 @@ import {
   yCells,
   yText,
   type FlowCell,
+  type FlowRef,
   type FlowSheetData,
 } from './model';
 import { columnGeometry, GAP_PX } from './columns';
@@ -90,6 +94,7 @@ export function Flow2Editor({
   onEditor: (e: null) => void;
 }) {
   const theme = useFlowTheme();
+  const colors = useFlowColors();
   const sheets = useFlow(ydoc);
   const undo = useUndo(ydoc);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -102,6 +107,7 @@ export function Flow2Editor({
     }
   });
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
+  const [jump, setJump] = useState<Jump | null>(null);
   const setViewMode = (m: 'canvas' | 'page') => {
     setMode(m);
     try {
@@ -149,8 +155,12 @@ export function Flow2Editor({
     setActiveId(id);
     setFly((f) => ({ id, n: (f?.n ?? 0) + 1 }));
   };
+  const onJump = (sheetId: string, cellId: string) => {
+    goTo(sheetId);
+    setJump((j) => ({ sheetId, cellId, n: (j?.n ?? 0) + 1 }));
+  };
   return (
-    <div className="flow-wrap f2" data-flow-theme={theme}>
+    <div className="flow-wrap f2" data-flow-theme={theme} data-flow-colors={colors}>
       {mode === 'canvas' ? (
         <>
           <NavBar doc={ydoc} sheets={sheets} activeId={sheet.id} onGo={goTo} mode={mode} onMode={setViewMode} />
@@ -160,12 +170,12 @@ export function Flow2Editor({
             activeId={sheet.id}
             onActive={setActiveId}
             fly={fly}
-            renderLive={(s, zoom) => <SheetView doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom }} />}
+            renderLive={(s, zoom) => <SheetView doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom }} jump={jump} onJump={onJump} />}
           />
         </>
       ) : (
         <>
-          <SheetView key={sheet.id} doc={ydoc} sheets={sheets} sheet={sheet} undo={undo} onPick={setActiveId} />
+          <SheetView key={sheet.id} doc={ydoc} sheets={sheets} sheet={sheet} undo={undo} onPick={setActiveId} jump={jump} onJump={onJump} />
         </>
       )}
     </div>
@@ -278,12 +288,19 @@ function Tabs({ doc, sheets, sheet, onPick, tools }: { doc: Y.Doc; sheets: FlowS
 
 type Focus = { id: string; at: 'start' | 'end' };
 
+/** Ask a sheet to put the caret in one of its cells (from a cross-application chip on another sheet). */
+export interface Jump {
+  sheetId: string;
+  cellId: string;
+  n: number;
+}
+
 export interface Embedded {
   /** Canvas zoom (the sheet is drawn scaled; mouse positions are divided by it). */
   zoom: number;
 }
 
-export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded }) {
+export function SheetView({ doc, sheets, sheet, undo, onPick, embedded, jump, onJump }: { doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -294,6 +311,9 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const want = useRef<Focus | null>(null);
   const hops = useRef<{ from: string; to: string; key: string }[]>([]);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [picker, setPicker] = useState<{ cellId: string; kind: 'x' | 'e' } | null>(null);
+  const [settling, setSettling] = useState(false);
   const [, bump] = useState(0);
   const sheetUid = useId().replace(/:/g, '');
 
@@ -317,6 +337,17 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
 
   const layout = useMemo(() => layoutFlow(cells, heights, embedded ? { ...METRICS, ghostRows: 6 } : METRICS), [cells, heights, embedded]);
   const top = (c: FlowCell) => layout.tops.get(c.id) ?? 0;
+  const labelFor = (r: FlowRef) => {
+    const owner = sheets.find((x) => x.id === r.sheet);
+    const target = owner?.cells.find((k) => k.id === r.cell);
+    if (!owner || !target) return { text: '(deleted)', missing: true };
+    const text = target.text.trim().replace(/\s+/g, ' ');
+    return { text: `${r.kind === 'x' ? `${owner.name || 'Untitled'} · ` : ''}${text.slice(0, 36) || '(empty)'}${text.length > 36 ? '…' : ''}`, missing: false };
+  };
+  const clickRef = (r: FlowRef) => {
+    if (r.sheet === sheet.id) focusCell(r.cell, 'end');
+    else onJump?.(r.sheet, r.cell);
+  };
   const rectOf = (c: FlowCell) => ({ left: colX[c.col - 1], right: colX[c.col - 1] + colW[c.col - 1], top: top(c), bottom: top(c) + (layout.heights.get(c.id) ?? 30) });
   const sideOf = (col: number) => SPEECH_INFO[sheet.columns[col - 1]].side;
 
@@ -330,6 +361,21 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
     want.current = { id, at };
     bump((n) => n + 1);
   };
+
+  useEffect(() => {
+    if (jump && jump.sheetId === sheet.id && byId.has(jump.cellId)) focusCell(jump.cellId, 'end');
+  }, [jump?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // While columns slide, the link lines step aside and come back once they land (as in Flowist).
+  const colSig = colW.map((w) => Math.round(w)).join(',');
+  const firstSig = useRef(colSig);
+  useEffect(() => {
+    if (firstSig.current === colSig) return;
+    firstSig.current = colSig;
+    setSettling(true);
+    const t = setTimeout(() => setSettling(false), 230);
+    return () => clearTimeout(t);
+  }, [colSig]);
 
   const colList = (col: number) => cells.filter((c) => c.col === col).sort((a, b) => top(a) - top(b));
   const rootOf = (c: FlowCell) => {
@@ -357,6 +403,11 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
     if (mod && e.shiftKey && key.toLowerCase() === 'l') {
       e.preventDefault();
       toggleLinking(c.id);
+      return;
+    }
+    if (mod && e.shiftKey && (key.toLowerCase() === 'x' || key.toLowerCase() === 'e')) {
+      e.preventDefault();
+      setPicker({ cellId: c.id, kind: key.toLowerCase() === 'x' ? 'x' : 'e' });
       return;
     }
     if (mod && key.toLowerCase() === 'g') {
@@ -572,7 +623,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
   const empty = cells.length === 0;
 
   const grouped = new Set(layout.groups.map((g) => g.id));
-  const tools = <LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} canGroup={picked.length >= 2} canUngroup={!!focused?.group && grouped.has(focused.group)} onGroup={() => group(focused)} onUngroup={() => ungroup(focused)} />;
+  const tools = <LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} canGroup={picked.length >= 2} canUngroup={!!focused?.group && grouped.has(focused.group)} onGroup={() => group(focused)} onUngroup={() => ungroup(focused)} canRef={!!focused} onRef={(k) => focused && setPicker({ cellId: focused.id, kind: k })} />;
   const body = (
       <div className="f2-inner" style={{ width: inner }}>
         <div className="f2-head">
@@ -587,7 +638,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
             <div key={s} className={'f2-band' + (i % 2 ? ' is-alt' : '')} style={{ left: colX[i] - GAP_PX / 2, width: colW[i] + GAP_PX }} />
           ))}
           {empty && <div className="f2-hint">Click here, or press Enter, to start. Tab moves to the next speech.</div>}
-          <svg className="f2-threads" aria-hidden="true" focusable="false">
+          <svg className={'f2-threads' + (settling ? ' is-settling' : '')} aria-hidden="true" focusable="false">
             {paths.map((p) => (
               <Fragment key={p.key}>
                 <path className="link-line" d={p.d} data-straight={p.straight && p.sourceY === p.responseY ? 'true' : undefined} data-active={lit.has(p.responseId ?? '') && lit.has(p.sourceId) ? 'true' : undefined} vectorEffect="non-scaling-stroke" />
@@ -621,6 +672,10 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
               measured={heights.has(c.id)}
               lit={lit.has(c.id)}
               picked={picked.includes(c.id)}
+              refs={c.refs.map((r) => ({ ...r, ...labelFor(r) }))}
+              onRefClick={clickRef}
+              onRefRemove={(r) => removeRef(doc, sheet.id, c.id, r)}
+              onHover={(on) => setHoverId((h) => (on ? c.id : h === c.id ? null : h))}
               inGroup={!!c.group && grouped.has(c.group)}
               linkingFrom={!!linking?.ids.includes(c.id)}
               linkable={!!linking && c.col === linking.col - 1}
@@ -646,6 +701,47 @@ export function SheetView({ doc, sheets, sheet, undo, onPick, embedded }: { doc:
               }}
             />
           ))}
+          {cells
+            .filter((c) => childrenOf(cells, c.id).length === 0 && c.col < sheet.columns.length && layout.tops.has(c.id) && !(linking || marquee))
+            .map((c) => (
+              <button
+                key={`slot-${c.id}`}
+                type="button"
+                className={`f2-slot fl-${sideOf(c.col + 1)}` + (hoverId === c.id || focusId === c.id ? ' is-shown' : '')}
+                style={{ left: colX[c.col] ?? 0, top: top(c), width: colW[c.col] ?? 100, height: layout.heights.get(c.id) ?? 30 }}
+                aria-label="Add an answer"
+                title="Add an answer to this argument"
+                tabIndex={-1}
+                onMouseEnter={() => setHoverId(c.id)}
+                onMouseLeave={() => setHoverId((h) => (h === c.id ? null : h))}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  focusCell(createChild(doc, sheet.id, c.id, null, sheet.columns.length), 'start');
+                }}
+              />
+            ))}
+          {picker && byId.get(picker.cellId) && (
+            <RefPicker
+              kind={picker.kind}
+              x={colX[byId.get(picker.cellId)!.col - 1] ?? 0}
+              y={top(byId.get(picker.cellId)!) + (layout.heights.get(picker.cellId) ?? 30) + 4}
+              candidates={
+                picker.kind === 'x'
+                  ? sheets.filter((x) => x.id !== sheet.id).flatMap((x) => x.cells.filter((k) => k.text.trim()).map((k) => ({ ref: { kind: 'x' as const, sheet: x.id, cell: k.id }, where: x.name || 'Untitled', text: k.text })))
+                  : cells.filter((k) => k.col < byId.get(picker.cellId)!.col && k.text.trim()).map((k) => ({ ref: { kind: 'e' as const, sheet: sheet.id, cell: k.id }, where: sheet.columns[k.col - 1], text: k.text }))
+              }
+              onPick={(ref) => {
+                addRef(doc, sheet.id, picker.cellId, ref);
+                setPicker(null);
+                focusCell(picker.cellId, 'end');
+              }}
+              onClose={() => {
+                setPicker(null);
+                focusCell(picker.cellId, 'end');
+              }}
+            />
+          )}
           {marquee && <div className="f2-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
         </div>
       </div>
@@ -718,13 +814,23 @@ function WindowBar({ doc, sheet, tools, canDelete, onDeleted }: { doc: Y.Doc; sh
   );
 }
 
-function LinkButtons({ linking, canUnlink, onToggle, onUnlink, canGroup, canUngroup, onGroup, onUngroup }: { linking: boolean; canUnlink: boolean; onToggle: () => void; onUnlink: () => void; canGroup: boolean; canUngroup: boolean; onGroup: () => void; onUngroup: () => void }) {
+function LinkButtons({ linking, canUnlink, onToggle, onUnlink, canGroup, canUngroup, onGroup, onUngroup, canRef, onRef }: { canRef: boolean; onRef: (k: 'x' | 'e') => void; linking: boolean; canUnlink: boolean; onToggle: () => void; onUnlink: () => void; canGroup: boolean; canUngroup: boolean; onGroup: () => void; onUngroup: () => void }) {
   return (
     <>
       <button type="button" className={'btn ghost small link-btn' + (linking ? ' is-on' : '')} aria-pressed={linking} title="Link the selected cells to the argument they answer (Ctrl/⌘+Shift+L)" onMouseDown={(e) => e.preventDefault()} onClick={onToggle}>
         <IconThread /> {linking ? 'Cancel link' : 'Link'}
       </button>
       {linking && <span className="link-hint">Click the argument these answer (Esc cancels)</span>}
+      {canRef && !linking && (
+        <>
+          <button type="button" className="btn ghost small" title="Apply an argument from another sheet here (Ctrl/⌘+Shift+X)" onMouseDown={(e) => e.preventDefault()} onClick={() => onRef('x')}>
+            Cross-apply
+          </button>
+          <button type="button" className="btn ghost small" title="Extend an earlier argument on this sheet (Ctrl/⌘+Shift+E)" onMouseDown={(e) => e.preventDefault()} onClick={() => onRef('e')}>
+            Extend
+          </button>
+        </>
+      )}
       {canGroup && !linking && (
         <button type="button" className="btn ghost small" title="Draw the selected cells as one framed block (Ctrl/⌘+G)" onMouseDown={(e) => e.preventDefault()} onClick={onGroup}>
           Group
@@ -757,6 +863,10 @@ function Cell({
   measured,
   lit,
   picked,
+  refs,
+  onRefClick,
+  onRefRemove,
+  onHover,
   inGroup,
   linkingFrom,
   linkable,
@@ -776,6 +886,10 @@ function Cell({
   measured: boolean;
   lit: boolean;
   picked: boolean;
+  refs: (FlowRef & { text: string; missing: boolean })[];
+  onRefClick: (r: FlowRef) => void;
+  onRefRemove: (r: FlowRef) => void;
+  onHover: (on: boolean) => void;
   inGroup: boolean;
   linkingFrom: boolean;
   linkable: boolean;
@@ -814,7 +928,8 @@ function Cell({
   }, [doc, sheetId, cell.id, fit]);
 
   // A cell's height depends on its width.
-  useLayoutEffect(fit, [w, fit]);
+  const refSig = refs.map((r) => refKey(r) + r.text).join('|');
+  useLayoutEffect(fit, [w, fit, refSig]);
 
   // Take the focus someone asked for.
   useLayoutEffect(() => {
@@ -833,12 +948,70 @@ function Cell({
       className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
       style={{ left: x, top: y, width: w }}
       onMouseDown={(e) => onMouseDown(e, cell)}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
     >
       <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onKeyDown={(e) => onKeyDown(e, cell)} />
+      {refs.length > 0 && (
+        <div className="f2-refs">
+          {refs.map((r) => (
+            <span key={refKey(r)} className={'f2-ref' + (r.missing ? ' is-missing' : '')} title={r.kind === 'x' ? 'Cross-applied from another sheet (click to go there)' : 'Extends an earlier argument (click to go there)'}>
+              <button type="button" className="f2-ref-go" tabIndex={-1} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); if (!r.missing) onRefClick(r); }}>
+                {r.kind === 'x' ? '↗' : '↺'} {r.text}
+              </button>
+              <button type="button" className="f2-ref-x" tabIndex={-1} aria-label="Remove" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onRefRemove(r); }}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 function sheetsMapGet(doc: Y.Doc, id: string): Y.Map<unknown> {
   return sheetsMap(doc).get(id)!;
+}
+
+/** A small search box listing cells to point at (for cross-apply and extend). */
+function RefPicker({ kind, x, y, candidates, onPick, onClose }: { kind: 'x' | 'e'; x: number; y: number; candidates: { ref: FlowRef; where: string; text: string }[]; onPick: (r: FlowRef) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const [at, setAt] = useState(0);
+  const list = candidates.filter((c) => c.text.toLowerCase().includes(q.toLowerCase()) || c.where.toLowerCase().includes(q.toLowerCase())).slice(0, 30);
+  return (
+    <div className="f2-picker" style={{ left: x, top: y }} onMouseDown={(e) => e.stopPropagation()}>
+      <input
+        autoFocus
+        value={q}
+        placeholder={kind === 'x' ? 'Cross-apply an argument from another sheet…' : 'Extend an earlier argument…'}
+        aria-label="Search cells"
+        onChange={(e) => {
+          setQ(e.target.value);
+          setAt(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+          else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setAt((a) => Math.min(list.length - 1, a + 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setAt((a) => Math.max(0, a - 1));
+          } else if (e.key === 'Enter' && list[at]) {
+            e.preventDefault();
+            onPick(list[at].ref);
+          }
+        }}
+      />
+      <div className="f2-picker-list" role="listbox">
+        {list.length === 0 && <div className="f2-picker-empty">{candidates.length ? 'Nothing matches.' : kind === 'x' ? 'No other sheet has anything typed yet.' : 'Nothing earlier on this sheet yet.'}</div>}
+        {list.map((c, i) => (
+          <button key={refKey(c.ref)} type="button" role="option" aria-selected={i === at} className={i === at ? 'is-on' : ''} onMouseEnter={() => setAt(i)} onMouseDown={(e) => { e.preventDefault(); onPick(c.ref); }}>
+            <span className="f2-picker-where">{c.where}</span> {c.text.slice(0, 80)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }

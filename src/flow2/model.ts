@@ -26,7 +26,28 @@ export interface FlowCell {
   gap: number;
   /** Cells that share a group id (and sit next to each other) are drawn as one framed block. */
   group: string | null;
+  /** Cross-applications (a cell on another sheet) and extensions (an earlier cell on this sheet) this cell refers to. */
+  refs: FlowRef[];
   text: string;
+}
+
+/** `x`: cross-applied from another sheet's cell; `e`: extends an earlier cell of this sheet. */
+export interface FlowRef {
+  kind: 'x' | 'e';
+  /** The sheet the cell is on (always set for `x`; the cell's own sheet for `e`). */
+  sheet: string;
+  cell: string;
+}
+
+export const refKey = (r: FlowRef) => `${r.kind}:${r.sheet}:${r.cell}`;
+function parseRefs(value: unknown): FlowRef[] {
+  if (!Array.isArray(value)) return [];
+  const out: FlowRef[] = [];
+  for (const v of value) {
+    const [kind, sheet, cell] = String(v).split(':');
+    if ((kind === 'x' || kind === 'e') && sheet && cell) out.push({ kind, sheet, cell });
+  }
+  return out;
 }
 
 export interface FlowSheetData {
@@ -65,6 +86,7 @@ function readCell(id: string, m: Y.Map<unknown>): FlowCell {
     order: Number(m.get('order')) || 0,
     gap: Math.max(0, Math.floor(Number(m.get('gap')) || 0)),
     group: typeof m.get('group') === 'string' ? (m.get('group') as string) : null,
+    refs: parseRefs(m.get('refs')),
     text: (m.get('text') as Y.Text | undefined)?.toString() ?? '',
   };
 }
@@ -362,5 +384,32 @@ export function ungroupCells(doc: Y.Doc, sheetId: string, ids: string[]) {
   if (!cells) return;
   local(doc, () => {
     for (const id of ids) cells.get(id)?.delete('group');
+  });
+}
+
+// ---------- Cross-applications and extensions ----------
+
+/**
+ * Point a cell at another cell: `x` (cross-apply: an argument from another sheet applied here) or `e` (extend an
+ * earlier argument on this sheet). The idea is Flowist's, by Elli, used with permission.
+ */
+export function addRef(doc: Y.Doc, sheetId: string, cellId: string, ref: FlowRef): boolean {
+  const cells = cellsOf(doc, sheetId);
+  const m = cells?.get(cellId);
+  if (!cells || !m) return false;
+  if (ref.cell === cellId && ref.sheet === sheetId) return false;
+  const current = parseRefs(m.get('refs'));
+  if (current.some((r) => refKey(r) === refKey(ref))) return true;
+  local(doc, () => m.set('refs', [...current, ref].map(refKey)));
+  return true;
+}
+
+export function removeRef(doc: Y.Doc, sheetId: string, cellId: string, ref: FlowRef) {
+  const m = cellsOf(doc, sheetId)?.get(cellId);
+  if (!m) return;
+  local(doc, () => {
+    const next = parseRefs(m.get('refs')).filter((r) => refKey(r) !== refKey(ref)).map(refKey);
+    if (next.length) m.set('refs', next);
+    else m.delete('refs');
   });
 }
