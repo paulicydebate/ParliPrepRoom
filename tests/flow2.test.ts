@@ -122,7 +122,7 @@ describe('flow2 model', () => {
   });
 });
 
-const cell = (id: string, col: number, parent: string | null, order: number, gap = 0, group: string | null = null) => ({ id, col, parent, order, gap, group, refs: [], text: id });
+const cell = (id: string, col: number, parent: string | null, order: number, gap = 0, group: string | null = null) => ({ id, col, parent, order, gap, group, mark: null, refs: [], text: id });
 
 describe('flow2 layout', () => {
   it('stacks roots with a small gap; each cell is as tall as its own text', () => {
@@ -415,5 +415,30 @@ describe('flow2 trackpad path (from Flowist)', () => {
       last = p;
     }
     expect(last.y).toBeCloseTo(-40, 5);
+  });
+});
+
+import { resetSheetPosition, setMark } from '../src/flow2/model';
+
+describe('flow2 marks and snap', () => {
+  it('marks cells, toggles off, and carries the mark in readFlow', () => {
+    const { doc, sheetId, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const b = createRoot(doc, sheetId, 1)!;
+    setMark(doc, sheetId, [a, b], 'dropped');
+    expect(cells().map((c) => c.mark)).toEqual(['dropped', 'dropped']);
+    setMark(doc, sheetId, [a], 'key');
+    expect(cells().find((c) => c.id === a)!.mark).toBe('key');
+    setMark(doc, sheetId, [a, b], null);
+    expect(cells().every((c) => c.mark === null)).toBe(true);
+  });
+
+  it('snap back clears a moved sheet position', () => {
+    const { doc, sheetId } = setup();
+    moveSheet(doc, sheetId, 500, 300);
+    expect(readFlow(doc)[0].x).toBe(500);
+    resetSheetPosition(doc, sheetId);
+    expect(readFlow(doc)[0].x).toBeNull();
+    expect(readFlow(doc)[0].y).toBeNull();
   });
 });

@@ -1,10 +1,15 @@
 import { COLORWAYS } from '../settings/colorways';
 import { updateSettings, useSettings } from '../settings/settings';
+import { setFlowColors } from '../store/flowTheme';
 
 /** Grid of Gov/Opp color pairs, plus "Pick your own". */
 export function ColorwayPicker() {
   const s = useSettings();
-  const pick = (colorway: string) => updateSettings({ ...s, colorway });
+  // Choosing a pair here means you want the flow to use it.
+  const pick = (colorway: string) => {
+    updateSettings({ ...s, colorway });
+    setFlowColors('colorway');
+  };
   return (
     <div className="colorways">
       <div className="colorway-grid" role="radiogroup" aria-label="Gov and Opp colors">
@@ -44,11 +49,11 @@ export function ColorwayPicker() {
       {s.colorway === 'custom' && (
         <div className="custom-colors">
           <label>
-            <input type="color" value={s.customColors.gov} onChange={(e) => updateSettings({ ...s, colorway: 'custom', customColors: { ...s.customColors, gov: e.target.value } })} />
+            <input type="color" value={s.customColors.gov} onChange={(e) => (setFlowColors('colorway'), updateSettings({ ...s, colorway: 'custom', customColors: { ...s.customColors, gov: e.target.value } }))} />
             Gov
           </label>
           <label>
-            <input type="color" value={s.customColors.opp} onChange={(e) => updateSettings({ ...s, colorway: 'custom', customColors: { ...s.customColors, opp: e.target.value } })} />
+            <input type="color" value={s.customColors.opp} onChange={(e) => (setFlowColors('colorway'), updateSettings({ ...s, colorway: 'custom', customColors: { ...s.customColors, opp: e.target.value } }))} />
             Opp
           </label>
         </div>

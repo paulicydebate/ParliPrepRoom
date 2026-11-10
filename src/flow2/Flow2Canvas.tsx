@@ -292,6 +292,9 @@ export function Flow2Canvas({
         <button type="button" className="icon-btn small" aria-label="Zoom in" disabled={camera.zoom >= MAX_CANVAS_ZOOM - 1e-6} onClick={() => zoomBy('in')}>
           +
         </button>
+        <button type="button" className="btn ghost small" onClick={() => activeId && rects.get(activeId) && animateTo(cornerCamera(rects.get(activeId)!))} title="Show the sheet you are on, snapped to the top-left corner">
+          Top left
+        </button>
         <button type="button" className="btn ghost small" onClick={fitAll} title="Show every sheet">
           Fit all
         </button>
@@ -319,7 +322,7 @@ function Window({ sheet, rect, active, onSize, onFocus, children }: { sheet: Flo
 }
 
 /** A light picture of a sheet, for when it is zoomed out too far to edit. */
-function SheetPreview({ sheet }: { sheet: FlowSheetData }) {
+export function SheetPreview({ sheet }: { sheet: FlowSheetData }) {
   const geo = columnGeometry(sheet, null, null);
   const heights = new Map(
     sheet.cells.map((c) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, Fragment, useId, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, Fragment, useId } from 'react';
 import * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
 import { recordEdit, toast, trackRoundDoc } from '../editor/roundGuard';
@@ -6,7 +6,7 @@ import { isRound } from '../store/roundDoc';
 import { logEvent } from '../store/typingLog';
 import { SPEECH_INFO } from '../model/speeches';
 import { useFlowColors, useFlowTheme } from '../store/flowTheme';
-import { IconChevronDown, IconChevronRight, IconMaximize, IconRestore, IconSidebar, IconThread } from '../ui/icons';
+import { IconChevronDown, IconChevronRight, IconMaximize, IconRestore, IconSidebar, IconSnap } from '../ui/icons';
 import { connectorPath, routeBetween, type ConnectorPath } from './connectors';
 import { connectorCrossings, CROSSING_SHADOW_DEFAULTS, crossingShadowExtent } from './connectorCrossings';
 import { layoutFlow, METRICS } from './layout';
@@ -29,7 +29,9 @@ import {
   refKey,
   removeRef,
   renameSheet,
+  resetSheetPosition,
   rootsOf,
+  setMark,
   setSheetSide,
   sheetOrder,
   sheetsMap,
@@ -37,12 +39,14 @@ import {
   yCells,
   yText,
   type FlowCell,
+  type FlowMark,
   type FlowRef,
   type FlowSheetData,
 } from './model';
 import { columnGeometry, GAP_PX } from './columns';
 import { Flow2Canvas } from './Flow2Canvas';
 import { Flow2Sidebar } from './Flow2Sidebar';
+import { FlowDock } from './FlowDock';
 import { directionalTarget } from './directionalTarget';
 import { bindText } from './textBinding';
 import './flowist/palette-0.css';
@@ -82,6 +86,9 @@ function useUndo(doc: Y.Doc) {
     [doc],
   );
 }
+
+export const MARK_GLYPH: Record<FlowMark, string> = { extended: '→', dropped: '!', answered: '✓', key: '★' };
+export const MARK_LABEL: Record<FlowMark, string> = { extended: 'Extended', dropped: 'Dropped', answered: 'Answered', key: 'Key argument' };
 
 type Peer = { name: string; color: string };
 
@@ -142,6 +149,8 @@ export function Flow2Editor({
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
   const [jump, setJump] = useState<Jump | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
+  const [dock, setDock] = useState<Dock | null>(null);
+  const onDock = useCallback((id: string, d: Dock | null) => setDock((cur) => (d ? d : cur?.sheetId === id ? null : cur)), []);
 
   // What is minimized or maximized is this window's view of the flow, not part of the shared document.
   const keyC = `pp-flow2-min-${docId}`;
@@ -222,6 +231,12 @@ export function Flow2Editor({
     if (maximizedId === id) setMax(rest[0]?.id ?? null);
   };
   const add = (side: 'gov' | 'opp') => goTo(addSheet(ydoc, side));
+  // Back to the top-left: forget where the sheet was put, then show it there.
+  const snap = (id: string) => {
+    resetSheetPosition(ydoc, id);
+    setActiveId(id);
+    setTimeout(() => setFly((f) => ({ id, n: (f?.n ?? 0) + 1 })), 80);
+  };
 
   return (
     <div className="flow-wrap f2 f2-workspace" data-flow-theme={theme} data-flow-colors={colors}>
@@ -247,7 +262,7 @@ export function Flow2Editor({
           </button>
         )}
         {maxSheet ? (
-          <SheetView key={maxSheet.id} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
+          <SheetView key={maxSheet.id} onDock={onDock} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={maxSheet} undo={undo} onPick={goTo} jump={jump} onJump={onJump} maximized={{ onRestore: () => setMax(null) }} />
         ) : (
           <Flow2Canvas
             doc={ydoc}
@@ -258,10 +273,11 @@ export function Flow2Editor({
             collapsed={collapsed}
             renderCollapsed={(s) => <CollapsedBar sheet={s} onExpand={() => toggleCollapse(s.id)} />}
             renderLive={(s, zoom) => (
-              <SheetView docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id) }} jump={jump} onJump={onJump} />
+              <SheetView onDock={onDock} docId={docId} peers={peers} onCellFocus={shareCell} doc={ydoc} sheets={sheets} sheet={s} undo={undo} onPick={goTo} embedded={{ zoom, onCollapse: () => toggleCollapse(s.id), onMaximize: () => toggleMax(s.id), onSnap: () => snap(s.id) }} jump={jump} onJump={onJump} />
             )}
           />
         )}
+        <FlowDock dock={dock} undo={undo} />
       </div>
     </div>
   );
@@ -287,6 +303,28 @@ function CollapsedBar({ sheet, onExpand }: { sheet: FlowSheetData; onExpand: () 
 
 type Focus = { id: string; at: 'start' | 'end' };
 
+/** What the toolbar can do right now for the sheet you are working in. */
+export interface DockFlags {
+  linking: boolean;
+  canLink: boolean;
+  canUnlink: boolean;
+  canGroup: boolean;
+  canUngroup: boolean;
+  canRef: boolean;
+  canMark: boolean;
+  /** The mark on the cell you are in (or on all the cells picked), if they share one. */
+  mark: FlowMark | null;
+}
+export interface DockApi {
+  link: () => void;
+  unlink: () => void;
+  group: () => void;
+  ungroup: () => void;
+  ref: (k: 'x' | 'e') => void;
+  mark: (m: FlowMark) => void;
+}
+export type Dock = { sheetId: string; api: DockApi; flags: DockFlags };
+
 /** Ask a sheet to put the caret in one of its cells (from a cross-application chip on another sheet). */
 export interface Jump {
   sheetId: string;
@@ -299,6 +337,8 @@ export interface Embedded {
   zoom: number;
   onCollapse: () => void;
   onMaximize: () => void;
+  /** Put this sheet back at the top-left of the canvas. */
+  onSnap: () => void;
 }
 
 /** One sheet filling the whole view. */
@@ -306,7 +346,7 @@ export interface Maximized {
   onRestore: () => void;
 }
 
-export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus }: { docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
+export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -629,7 +669,38 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
   const empty = cells.length === 0;
 
   const grouped = new Set(layout.groups.map((g) => g.id));
-  const tools = <LinkButtons linking={!!linking} canUnlink={!!focused?.parent} onToggle={() => toggleLinking(focusId ?? undefined)} onUnlink={() => focused && unlinkCell(doc, sheet.id, focused.id)} canGroup={picked.length >= 2} canUngroup={!!focused?.group && grouped.has(focused.group)} onGroup={() => group(focused)} onUngroup={() => ungroup(focused)} canRef={!!focused} onRef={(k) => focused && setPicker({ cellId: focused.id, kind: k })} />;
+  // The toolbar (Flowist-style dock at the bottom of the view) acts on the sheet you are working in.
+  const targets = picked.length ? picked.filter((id) => byId.has(id)) : focused ? [focused.id] : [];
+  const targetCells = targets.map((id) => byId.get(id)!);
+  const sharedMark = targetCells.length && targetCells.every((c) => c.mark === targetCells[0].mark) ? targetCells[0].mark : null;
+  const flags: DockFlags = {
+    linking: !!linking,
+    canLink: targetCells.some((c) => c.col >= 2),
+    canUnlink: !!focused?.parent,
+    canGroup: picked.length >= 2,
+    canUngroup: !!focused?.group && grouped.has(focused.group),
+    canRef: !!focused,
+    canMark: targetCells.length > 0,
+    mark: sharedMark,
+  };
+  const latest = useRef<DockApi>(null as unknown as DockApi);
+  latest.current = {
+    link: () => toggleLinking(focusId ?? undefined),
+    unlink: () => focused && unlinkCell(doc, sheet.id, focused.id),
+    group: () => group(focused),
+    ungroup: () => ungroup(focused),
+    ref: (k) => focused && setPicker({ cellId: focused.id, kind: k }),
+    mark: (m) => setMark(doc, sheet.id, targets, sharedMark === m ? null : m),
+  };
+  const api = useMemo<DockApi>(
+    () => ({ link: () => latest.current.link(), unlink: () => latest.current.unlink(), group: () => latest.current.group(), ungroup: () => latest.current.ungroup(), ref: (k) => latest.current.ref(k), mark: (m) => latest.current.mark(m) }),
+    [],
+  );
+  const flagsKey = JSON.stringify(flags);
+  useEffect(() => {
+    if (focusId) onDock?.(sheet.id, { sheetId: sheet.id, api, flags });
+  }, [flagsKey, focusId, sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onDock?.(sheet.id, null), [sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const body = (
       <div className="f2-inner" style={{ width: inner }}>
         <div className="f2-head">
@@ -689,6 +760,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
               want={want}
               onHeight={onHeight}
               docId={docId}
+              mark={c.mark}
               peers={peers.get(c.id) ?? []}
               onFocus={() => {
                 setFocusId(c.id);
@@ -763,7 +835,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
     <WindowBar
       doc={doc}
       sheet={sheet}
-      tools={tools}
+      onSnap={embedded?.onSnap}
       onCollapse={embedded?.onCollapse}
       onMaximize={embedded?.onMaximize}
       onRestore={maximized?.onRestore}
@@ -788,7 +860,7 @@ export function SheetView({ doc, sheets, sheet, undo, onPick: _onPick, embedded,
 }
 
 /** A sheet's title bar: drag it to move the sheet; name, side, Link and the minimize and maximize buttons live here. */
-function WindowBar({ doc, sheet, tools, onCollapse, onMaximize, onRestore }: { doc: Y.Doc; sheet: FlowSheetData; tools: ReactNode; onCollapse?: () => void; onMaximize?: () => void; onRestore?: () => void }) {
+function WindowBar({ doc, sheet, onSnap, onCollapse, onMaximize, onRestore }: { doc: Y.Doc; sheet: FlowSheetData; onSnap?: () => void; onCollapse?: () => void; onMaximize?: () => void; onRestore?: () => void }) {
   const [renaming, setRenaming] = useState(false);
   return (
     <div className={`f2-window-bar fl-${sheet.side}`} data-window-handle onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.f2-window-bar') === e.currentTarget && !(e.target as HTMLElement).closest('button, input, select, .f2-window-name')) (onRestore ?? onMaximize)?.(); }}>
@@ -818,7 +890,11 @@ function WindowBar({ doc, sheet, tools, onCollapse, onMaximize, onRestore }: { d
         <option value="opp">Opp</option>
       </select>
       <span className="tb-spacer" />
-      {tools}
+      {onSnap && (
+        <button type="button" className="icon-btn small" aria-label={`Move ${sheet.name || 'Untitled'} back to the top-left`} title="Snap this sheet back to the top-left of the canvas" onClick={onSnap}>
+          <IconSnap />
+        </button>
+      )}
       {onCollapse && (
         <button type="button" className="icon-btn small" aria-label={`Minimize ${sheet.name || 'Untitled'}`} title="Minimize this sheet to its title bar" onClick={onCollapse}>
           <IconChevronDown />
@@ -838,64 +914,6 @@ function WindowBar({ doc, sheet, tools, onCollapse, onMaximize, onRestore }: { d
   );
 }
 
-function LinkButtons({
-  linking,
-  canUnlink,
-  onToggle,
-  onUnlink,
-  canGroup,
-  canUngroup,
-  onGroup,
-  onUngroup,
-  canRef,
-  onRef,
-}: {
-  linking: boolean;
-  canUnlink: boolean;
-  onToggle: () => void;
-  onUnlink: () => void;
-  canGroup: boolean;
-  canUngroup: boolean;
-  onGroup: () => void;
-  onUngroup: () => void;
-  canRef: boolean;
-  onRef: (k: 'x' | 'e') => void;
-}) {
-  return (
-    <>
-      <button type="button" className={'btn ghost small link-btn' + (linking ? ' is-on' : '')} aria-pressed={linking} title="Link the selected cells to the argument they answer (Ctrl/⌘+Shift+L)" onMouseDown={(e) => e.preventDefault()} onClick={onToggle}>
-        <IconThread /> {linking ? 'Cancel link' : 'Link'}
-      </button>
-      {linking && <span className="link-hint">Click the argument these answer (Esc cancels)</span>}
-      {canRef && !linking && (
-        <>
-          <button type="button" className="btn ghost small" title="Apply an argument from another sheet here (Ctrl/⌘+Shift+X)" onMouseDown={(e) => e.preventDefault()} onClick={() => onRef('x')}>
-            Cross-apply
-          </button>
-          <button type="button" className="btn ghost small" title="Extend an earlier argument on this sheet (Ctrl/⌘+Shift+E)" onMouseDown={(e) => e.preventDefault()} onClick={() => onRef('e')}>
-            Extend
-          </button>
-        </>
-      )}
-      {canGroup && !linking && (
-        <button type="button" className="btn ghost small" title="Draw the selected cells as one framed block (Ctrl/⌘+G)" onMouseDown={(e) => e.preventDefault()} onClick={onGroup}>
-          Group
-        </button>
-      )}
-      {canUngroup && !linking && !canGroup && (
-        <button type="button" className="btn ghost small" title="Take this cell out of its group (Ctrl/⌘+Shift+G)" onMouseDown={(e) => e.preventDefault()} onClick={onUngroup}>
-          Ungroup
-        </button>
-      )}
-      {canUnlink && !linking && (
-        <button type="button" className="btn ghost small" title="Unlink this cell from the argument it answers" onMouseDown={(e) => e.preventDefault()} onClick={onUnlink}>
-          Unlink
-        </button>
-      )}
-    </>
-  );
-}
-
 // ---------- One cell ----------
 
 function Cell({
@@ -912,6 +930,7 @@ function Cell({
   docId,
   peers,
   onBlur,
+  mark,
   refs,
   onRefClick,
   onRefRemove,
@@ -938,6 +957,7 @@ function Cell({
   docId: string;
   peers: Peer[];
   onBlur: () => void;
+  mark: FlowMark | null;
   refs: (FlowRef & { text: string; missing: boolean })[];
   onRefClick: (r: FlowRef) => void;
   onRefRemove: (r: FlowRef) => void;
@@ -1023,12 +1043,17 @@ function Cell({
   return (
     <div
       ref={wrap}
-      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (peers.length ? ' has-peer' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
+      className={`f2-cell fl-${side}` + (lit ? ' is-lit' : '') + (picked ? ' is-picked' : '') + (inGroup ? ' in-group' : '') + (mark ? ` mark-${mark}` : '') + (peers.length ? ' has-peer' : '') + (linkingFrom ? ' is-linking' : '') + (linkable ? ' is-linkable' : '') + (measured ? '' : ' is-measuring')}
       style={{ left: x, top: y, width: w, ...(peers.length ? ({ ['--peer' as string]: peers[0].color } as React.CSSProperties) : {}) }}
       onMouseDown={(e) => onMouseDown(e, cell)}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
     >
+      {mark && (
+        <span className={`f2-mark f2-mark-${mark}`} title={MARK_LABEL[mark]} aria-label={MARK_LABEL[mark]}>
+          {MARK_GLYPH[mark]}
+        </span>
+      )}
       {peers.length > 0 && <span className="f2-peer" style={{ background: peers[0].color }}>{peers.map((p) => p.name).join(', ')}</span>}
       <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onBlur={onBlur} onKeyDown={(e) => onKeyDown(e, cell)} />
       {refs.length > 0 && (

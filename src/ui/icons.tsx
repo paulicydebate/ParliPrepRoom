@@ -213,3 +213,23 @@ export const IconSidebar = () => (
     <path d="M9.5 4.5v15" />
   </Svg>
 );
+
+export const IconSnap = () => (
+  <Svg size={14}>
+    <path d="M4 4h6M4 4v6M4 4l7 7" />
+    <rect x="12.5" y="12.5" width="7" height="7" rx="1.5" />
+  </Svg>
+);
+export const IconGroup = () => (
+  <Svg size={16}>
+    <rect x="4" y="3.5" width="16" height="17" rx="2" />
+    <path d="M4 12h16" />
+  </Svg>
+);
+export const IconUnlink = () => (
+  <Svg size={16}>
+    <circle cx="5" cy="12" r="2" />
+    <circle cx="19" cy="12" r="2" />
+    <path d="M7 12h3M14 12h3M10 16l4-8" />
+  </Svg>
+);

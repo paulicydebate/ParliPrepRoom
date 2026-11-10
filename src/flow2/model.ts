@@ -26,10 +26,16 @@ export interface FlowCell {
   gap: number;
   /** Cells that share a group id (and sit next to each other) are drawn as one framed block. */
   group: string | null;
+  /** How the argument stands in the round: extended, dropped, answered, or key. */
+  mark: FlowMark | null;
   /** Cross-applications (a cell on another sheet) and extensions (an earlier cell on this sheet) this cell refers to. */
   refs: FlowRef[];
   text: string;
 }
+
+export type FlowMark = 'extended' | 'dropped' | 'answered' | 'key';
+export const FLOW_MARKS: FlowMark[] = ['extended', 'dropped', 'answered', 'key'];
+const asMark = (v: unknown): FlowMark | null => (FLOW_MARKS as string[]).includes(String(v)) ? (v as FlowMark) : null;
 
 /** `x`: cross-applied from another sheet's cell; `e`: extends an earlier cell of this sheet. */
 export interface FlowRef {
@@ -86,6 +92,7 @@ function readCell(id: string, m: Y.Map<unknown>): FlowCell {
     order: Number(m.get('order')) || 0,
     gap: Math.max(0, Math.floor(Number(m.get('gap')) || 0)),
     group: typeof m.get('group') === 'string' ? (m.get('group') as string) : null,
+    mark: asMark(m.get('mark')),
     refs: parseRefs(m.get('refs')),
     text: (m.get('text') as Y.Text | undefined)?.toString() ?? '',
   };
@@ -411,5 +418,30 @@ export function removeRef(doc: Y.Doc, sheetId: string, cellId: string, ref: Flow
     const next = parseRefs(m.get('refs')).filter((r) => refKey(r) !== refKey(ref)).map(refKey);
     if (next.length) m.set('refs', next);
     else m.delete('refs');
+  });
+}
+
+// ---------- Marks and sheet position ----------
+
+/** Mark these cells (or clear the mark, with null). */
+export function setMark(doc: Y.Doc, sheetId: string, cellIds: string[], mark: FlowMark | null) {
+  const cells = cellsOf(doc, sheetId);
+  if (!cells) return;
+  local(doc, () => {
+    for (const id of cellIds) {
+      const m = cells.get(id);
+      if (!m) continue;
+      if (mark) m.set('mark', mark);
+      else m.delete('mark');
+    }
+  });
+}
+
+/** Forget where a sheet was put: it goes back to its place in the row of sheets, from the top-left corner. */
+export function resetSheetPosition(doc: Y.Doc, id: string) {
+  local(doc, () => {
+    const s = sheetsMap(doc).get(id);
+    s?.delete('x');
+    s?.delete('y');
   });
 }

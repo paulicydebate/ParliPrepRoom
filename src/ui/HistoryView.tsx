@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState } from 'react';
 import type * as Y from 'yjs';
 import { BODY_FIELD } from '../editor/extensions';
 import { diffBlocks, flattenDoc, summarize, type DiffRow, type FlatBlock } from '../history/diff';
+import { diffFlows, flattenFlow, summarizeFlow } from '../history/flowDiff';
+import { restoreFlow } from '../flow2/restore';
+import type { FlowSheetData } from '../flow2/model';
+import { readFlow } from '../flow2/model';
 import { loadVersionDoc, renameVersion, saveVersion, type VersionMeta } from '../store/versions';
+import { FlowDiffLines, FlowSnapshotView, useFlowSheets } from './FlowHistory';
 import { logEvent } from '../store/typingLog';
 import { useVersions } from './hooks';
 import { ServerHistory } from './ServerHistory';
@@ -73,11 +78,14 @@ export function HistoryView({
   round = false,
   checkToken,
   server = false,
+  format = 'doc',
   onClose,
 }: {
   docId: string;
   ydoc: Y.Doc;
   editor: Editor | null;
+  /** A doc is compared block by block, a flow cell by cell. */
+  format?: 'doc' | 'flow';
   round?: boolean;
   checkToken?: string | null;
   /** The doc is on the server: history and replay come from the server's record (everyone's edits, with names). */
@@ -87,7 +95,7 @@ export function HistoryView({
   const [tab, setTab] = useState<Tab>(server ? 'history' : 'device');
   const tabs = <HistoryTabs tab={tab} setTab={setTab} server={server} />;
   if (tab === 'history' || tab === 'replay') {
-    return <ServerHistory key={tab} mode={tab} docId={docId} editor={editor} round={round} tabs={tabs} onClose={onClose} />;
+    return <ServerHistory key={tab} mode={tab} docId={docId} ydoc={ydoc} format={format} editor={editor} round={round} tabs={tabs} onClose={onClose} />;
   }
   if (tab === 'log') {
     return (
@@ -105,7 +113,7 @@ export function HistoryView({
       </div>
     );
   }
-  return <VersionsView docId={docId} ydoc={ydoc} editor={editor} round={round} onClose={onClose} tabs={tabs} />;
+  return <VersionsView docId={docId} ydoc={ydoc} format={format} editor={editor} round={round} onClose={onClose} tabs={tabs} />;
 }
 
 function HistoryTabs({ tab, setTab, server }: { tab: Tab; setTab: (t: Tab) => void; server: boolean }) {
@@ -127,6 +135,7 @@ function HistoryTabs({ tab, setTab, server }: { tab: Tab; setTab: (t: Tab) => vo
 function VersionsView({
   docId,
   ydoc,
+  format,
   editor,
   round,
   onClose,
@@ -134,6 +143,7 @@ function VersionsView({
 }: {
   docId: string;
   ydoc: Y.Doc;
+  format: 'doc' | 'flow';
   editor: Editor | null;
   round: boolean;
   onClose: () => void;
@@ -143,6 +153,9 @@ function VersionsView({
   const [selected, setSelected] = useState<string | null>(null);
   const [versionJson, setVersionJson] = useState<JSONContent | null>(null);
   const [currentJson, setCurrentJson] = useState<JSONContent | null>(() => editor?.getJSON() ?? null);
+  const flow = format === 'flow';
+  const [versionSheets, setVersionSheets] = useState<FlowSheetData[] | null>(null);
+  const currentSheets = useFlowSheets(ydoc, flow);
   const [mode, setMode] = useState<'compare' | 'read'>('compare');
   const [changesOnly, setChangesOnly] = useState(false);
   const [naming, setNaming] = useState('');
@@ -168,23 +181,27 @@ function VersionsView({
   useEffect(() => {
     let live = true;
     setVersionJson(null);
+    setVersionSheets(null);
     setConfirmRestore(false);
     if (!selected) return;
     void loadVersionDoc(selected).then((vdoc) => {
       if (!live || !vdoc) return;
-      setVersionJson(yXmlFragmentToProsemirrorJSON(vdoc.getXmlFragment(BODY_FIELD)) as JSONContent);
+      if (flow) setVersionSheets(readFlow(vdoc));
+      else setVersionJson(yXmlFragmentToProsemirrorJSON(vdoc.getXmlFragment(BODY_FIELD)) as JSONContent);
       vdoc.destroy();
     });
     return () => {
       live = false;
     };
-  }, [selected]);
+  }, [selected, flow]);
 
+  const flowRows = useMemo(() => (versionSheets && currentSheets ? diffFlows(flattenFlow(versionSheets), flattenFlow(currentSheets)) : []), [versionSheets, currentSheets]);
   const rows = useMemo(
     () => (versionJson && currentJson ? diffBlocks(flattenDoc(versionJson), flattenDoc(currentJson)) : []),
     [versionJson, currentJson],
   );
-  const stats = summarize(rows);
+  const stats = flow ? summarizeFlow(flowRows) : summarize(rows);
+  const haveVersion = flow ? !!versionSheets : !!versionJson;
   const noChanges = stats.added + stats.removed + stats.changed === 0;
 
   const saveNamed = async () => {
@@ -193,11 +210,17 @@ function VersionsView({
   };
 
   const restore = async () => {
-    if (!editor || !versionJson || !selectedMeta) return;
+    if (!selectedMeta || (flow ? !versionSheets : !editor || !versionJson)) return;
     const when = `${formatDay(selectedMeta.at)} ${formatTime(selectedMeta.at)}`;
     await saveVersion(docId, ydoc, { auto: false, name: `Before restoring ${when}` });
     if (round) logEvent(docId, { k: 'restore', s: when });
-    editor.commands.setContent(versionJson);
+    if (flow) {
+      const vdoc = await loadVersionDoc(selectedMeta.id);
+      if (vdoc) {
+        restoreFlow(ydoc, vdoc);
+        vdoc.destroy();
+      }
+    } else editor!.commands.setContent(versionJson!);
     onClose();
   };
 
@@ -238,12 +261,12 @@ function VersionsView({
               </button>
             </span>
           ) : (
-            <button type="button" className="btn primary" disabled={!versionJson} onClick={() => setConfirmRestore(true)}>
+            <button type="button" className="btn primary" disabled={!haveVersion} onClick={() => setConfirmRestore(true)}>
               Restore this version
             </button>
           )}
         </div>
-        {mode === 'compare' && selectedMeta && versionJson && (
+        {mode === 'compare' && selectedMeta && haveVersion && (
           <p className="history-summary">
             {noChanges
               ? 'No changes since this version.'
@@ -255,8 +278,10 @@ function VersionsView({
         )}
         <div className="pp-doc history-doc">
           {!versions?.length && <p className="muted">No versions yet. Versions save automatically every couple of minutes while you edit, or name one on the right.</p>}
-          {versionJson && mode === 'read' && flattenDoc(versionJson).map((b, i) => <Line key={i} block={b} />)}
-          {versionJson && mode === 'compare' && <DiffLines rows={rows} changesOnly={changesOnly} />}
+          {!flow && versionJson && mode === 'read' && flattenDoc(versionJson).map((b, i) => <Line key={i} block={b} />)}
+          {!flow && versionJson && mode === 'compare' && <DiffLines rows={rows} changesOnly={changesOnly} />}
+          {flow && versionSheets && mode === 'read' && <FlowSnapshotView sheets={versionSheets} />}
+          {flow && versionSheets && mode === 'compare' && <FlowDiffLines rows={flowRows} changesOnly={changesOnly} />}
         </div>
       </div>
       <aside className="history-list" aria-label="Versions">
