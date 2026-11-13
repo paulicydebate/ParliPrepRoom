@@ -47,7 +47,7 @@ export function summarizeRecord(r: { updates: RecordUpdate[]; events: RecordEven
       since.delete(e.userId);
     }
   }
-  const large = live.filter((u) => u.inserted > LARGE_EDIT).length;
+  const large = live.filter((u) => u.inserted > LARGE_EDIT && !u.restored).length;
   const blocked = r.events.filter((e) => e.kind === 'paste-blocked' || e.kind === 'drop-blocked').length;
   const roundOff = r.events.filter((e) => e.kind === 'round-off').length;
   return {

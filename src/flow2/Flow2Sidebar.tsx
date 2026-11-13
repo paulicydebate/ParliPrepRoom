@@ -29,6 +29,7 @@ export function Flow2Sidebar({
   onAdd,
   onRename,
   blockPaste,
+  resolution,
   onDelete,
   onToggleCollapse,
   onToggleMaximize,
@@ -43,6 +44,8 @@ export function Flow2Sidebar({
   onRename: (id: string, name: string) => void;
   /** True while pasting a name is not allowed (a round doc). */
   blockPaste?: () => boolean;
+  /** The round's resolution, shown above the sheets. */
+  resolution?: string;
   onDelete: (id: string) => void;
   onToggleCollapse: (id: string) => void;
   onToggleMaximize: (id: string) => void;
@@ -168,6 +171,11 @@ export function Flow2Sidebar({
           <IconSidebar />
         </button>
       </div>
+      {resolution && (
+        <p className="f2-side-res" title={resolution}>
+          {resolution}
+        </p>
+      )}
       <nav className="f2-side-scroll">
         {group('gov', 'Gov')}
         {group('opp', 'Opp')}

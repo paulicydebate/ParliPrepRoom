@@ -165,3 +165,40 @@ describe('saved-edits table without the extra counter', () => {
     expect(c.storage.sql.log.some((q) => q.includes('INSERT INTO updates_new') || q.includes('DROP TABLE'))).toBe(false);
   });
 });
+
+describe('putting text back is not a large edit', () => {
+  const send = (u: Uint8Array) => {
+    const enc = encoding.createEncoder();
+    encoding.writeVarUint(enc, 0);
+    syncProtocol.writeUpdate(enc, u);
+    const b = encoding.toUint8Array(enc);
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+  };
+
+  it('Undo of a deleted paragraph is marked restored; text that was never there is still flagged', async () => {
+    const doc = new Y.Doc();
+    const undo = new Y.UndoManager(doc.getText('t'));
+    const ups: Uint8Array[] = [];
+    doc.on('update', (u: Uint8Array) => ups.push(u));
+    const t = doc.getText('t');
+    const long = 'Rubber bullets cause serious injuries at short range, study after study';
+    for (const ch of long) t.insert(t.length, ch); // typed
+    undo.stopCapturing();
+    t.delete(0, t.length);
+    undo.stopCapturing();
+    undo.undo(); // puts the deleted text back in one edit
+    t.insert(t.length, ' and this is a pasted paragraph that was never typed here before at all');
+    for (const u of ups.slice(0, long.length)) await room.webSocketMessage(ws, send(u));
+    await room.state();
+    for (const u of ups.slice(long.length)) {
+      await room.webSocketMessage(ws, send(u));
+      await room.state();
+    }
+    const rec = await room.record(true);
+    // (the first row is the typing, saved as one row here because the test sends it all within a second)
+    const big = rec.updates.slice(1).filter((u) => u.inserted > 40);
+    expect(big.map((u) => !!u.restored)).toEqual([true, false]);
+    const flagged = rec.updates.filter((u) => u.via === 'live' && u.inserted > 40 && !u.restored).length;
+    expect((await room.summary()).large).toBe(flagged); // the running count agrees with the full record
+  });
+});

@@ -1,5 +1,9 @@
 import type { DocMeta } from '../store/docs';
 import { formatOf } from '../store/docs';
+import { useEffect, useState } from 'react';
+import type * as Y from 'yjs';
+import { acquireDoc, releaseDoc } from '../store/registry';
+import { useResolution } from '../store/roundDoc';
 import { IconClose } from './icons';
 import { CheckLinkButton, PartnersButton } from './RoundTools';
 
@@ -10,6 +14,18 @@ export function RoundInfoPanel({ meta, hasServer, onClose }: { meta: DocMeta; ha
   const accepted = meta.partners?.length ?? 0;
   const pending = meta.pendingPartners?.length ?? 0;
   const declined = meta.declinedPartners?.length ?? 0;
+  const [doc, setDoc] = useState<Y.Doc | null>(null);
+  useEffect(() => {
+    const { doc: d, ready } = acquireDoc(meta.id);
+    let live = true;
+    void ready.then(() => live && setDoc(d));
+    return () => {
+      live = false;
+      setDoc(null);
+      releaseDoc(meta.id);
+    };
+  }, [meta.id]);
+  const resolution = useResolution(doc);
   return (
     <aside className="round-info" aria-label="Round info">
       <div className="round-info-head">
@@ -19,6 +35,12 @@ export function RoundInfoPanel({ meta, hasServer, onClose }: { meta: DocMeta; ha
         </button>
       </div>
       <dl>
+        {resolution && (
+          <>
+            <dt>Resolution</dt>
+            <dd className="round-info-res">{resolution}</dd>
+          </>
+        )}
         <dt>Name</dt>
         <dd>{meta.title || 'Untitled'}</dd>
         <dt>Kind</dt>

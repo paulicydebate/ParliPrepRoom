@@ -56,11 +56,19 @@ export interface LocalEdit {
 export function bindText(el: HTMLTextAreaElement, text: Y.Text, onLocal?: (e: LocalEdit) => void): () => void {
   const doc = text.doc;
   let composing = false;
+  // While an input method is composing, partners' changes wait: rewriting the box would break the composition.
+  // `base` is the text when composing started; `held` are the changes that arrived since.
+  let base = '';
+  let held: Delta[] = [];
   el.value = text.toString();
 
   const fromY = (event: Y.YTextEvent, tr: Y.Transaction) => {
     if (tr.origin === el) return;
     const delta = event.delta as Delta;
+    if (composing) {
+      held.push(delta);
+      return;
+    }
     const focused = document.activeElement === el;
     const start = el.selectionStart;
     const end = el.selectionEnd;
@@ -80,10 +88,30 @@ export function bindText(el: HTMLTextAreaElement, text: Y.Text, onLocal?: (e: Lo
       if (d.ins) text.insert(d.at, d.ins);
     }, ORIGIN_LOCAL_EL(el));
   };
-  const start = () => (composing = true);
+  const start = () => {
+    composing = true;
+    base = el.value;
+    held = [];
+  };
   const stop = () => {
     composing = false;
-    toY();
+    if (!held.length) return toY();
+    // Put what was composed where it belongs now that partners' changes are in, then show the merged text.
+    const d = diffText(base, el.value);
+    const mapAll = (pos: number) => held.reduce((p, delta) => mapPosition(delta, p), pos);
+    const at = mapAll(d.at);
+    const del = Math.max(0, mapAll(d.at + d.del) - at);
+    held = [];
+    if ((d.del || d.ins) && doc) {
+      onLocal?.({ at, del, ins: d.ins, deleted: text.toString().slice(at, at + del) });
+      doc.transact(() => {
+        if (del) text.delete(at, del);
+        if (d.ins) text.insert(at, d.ins);
+      }, ORIGIN_LOCAL_EL(el));
+    }
+    el.value = text.toString();
+    if (document.activeElement === el) el.setSelectionRange(at + d.ins.length, at + d.ins.length);
+    el.dispatchEvent(new Event('flow2-remote'));
   };
   el.addEventListener('input', toY);
   el.addEventListener('compositionstart', start);

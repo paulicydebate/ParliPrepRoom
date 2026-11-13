@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import * as Y from 'yjs';
 import type { WebsocketProvider } from 'y-websocket';
 import { recordEdit, toast, trackRoundDoc } from '../editor/roundGuard';
-import { isRound } from '../store/roundDoc';
+import { isRound, useResolution } from '../store/roundDoc';
 import { logEvent } from '../store/typingLog';
 import { SPEECH_INFO } from '../model/speeches';
 import { useFlowColors, useFlowTheme } from '../store/flowTheme';
@@ -197,6 +197,7 @@ export function Flow2Editor({
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
   const [jump, setJump] = useState<Jump | null>(null);
   const [sideOpen, setSideOpen] = useState(true);
+  const resolution = useResolution(ydoc);
   // The pin board follows the sheet in view and offers these sheet names.
   const namesKey = sheets.map((s) => s.name.trim()).join('\u0000');
   useEffect(() => {
@@ -344,6 +345,7 @@ export function Flow2Editor({
             if (isRound(ydoc)) recordEdit(docId, name, old);
           }}
           blockPaste={() => isRound(ydoc)}
+          resolution={resolution}
           onDelete={del}
           onToggleCollapse={toggleCollapse}
           onToggleMaximize={toggleMax}

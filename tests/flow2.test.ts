@@ -572,3 +572,26 @@ describe('flow2 hardening (review 2026-11-13)', () => {
     expect(readFlow(doc)[0].name).toHaveLength(80);
   });
 });
+
+describe('typing with an input method while a partner edits', () => {
+  it('keeps both the composed text and the partner’s change', () => {
+    const doc = new Y.Doc();
+    const text = doc.getText('t');
+    text.insert(0, 'abc');
+    const el = document.createElement('textarea');
+    document.body.appendChild(el);
+    const off = bindText(el, text);
+    el.focus();
+    el.dispatchEvent(new CompositionEvent('compositionstart'));
+    el.value = 'abcにほ';
+    el.dispatchEvent(new Event('input'));
+    doc.transact(() => text.insert(0, 'X'), 'partner'); // partner types at the start meanwhile
+    expect(el.value).toBe('abcにほ'); // the box is left alone while composing
+    el.value = 'abc日本';
+    el.dispatchEvent(new CompositionEvent('compositionend'));
+    expect(text.toString()).toBe('Xabc日本');
+    expect(el.value).toBe('Xabc日本');
+    off();
+    el.remove();
+  });
+});

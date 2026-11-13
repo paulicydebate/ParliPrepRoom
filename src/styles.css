@@ -4969,3 +4969,20 @@ kbd {
     animation: none;
   }
 }
+
+/* The round's resolution, above the sheet list and in Round info. */
+.f2-side-res {
+  margin: 0 12px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.round-info-res {
+  white-space: pre-wrap;
+}
