@@ -14,7 +14,7 @@ The open work, in order, and the rules that come with it. Updated 2026-11-13. Th
 1. **Speech tags in docs: removed.** The doc toolbar's speech menu, the speech labels in docs and in their Word export, and `src/model/flow.ts` are gone. Old docs keep their `speech`, `answers` and `newRow` attributes in the schema so they still open; nothing uses them.
 2. **Word export of a flow: added** (`src/export/flowDocx.ts`, download menu on a flow: a landscape table per sheet, same rows as Excel).
 3. **No restoring a round doc from History:** both Restore buttons are off while Round doc is on (`ROUND_NO_RESTORE` in `src/editor/roundGuard.ts`). Turning Round doc off first is still possible and is recorded and flagged.
-4. **Deployed** to the live site.
+4. **Deploy to the live site:** asked for; not done yet. The session's permission check stopped the production deploy on 2026-11-13, so the owner needs to allow it (or run the deploy command in HANDOFF.md). The preview has this build (`9843b85`).
 
 ## Open work
 
