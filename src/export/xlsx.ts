@@ -6,7 +6,7 @@ import { strToU8, zipSync } from 'fflate';
 // a paper flow. Opens in Excel, Google Sheets and Numbers.
 
 export const esc = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
 
 export function colName(i: number) {
   let s = '';
@@ -54,7 +54,8 @@ export function richCell(ref: string, style: number, lines: { runs: Run[]; claim
 }
 
 export function sheetName(title: string, used: Set<string>) {
-  let base = title.replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 28) || 'Sheet';
+  // (Excel refuses these characters in a sheet name, and an apostrophe at either end.)
+  let base = title.replace(/[\[\]:*?/\\]/g, ' ').trim().replace(/^'+|'+$/g, '').trim().slice(0, 28) || 'Sheet';
   let name = base;
   for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base.slice(0, 26)} ${i}`;
   used.add(name.toLowerCase());
@@ -65,7 +66,7 @@ export function sheetName(title: string, used: Set<string>) {
 export function packWorkbook(names: string[], files: Record<string, Uint8Array>): Uint8Array {
   const n = names.length;
   files['[Content_Types].xml'] = strToU8(
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="json" ContentType="application/json"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names
       .map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
       .join('')}</Types>`,
   );

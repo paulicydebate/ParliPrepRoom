@@ -1,6 +1,6 @@
 import { diffWords } from 'diff';
 import { SPEECH_INFO, type Speech } from '../model/speeches';
-import { childrenOf, rootsOf, type FlowSheetData } from '../flow2/model';
+import { childrenMap, type FlowSheetData } from '../flow2/model';
 import type { TextPart } from './diff';
 
 // Comparing two states of a flow, cell by cell (the way diff.ts compares two docs block by block).
@@ -23,13 +23,12 @@ export type FlowDiffRow =
 export function flattenFlow(sheets: readonly FlowSheetData[]): FlatCell[] {
   const out: FlatCell[] = [];
   for (const s of sheets) {
-    const walk = (id: string, depth: number) => {
-      const c = s.cells.find((k) => k.id === id);
-      if (!c) return;
+    const kids = childrenMap(s.cells);
+    const walk = (c: (typeof s.cells)[number], depth: number) => {
       if (c.text.trim()) out.push({ id: c.id, sheetId: s.id, sheet: s.name || 'Untitled', speech: s.columns[c.col - 1] ?? 'PMC', depth, text: c.text });
-      for (const k of childrenOf(s.cells, id)) walk(k.id, depth + 1);
+      for (const k of kids.get(c.id) ?? []) walk(k, depth + 1);
     };
-    for (const r of rootsOf(s.cells)) walk(r.id, 0);
+    for (const r of kids.get(null) ?? []) walk(r, 0);
   }
   return out;
 }

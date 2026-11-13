@@ -507,7 +507,7 @@ describe('flow Excel export and import', () => {
     expect(grid[0].rows[1][0]).toContain('Rubber bullets');
 
     const fresh = new Y.Doc();
-    expect(importSheetsToFlow(fresh, grid)).toBe(5);
+    expect(importSheetsToFlow(fresh, grid).cells).toBe(5); // from the grid (no exact copy passed)
     const back = readFlow(fresh)[0];
     const text = (id: string) => back.cells.find((c) => c.id === id)!.text;
     const byText = (t: string) => back.cells.find((c) => c.text === t)!;
@@ -640,5 +640,84 @@ describe('row order and groups (review 2026-11-13)', () => {
     expect(layoutFlow(readFlow(doc)[0].cells, heights, M).groups).toHaveLength(1);
     createRoot(doc, sheetId, 1, a); // a new row lands between the two
     expect(layoutFlow(readFlow(doc)[0].cells, heights, M).groups).toHaveLength(0);
+  });
+});
+
+import { readFlowPart } from '../src/import/importFile';
+
+describe('Excel round trip (review 2026-11-13)', () => {
+  const sample = () => {
+    const { doc, sheetId, type } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, '→ starts with an arrow on purpose');
+    const x = createRoot(doc, sheetId, 2, a, 2)!; // an unlinked LOC argument, two blank rows above it
+    type(x, 'their own point');
+    const b = createChild(doc, sheetId, a)!;
+    type(b, 'answer');
+    setMark(doc, sheetId, [b], 'key');
+    addRef(doc, sheetId, x, { kind: 'e', sheet: sheetId, cell: a });
+    return doc;
+  };
+  const shape = (doc: Y.Doc) => {
+    const s = readFlow(doc)[0];
+    const byId = new Map(s.cells.map((c) => [c.id, c]));
+    return rootsOf(s.cells)
+      .flatMap((r) => [r, ...s.cells.filter((c) => c.parent === r.id)])
+      .map((c) => [c.text, c.col, c.parent ? byId.get(c.parent)!.text : null, c.gap, c.mark, c.refs.map((r) => byId.get(r.cell)?.text)]);
+  };
+
+  it('a file made here comes back exactly', () => {
+    const doc = sample();
+    const bytes = buildFlow2Xlsx(readFlow(doc));
+    const fresh = new Y.Doc();
+    const report = importSheetsToFlow(fresh, parseXlsx(bytes), readFlowPart(bytes));
+    expect(report.exact).toBe(true);
+    expect(shape(fresh)).toEqual(shape(doc));
+  });
+
+  it('a file edited elsewhere is read from the grid, keeping blank rows and reporting columns it cannot place', () => {
+    const doc = sample();
+    const bytes = buildFlow2Xlsx(readFlow(doc));
+    const grid = parseXlsx(bytes);
+    grid[0].rows[0].push('Notes');
+    grid[0].rows[1][grid[0].rows[0].length - 1] = 'a note'; // under the Notes heading
+    grid[0].rows[1][1] = 'edited answer';
+    const fresh = new Y.Doc();
+    const report = importSheetsToFlow(fresh, grid, readFlowPart(bytes));
+    expect(report.exact).toBe(false);
+    expect(report.skipped.join()).toContain('Notes');
+    const texts = readFlow(fresh)[0].cells.map((c) => c.text);
+    expect(texts).toContain('edited answer');
+    expect(texts).not.toContain('a note');
+    expect(readFlow(fresh)[0].cells.find((c) => c.text === 'their own point')!.gap).toBe(2);
+  });
+
+  it('a line of the flow that says "MG | MO" is not taken for the heading row', () => {
+    const fresh = new Y.Doc();
+    importSheetsToFlow(fresh, [{ name: 'S', rows: [['PMC', 'LOC', 'MG', 'MO'], ['claim', 'answer'], ['', '', 'MG', 'MO']] }]);
+    const texts = readFlow(fresh)[0].cells.map((c) => c.text);
+    expect(texts).toEqual(expect.arrayContaining(['claim', 'answer', 'MG', 'MO']));
+  });
+
+  it('imports thousands of rows quickly', () => {
+    const rows = [['PMC', 'LOC', 'MG']];
+    for (let i = 0; i < 4000; i++) rows.push([`arg ${i}`, `answer ${i}`, `extension ${i}`]);
+    const fresh = new Y.Doc();
+    const t0 = performance.now();
+    expect(importSheetsToFlow(fresh, [{ name: 'Big', rows }]).cells).toBe(12000);
+    const cells = readFlow(fresh)[0].cells;
+    layoutFlow(cells, new Map(), M);
+    flowRows(cells);
+    expect(performance.now() - t0).toBeLessThan(5000);
+  });
+
+  it('Excel limits: long text is cut, sheet names lose end apostrophes', () => {
+    const { doc, sheetId, type } = setup();
+    renameSheet(doc, sheetId, "'quoted'");
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, 'x'.repeat(40000) + '￿');
+    const grid = parseXlsx(buildFlow2Xlsx(readFlow(doc)));
+    expect(grid[0].name).toBe('quoted');
+    expect(grid[0].rows[1][0].length).toBe(32767);
   });
 });

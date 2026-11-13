@@ -394,6 +394,18 @@ export function rootsOf(cells: FlowCell[]): FlowCell[] {
   return cells.filter((c) => c.parent === null).sort(byOrder);
 }
 
+/** Every cell's answers (and, under `null`, the roots), each list in order: one pass instead of a search per cell. */
+export function childrenMap(cells: FlowCell[]): Map<string | null, FlowCell[]> {
+  const out = new Map<string | null, FlowCell[]>();
+  for (const c of cells) {
+    const list = out.get(c.parent);
+    if (list) list.push(c);
+    else out.set(c.parent, [c]);
+  }
+  for (const list of out.values()) list.sort(byOrder);
+  return out;
+}
+
 export function childrenOf(cells: FlowCell[], id: string): FlowCell[] {
   return cells.filter((c) => c.parent === id).sort(byOrder);
 }
@@ -492,4 +504,40 @@ export function resetSheetPosition(doc: Y.Doc, id: string) {
     s?.delete('x');
     s?.delete('y');
   });
+}
+
+/** One cell for `addCells`: `key` names it within the batch, `parent` is another item's key (or null for a root). */
+export interface NewCell {
+  key: string;
+  parent: string | null;
+  col: number;
+  order: number;
+  text: string;
+  gap?: number;
+  group?: string | null;
+  mark?: FlowMark | null;
+  refs?: string[];
+}
+
+/** Add many cells in one change (an import): no re-reading of the sheet per cell. Returns each key's new cell id. */
+export function addCells(doc: Y.Doc, sheetId: string, items: NewCell[]): Map<string, string> {
+  const ids = new Map<string, string>();
+  const cells = cellsOf(doc, sheetId);
+  if (!cells) return ids;
+  for (const it of items) ids.set(it.key, newBlockId());
+  local(doc, () => {
+    for (const it of items) {
+      const m = new Y.Map<unknown>();
+      m.set('col', it.col);
+      m.set('parent', it.parent === null ? null : ids.get(it.parent) ?? null);
+      m.set('order', it.order);
+      if (it.gap) m.set('gap', it.gap);
+      if (it.group) m.set('group', it.group);
+      if (it.mark) m.set('mark', it.mark);
+      if (it.refs?.length) m.set('refs', it.refs);
+      m.set('text', new Y.Text(it.text));
+      cells.set(ids.get(it.key)!, m);
+    }
+  });
+  return ids;
 }

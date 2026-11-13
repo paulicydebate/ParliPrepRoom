@@ -1,4 +1,4 @@
-import { childrenOf, rootsOf, type FlowCell } from './model';
+import { childrenMap, type FlowCell } from './model';
 
 // Where each cell goes, once every cell's own height is known. Pure, no DOM.
 //
@@ -49,6 +49,8 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
   const tops = new Map<string, number>();
   const heights = new Map<string, number>();
   const minH = m.rowHeight - m.cellGap;
+  const kidsOf = childrenMap(cells);
+  const ids = new Set(cells.map((c) => c.id));
 
   const build = (cell: FlowCell, seen: Set<string>): Node => {
     const h = Math.max(minH, measured.get(cell.id) ?? 0);
@@ -57,7 +59,7 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
     const kids: Node['kids'] = [];
     let y = 0;
     let lastGap = m.cellGap;
-    for (const c of childrenOf(cells, cell.id)) {
+    for (const c of kidsOf.get(cell.id) ?? []) {
       if (seen.has(c.id)) continue; // a broken loop of links: ignore the repeat
       const k = build(c, seen);
       const prev = kids.at(-1);
@@ -83,8 +85,8 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
   const blanks: Layout['blanks'] = [];
   const seen = new Set<string>();
   let y = 0;
-  const roots = rootsOf(cells);
-  for (const root of roots) {
+  const roots = kidsOf.get(null) ?? [];
+  roots.forEach((root, ri) => {
     if (root.gap > 0) {
       blanks.push({ rootId: root.id, top: y, count: root.gap });
       y += root.gap * m.rowHeight;
@@ -93,12 +95,12 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
     place(node, y - node.top0);
     bands.push({ rootId: root.id, top: y, height: node.height });
     y += node.height + m.rootGap;
-    const next = roots[roots.indexOf(root) + 1];
+    const next = roots[ri + 1];
     if (next && root.group && next.group === root.group && next.gap === 0) y -= m.rootGap;
-  }
+  });
   // Cells that hang off a missing parent (deleted in another window) are shown as roots.
   for (const c of cells) {
-    if (seen.has(c.id) || (c.parent !== null && cells.some((p) => p.id === c.parent))) continue;
+    if (seen.has(c.id) || (c.parent !== null && ids.has(c.parent))) continue;
     const node = build(c, seen);
     place(node, y - node.top0);
     bands.push({ rootId: c.id, top: y, height: node.height });
@@ -114,7 +116,7 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
     // moved away) splits the frame instead of being drawn inside it.
     const ids = new Set(members.map((c) => c.id));
     const first = members[0];
-    const siblings = (first.parent === null ? roots : childrenOf(cells, first.parent)).filter((c) => tops.has(c.id));
+    const siblings = (kidsOf.get(first.parent) ?? []).filter((c) => tops.has(c.id));
     let run: FlowCell[] = [];
     const flush = () => {
       if (run.length >= 2) {

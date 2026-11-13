@@ -397,13 +397,16 @@ export function App() {
       const meta = await createDoc({ title, kind: 'reference', format });
       const { doc, ready } = acquireDoc(meta.id);
       await ready;
+      let note = `Imported “${title}” as a reference ${grid ? 'flow' : 'doc'}.`;
       if (grid) {
         const { importSheetsToFlow } = await import('../import/flowImport');
-        if (!importSheetsToFlow(doc, grid.sheets)) toast('That spreadsheet had nothing to put on a flow.');
+        const report = importSheetsToFlow(doc, grid.sheets, grid.exact);
+        if (!report.cells) note = 'That spreadsheet had nothing to put on a flow.';
+        else if (report.skipped.length) note = `Imported “${title}”, but: ${report.skipped.join('; ')}.`;
       } else writeJSON(doc, json!);
       releaseDoc(meta.id);
       openInFocused(meta.id);
-      toast(`Imported “${title}” as a reference ${format === 'flow' ? 'flow' : 'doc'}.`);
+      toast(note);
     } catch (e) {
       toast((e as Error).message);
     }
