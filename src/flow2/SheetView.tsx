@@ -603,6 +603,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
               hidden={mini[c.col - 1]}
               y={top(c)}
               side={sideOf(c.col)}
+              label={`${SPEECH_INFO[sheet.columns[c.col - 1]].name}${c.parent && byId.get(c.parent)?.text.trim() ? `, answers: ${byId.get(c.parent)!.text.trim().slice(0, 60)}` : ''}`}
               measured={heights.has(c.id)}
               lit={lit.has(c.id)}
               picked={picked.includes(c.id)}

@@ -133,7 +133,26 @@ export function Flow2Sidebar({
                 ⋮
               </button>
               {menu === s.id && (
-                <div className="f2-side-menu" role="menu">
+                <div
+                  className="f2-side-menu"
+                  role="menu"
+                  ref={(el) => {
+                    // Opening the menu puts the keyboard on its first item.
+                    if (el && !el.contains(document.activeElement)) el.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    const items = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+                    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setMenu(null);
+                      e.currentTarget.parentElement?.querySelector<HTMLButtonElement>('.f2-side-more')?.focus();
+                    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+                    }
+                  }}
+                >
                   <button type="button" role="menuitem" onClick={() => (setMenu(null), setRenaming(s.id))}>
                     Rename
                   </button>
@@ -189,7 +208,29 @@ export function Flow2Sidebar({
           Fill screen
         </button>
       </div>
-      <div className="f2-side-resize" role="separator" aria-orientation="vertical" aria-label="Resize the sheet list" onPointerDown={startResize} />
+      <div
+        className="f2-side-resize"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the sheet list"
+        aria-valuemin={MIN_W}
+        aria-valuemax={MAX_W}
+        aria-valuenow={Math.round(width)}
+        tabIndex={0}
+        onPointerDown={startResize}
+        onKeyDown={(e) => {
+          // Left and right arrows resize it from the keyboard.
+          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+          e.preventDefault();
+          const next = Math.max(MIN_W, Math.min(MAX_W, width + (e.key === 'ArrowRight' ? 16 : -16)));
+          setWidth(next);
+          try {
+            localStorage.setItem('pp-flow2-side-w', String(next));
+          } catch {
+            /* ignore */
+          }
+        }}
+      />
     </aside>
   );
 }

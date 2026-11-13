@@ -26,6 +26,7 @@ export function Cell({
   cell,
   x,
   w,
+  label,
   hidden,
   y,
   side,
@@ -55,6 +56,8 @@ export function Cell({
   cell: FlowCell;
   x: number;
   w: number;
+  /** What a screen reader says for the cell, e.g. "LOC, answers: Econ bad is real". */
+  label: string;
   hidden?: boolean;
   y: number;
   side: 'gov' | 'opp';
@@ -228,7 +231,7 @@ export function Cell({
       {peers.length > 0 &&
         peerSel.map((r, i) => <span key={i} className="f2-peer-sel" style={{ ...r, background: peers[0].color }} aria-hidden="true" />)}
       {peers.length > 0 && peerCaret && <span className="f2-peer-caret" style={{ left: peerCaret.left, top: peerCaret.top, height: peerCaret.height, background: peers[0].color }} aria-hidden="true" />}
-      <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onBlur={onBlur} onKeyDown={(e) => onKeyDown(e, cell)} />
+      <textarea ref={area} rows={1} spellCheck aria-label={label} onFocus={onFocus} onBlur={onBlur} onKeyDown={(e) => onKeyDown(e, cell)} />
       {refs.length > 0 && (
         <div className="f2-refs">
           {refs.map((r) => (

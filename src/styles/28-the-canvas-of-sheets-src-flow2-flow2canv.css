@@ -1,0 +1,272 @@
+/* ---------- The canvas of sheets (src/flow2/Flow2Canvas.tsx) ---------- */
+.f2-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 78%, #000);
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+.f2-viewport:active {
+  cursor: grabbing;
+}
+.f2-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.f2-window {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.28);
+  cursor: auto;
+  padding-bottom: 8px;
+}
+.f2-window.is-active {
+  border-color: color-mix(in srgb, var(--text) 35%, var(--border));
+}
+.f2-window-body {
+  position: relative;
+}
+.f2-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  color: var(--column-heading, var(--text));
+}
+.f2-window-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 28ch;
+}
+.f2-window-side {
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.f2-window .f2-inner {
+  margin: 0 12px;
+}
+.f2-window .f2-head {
+  position: relative;
+  top: auto;
+}
+.f2-window .f2-canvas {
+  cursor: text;
+}
+.f2-preview .f2-cell {
+  position: absolute;
+  padding: 3px 5px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--column-text);
+  overflow: hidden;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+.f2-zoom {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  z-index: 10;
+  cursor: auto;
+}
+.f2-zoom-pct {
+  min-width: 3.2em;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+/* Groups: cells drawn together inside one frame. */
+.f2-group {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 2px solid light-dark(var(--p0-base-600, #6a6a65), var(--p0-base-400, #94958d));
+  border-radius: 5px;
+}
+.f2-cell.in-group {
+  border-radius: 0;
+}
+
+/* Answer slots: an empty place beside an argument with no answer yet, shown when you point at it. */
+.f2-slot {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px dashed transparent;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 80ms;
+}
+.f2-slot.is-shown,
+.f2-slot:hover {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--text) 30%, transparent);
+}
+.f2-slot.is-shown::after,
+.f2-slot:hover::after {
+  content: '+';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+/* Cross-applications and extensions: small tags under a cell's text. */
+.f2-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 0 4px 4px;
+}
+.f2-ref {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 2px;
+  background: light-dark(color-mix(in srgb, var(--p0-base-600) 14%, transparent), color-mix(in srgb, var(--p0-base-300) 14%, transparent));
+  font-family: 'Paper Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--column-text, var(--text));
+}
+.f2-ref.is-missing {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.f2-ref button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 1px 4px;
+}
+.f2-ref-go {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.f2-ref-x {
+  opacity: 0;
+}
+.f2-ref:hover .f2-ref-x,
+.f2-cell:focus-within .f2-ref-x {
+  opacity: 0.7;
+}
+.f2-picker {
+  position: absolute;
+  z-index: 20;
+  width: 300px;
+  padding: 6px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.f2-picker input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.f2-picker-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow: auto;
+  margin-top: 4px;
+}
+.f2-picker-list button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.f2-picker-list button.is-on {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+.f2-picker-where {
+  color: var(--text-2);
+  margin-right: 4px;
+}
+.f2-picker-empty {
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 6px;
+}
+
+/* A column going from narrow to wide slides; the link lines step aside meanwhile and fade back. */
+.f2-cell,
+.f2-head .flow-col-head,
+.f2-band,
+.f2-group,
+.f2-slot,
+.f2-add {
+  transition-property: left, width;
+  transition-duration: 160ms;
+  transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
+}
+.f2-threads {
+  transition: opacity 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+.f2-threads.is-settling {
+  opacity: 0;
+  transition-duration: 80ms;
+}
+.flow-colors-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 12px;
+  font-size: 13px;
+}
+.flow-colors-opt label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

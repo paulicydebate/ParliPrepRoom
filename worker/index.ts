@@ -37,7 +37,10 @@ const decodedFiles = new Map<string, Uint8Array>();
 function decoded(path: string, b64: string): Uint8Array {
   let bytes = decodedFiles.get(path);
   if (!bytes) {
-    bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    // A plain loop: several times faster than Uint8Array.from with a callback, which matters on a cold start.
+    const bin = atob(b64);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     decodedFiles.set(path, bytes);
   }
   return bytes;

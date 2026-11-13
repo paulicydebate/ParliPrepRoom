@@ -1,0 +1,784 @@
+/* ---------- The flow workspace: sheet list on the left, canvas (or one maximized sheet) on the right ---------- */
+.flow-wrap.f2.f2-workspace {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.f2-main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.f2-side-open {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 12;
+}
+.f2-side {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 92%, var(--text));
+  font-size: 12.5px;
+}
+.f2-side-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 6px 0 12px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.f2-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  scrollbar-width: thin;
+}
+.f2-side-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding-left: 4px;
+  margin-top: 6px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.f2-side ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.f2-side-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+.f2-side-row:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.f2-side-row.is-active {
+  background: color-mix(in srgb, var(--column-heading, var(--accent)) 16%, transparent);
+  color: var(--column-heading, var(--text));
+}
+.f2-side-go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.f2-side-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--column-heading, var(--text-2));
+  flex: none;
+}
+.f2-side-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.f2-side-flag {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+.f2-side-row.is-collapsed .f2-side-name {
+  opacity: 0.6;
+}
+.f2-side-more {
+  opacity: 0;
+}
+.f2-side-row:hover .f2-side-more,
+.f2-side-row.is-active .f2-side-more,
+.f2-side-more[aria-expanded='true'] {
+  opacity: 1;
+}
+.f2-side-rename {
+  flex: 1;
+  min-width: 0;
+  margin: 2px 4px;
+  font: inherit;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+}
+.f2-side-menu {
+  position: absolute;
+  right: 4px;
+  top: 100%;
+  z-index: 30;
+  min-width: 150px;
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+.f2-side-menu button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.f2-side-menu button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.f2-side-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.f2-side-menu .is-danger {
+  color: #e5484d;
+}
+.f2-side-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+.f2-side-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.f2-side-resize:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.f2-window-body.is-collapsed {
+  width: 260px;
+}
+.f2-window-body.is-collapsed .f2-window-bar {
+  border-bottom: 0;
+}
+.f2-window-body.is-maximized {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+.f2-window-body.is-maximized .f2-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.f2-window-body.is-maximized .f2-window-bar {
+  padding-left: 44px;
+  cursor: default;
+}
+/* Pre-made empty rows below what is typed: faint lines to type on. */
+.f2-ghost-rows {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 33px, color-mix(in srgb, var(--text) 7%, transparent) 33px, color-mix(in srgb, var(--text) 7%, transparent) 34px);
+}
+
+/* The rail at the right of the workspace: show or hide the docs beside the flow. */
+.docs-rail {
+  flex: none;
+  width: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 0 0 6px;
+}
+.docs-rail-btn {
+  writing-mode: vertical-rl;
+  padding: 10px 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.docs-rail-btn.is-on,
+.docs-rail-btn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 35%, var(--border));
+}
+.docs-rail {
+  gap: 6px;
+}
+.round-info {
+  flex: none;
+  width: 270px;
+  margin-left: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow-y: auto;
+  font-size: 13px;
+}
+.round-info-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.round-info dl {
+  margin: 0;
+  display: grid;
+  gap: 2px 0;
+}
+.round-info dt {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.round-info dd {
+  margin: 0;
+}
+.round-info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+/* The account menu doubles as the workspace menu: teams, Round Mode, account. */
+.workspace-menu {
+  min-width: 260px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.workspace-menu .menu-section {
+  padding: 8px 12px 2px;
+  color: var(--text-2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.workspace-menu .menu-sep {
+  height: 1px;
+  margin: 6px 0;
+  background: var(--border);
+}
+.workspace-menu button.is-on {
+  font-weight: 600;
+}
+.avatar {
+  position: relative;
+}
+.avatar-dot {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #8b5cf6;
+  border: 2px solid var(--surface);
+}
+
+/* Tabs along the top: one per open window, and + for Home beside it. */
+.tab-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-left: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 30px;
+  padding: 0 6px 0 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--text-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+.tab.is-on {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+.tab-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-2);
+}
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-x,
+.tab-add {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.tab-x:hover,
+.tab-add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--text);
+}
+.tab-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Home: what you can start and everything you have, in one place. */
+.home {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 26px;
+}
+.home h2 {
+  margin: 0 0 14px;
+  font-size: 22px;
+}
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+.home-group h3 {
+  margin: 18px 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.home-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-group li button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-group li button:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.home-meta {
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.home-date {
+  margin-left: 10px;
+}
+
+/* A partner is in this cell: its outline and a name tag in their color. */
+.flow-wrap.f2 .f2-cell.has-peer {
+  outline: 2px solid var(--peer);
+  outline-offset: -1px;
+}
+.f2-peer {
+  position: absolute;
+  right: -1px;
+  top: -17px;
+  z-index: 4;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: 3px 3px 0 0;
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* A flow in History: read-only sheets, and cell-by-cell changes. */
+.f2-snapshot {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 10px;
+  background: var(--surface);
+  border-radius: 8px;
+}
+.f2-snapshot-sheet {
+  position: relative;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding-bottom: 8px;
+}
+.flow-diff .fd-sheet {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.fd-row {
+  display: flex;
+  gap: 8px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  line-height: 1.4;
+}
+.fd-where {
+  flex: none;
+  width: 34px;
+  font-size: 10.5px;
+  font-family: 'Paper Mono', ui-monospace, monospace;
+  color: var(--text-2);
+  padding-top: 2px;
+}
+.fd-same {
+  opacity: 0.7;
+}
+.fd-added {
+  background: color-mix(in srgb, #2da44e 18%, transparent);
+}
+.fd-removed {
+  background: color-mix(in srgb, #e5484d 16%, transparent);
+  text-decoration: line-through;
+}
+.fd-changed {
+  background: color-mix(in srgb, #d29922 12%, transparent);
+}
+.fd-row ins {
+  background: color-mix(in srgb, #2da44e 30%, transparent);
+  text-decoration: none;
+}
+.fd-row del {
+  background: color-mix(in srgb, #e5484d 25%, transparent);
+}
+
+/* The toolbar along the bottom of the flow (a floating dock of icon buttons in groups, as in Flowist). */
+.f2-dock {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 94%, var(--text));
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+  max-width: calc(100% - 200px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.f2-dock-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.f2-dock-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.f2-dock-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.f2-dock-btn.is-on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+.f2-dock-glyph {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+.f2-dock-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border);
+}
+.f2-dock-hint {
+  flex: none;
+  margin: 0 8px;
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.f2-dock-btn.mark-extended .f2-dock-glyph {
+  color: #5fbf6a;
+}
+.f2-dock-btn.mark-dropped .f2-dock-glyph {
+  color: #e5484d;
+}
+.f2-dock-btn.mark-answered .f2-dock-glyph {
+  color: #4aa3df;
+}
+.f2-dock-btn.mark-key .f2-dock-glyph {
+  color: #e8a317;
+}
+
+/* A mark on a cell: a colored edge and a small badge. */
+.f2-mark {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  z-index: 3;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  pointer-events: none;
+}
+.f2-mark-extended {
+  background: #3c9a50;
+}
+.f2-mark-dropped {
+  background: #d4373c;
+}
+.f2-mark-answered {
+  background: #3b8fc8;
+}
+.f2-mark-key {
+  background: #d99a0f;
+}
+.flow-wrap.f2 .f2-cell.mark-extended {
+  box-shadow: inset 3px 0 0 #3c9a50;
+}
+.flow-wrap.f2 .f2-cell.mark-dropped {
+  box-shadow: inset 3px 0 0 #d4373c;
+}
+.flow-wrap.f2 .f2-cell.mark-answered {
+  box-shadow: inset 3px 0 0 #3b8fc8;
+}
+.flow-wrap.f2 .f2-cell.mark-key {
+  box-shadow: inset 3px 0 0 #d99a0f;
+}
+.f2-cell textarea {
+  padding-right: 22px;
+}
+
+/* Minimize a speech column to a thin strip, and open it again (the idea is Flowist's, by Elli, used with permission). */
+.f2-col-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.f2-col-toggle svg {
+  width: 12px;
+  height: 12px;
+}
+.flow-col-head:hover .f2-col-toggle,
+.f2-col-toggle:focus-visible,
+.flow-col-head.is-mini .f2-col-toggle {
+  opacity: 0.85;
+}
+.f2-col-toggle:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.flow-col-head.is-mini .f2-col-toggle {
+  right: 50%;
+  transform: translate(50%, -50%);
+}
+.f2-cell.is-minimized {
+  opacity: 0;
+  pointer-events: none;
+}
+.f2-band:has(+ .f2-band) {
+  transition: none;
+}
+
+/* Pins column inside a flow */
+.f2-col-pin {
+  right: 24px;
+}
+.f2-col-pin.is-on {
+  opacity: 0.95;
+}
+.flow-col-head.is-mini .f2-col-pin {
+  display: none;
+}
+.f2-pins-head {
+  text-align: center;
+}
+.f2-pins-wrap {
+  position: absolute;
+  top: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 0;
+  z-index: 1;
+}
+.f2-pins {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.f2-pins-empty {
+  margin: 4px 6px;
+  line-height: 1.35;
+}
+.f2-pin {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--text, #ddd) 22%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text, #ddd) 6%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.f2-pin:hover {
+  border-color: color-mix(in srgb, var(--text, #ddd) 45%, transparent);
+}
+.f2-pin-block[data-kind='position'],
+.f2-pin-block[data-kind='section'],
+.f2-pin-block[data-kind='claim'] {
+  font-weight: 600;
+}
+
+/* A partner's caret inside the cell they are typing in. */
+.f2-peer-caret {
+  position: absolute;
+  width: 2px;
+  z-index: 3;
+  pointer-events: none;
+  border-radius: 1px;
+  animation: f2-caret-blink 1.1s steps(2, start) infinite;
+}
+@keyframes f2-caret-blink {
+  to {
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .f2-peer-caret {
+    animation: none;
+  }
+}
+
+/* The round's resolution, above the sheet list and in Round info. */
+.f2-side-res {
+  margin: 0 12px 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.round-info-res {
+  white-space: pre-wrap;
+}
+/* Text a partner has selected in a cell. */
+.f2-peer-sel {
+  position: absolute;
+  z-index: 1;
+  opacity: 0.28;
+  border-radius: 2px;
+  pointer-events: none;
+}

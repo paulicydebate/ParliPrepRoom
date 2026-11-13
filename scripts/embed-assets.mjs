@@ -9,6 +9,8 @@ import { execSync } from 'node:child_process';
 let build = 'dev';
 try {
   build = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  // Built from changes not yet committed: say so, so the stamp never names a commit that is not what runs.
+  if (execSync('git status --porcelain --untracked-files=no', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()) build += '-dirty';
 } catch {
   /* not a git checkout */
 }

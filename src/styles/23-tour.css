@@ -1,0 +1,173 @@
+/* ---------- Tour ---------- */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.tour-block {
+  position: absolute;
+  inset: 0;
+}
+.tour-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 14, 13, 0.55);
+}
+.tour-spot {
+  position: absolute;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(10, 14, 13, 0.55), 0 0 0 2px var(--accent);
+  pointer-events: none;
+  transition: left 0.18s, top 0.18s, width 0.18s, height 0.18s;
+}
+.tour-card {
+  position: absolute;
+  z-index: 1;
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+.tour-card h3 {
+  margin: 2px 0 6px;
+  font-size: 16px;
+}
+.tour-card p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.tour-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tour-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.tour-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tour-offer {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 60;
+  width: min(300px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.tour-offer .tour-actions {
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.help-menu {
+  position: relative;
+  flex: none;
+}
+.help-menu > summary {
+  list-style: none;
+}
+.help-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.help-pop {
+  min-width: 210px;
+  z-index: 40;
+}
+.help-pop a {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+.help-pop a:hover {
+  background: var(--surface-2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot {
+    transition: none;
+  }
+}
+
+/* Invitations to co-edit */
+.invite-bars {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+.invite-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 14px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  font-size: 14px;
+}
+.invite-bar > span:first-child {
+  flex: 1 1 320px;
+}
+.partner-status {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.partner-status.is-declined {
+  color: var(--danger);
+}
+
+/* New doc / New flow menu in the sidebar, and the Flow badge on a window */
+.new-menu {
+  position: relative;
+}
+.new-menu > summary {
+  list-style: none;
+}
+.new-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.new-menu .menu {
+  min-width: 190px;
+  z-index: 30;
+}
+.new-menu .menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.menu-sub {
+  flex-basis: 100%;
+  padding-left: 24px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.badge.flow {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
+
+.pause-banner {
+  background: #b45309;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 13px;
+  text-align: center;
+}

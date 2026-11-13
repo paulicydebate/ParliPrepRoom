@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
-import { clearPins } from '../store/pins';
+import { clearPins, usePins } from '../store/pins';
 import { nextDelay, wasIdle } from '../store/poll';
 import { setRound } from '../store/roundDoc';
 import { startTour } from '../store/tour';
@@ -496,19 +496,26 @@ export function App() {
   // In Round Mode only round docs are listed (and searchable).
   const visibleDocs = spaceDocs ? (roundMode ? spaceDocs.filter((d) => d.round) : spaceDocs) : null;
   const spaceName = signedIn ? (acct.teams.find((t) => t.id === acct.space)?.name ?? 'My own docs') : null;
-  const searchable = visibleDocs ?? [];
+  // (Kept as the same array while its contents are the same, so what reads it does not redo its work every render.)
+  const searchKey = (visibleDocs ?? []).map((d) => `${d.id}:${d.title}`).join('|');
+  const searchable = useMemo(() => visibleDocs ?? [], [searchKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Docs in this list that are mine to delete (not ones teammates shared with me). */
   const myDocs = (spaceDocs ?? []).filter((d) => !d.ownerId || d.ownerId === acct.user?.id);
 
   const pinColumnsOpen = usePinColumnsOpen();
-  const { index: library, flowIndex, blockContent } = useLibrary(
-    searchable.map((d) => d.id),
-    findOpen || pinsOpen || pinColumnsOpen,
+  const pins = usePins(acct.space);
+  // Search and the pin board need every doc open; a pins column in a flow needs only the docs that have pins, so a
+  // flow left open with its pins column showing does not keep 40 docs syncing.
+  const pinnedKey = [...new Set(pins.map((p) => p.docId))].sort().join(',');
+  const libraryIds = useMemo(
+    () => (findOpen || pinsOpen ? searchable.map((d) => d.id) : searchable.filter((d) => pinnedKey.split(',').includes(d.id)).map((d) => d.id)),
+    [findOpen, pinsOpen, searchable, pinnedKey],
   );
+  const { index: library, flowIndex, blockContent } = useLibrary(libraryIds, findOpen || pinsOpen || (pinColumnsOpen && libraryIds.length > 0));
   // The pins column inside a flow reads the same index.
   useEffect(() => {
     setLibraryView({ docs: searchable, index: library });
-  }, [searchable, library]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchable, library]);
   /** Open a doc at a block. keepFocused: don't replace the pane you're in (e.g. the flow); use another pane or open one. */
   const jumpTo = (docId: string, blockId: string, keepFocused = false) => {
     setLayout((l) => {
