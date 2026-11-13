@@ -12,7 +12,7 @@ import {
   type FlowMark,
   type FlowRef,
 } from './model';
-import { caretCoords } from './caret';
+import { caretCoords, selectionRects } from './caret';
 import { bindText } from './textBinding';
 import { MARK_GLYPH, MARK_LABEL, type Peer } from './flowHooks';
 import type { Focus } from './SheetView';
@@ -65,7 +65,7 @@ export function Cell({
   peers: Peer[];
   onBlur: () => void;
   /** The caret moved to this character (shared with partners). */
-  onCaret: (at: number) => void;
+  onCaret: (at: number, end: number) => void;
   mark: FlowMark | null;
   refs: (FlowRef & { text: string; missing: boolean })[];
   onRefClick: (r: FlowRef) => void;
@@ -140,11 +140,12 @@ export function Cell({
   useEffect(() => {
     const el = area.current;
     if (!el) return;
-    let last = -1;
+    let last = '';
     const report = () => {
-      if (document.activeElement !== el || el.selectionStart === last) return;
-      last = el.selectionStart;
-      caretRef.current(last);
+      const now = `${el.selectionStart}:${el.selectionEnd}`;
+      if (document.activeElement !== el || now === last) return;
+      last = now;
+      caretRef.current(el.selectionStart, el.selectionEnd);
     };
     // (flow2-remote: a partner's edit moved the caret, so partners see where it is now.)
     const events = ['keyup', 'mouseup', 'input', 'focus', 'select', 'flow2-remote'] as const;
@@ -156,13 +157,23 @@ export function Cell({
 
   // Where a partner's caret is drawn inside this cell.
   const peerAt = peers[0]?.at;
+  const peerEnd = peers[0]?.end;
   const [peerCaret, setPeerCaret] = useState<{ left: number; top: number; height: number } | null>(null);
+  // And the text they have selected, as a band in their color.
+  const [peerSel, setPeerSel] = useState<{ left: number; top: number; width: number; height: number }[]>([]);
   useLayoutEffect(() => {
     const el = area.current;
-    if (!el || peerAt === undefined) return setPeerCaret(null);
-    const c = caretCoords(el, peerAt);
+    if (!el || peerAt === undefined) {
+      setPeerSel([]);
+      return setPeerCaret(null);
+    }
+    const len = el.value.length;
+    const at = Math.min(peerAt, len);
+    const end = peerEnd === undefined ? at : Math.min(peerEnd, len);
+    const c = caretCoords(el, end);
     setPeerCaret({ left: el.offsetLeft + c.left, top: el.offsetTop + c.top, height: c.height });
-  }, [peerAt, cell.text, w]);
+    setPeerSel(selectionRects(el, Math.min(at, end), Math.max(at, end)).map((r) => ({ ...r, left: r.left + el.offsetLeft, top: r.top + el.offsetTop })));
+  }, [peerAt, peerEnd, cell.text, w]);
 
   // Measure again once the width has really changed (columns slide to their new width over 160 ms, so the width
   // passed in arrives before the box has it) and once the fonts have loaded (a fallback font wraps differently).
@@ -214,6 +225,8 @@ export function Cell({
         </span>
       )}
       {peers.length > 0 && <span className="f2-peer" style={{ background: peers[0].color }}>{peers.map((p) => p.name).join(', ')}</span>}
+      {peers.length > 0 &&
+        peerSel.map((r, i) => <span key={i} className="f2-peer-sel" style={{ ...r, background: peers[0].color }} aria-hidden="true" />)}
       {peers.length > 0 && peerCaret && <span className="f2-peer-caret" style={{ left: peerCaret.left, top: peerCaret.top, height: peerCaret.height, background: peers[0].color }} aria-hidden="true" />}
       <textarea ref={area} rows={1} spellCheck aria-label="Cell" onFocus={onFocus} onBlur={onBlur} onKeyDown={(e) => onKeyDown(e, cell)} />
       {refs.length > 0 && (

@@ -3,7 +3,7 @@
 //   npm run build && npx wrangler dev --port 8793 --var DEV_LOGIN:1     (in one terminal)
 //   npm run e2e                                                        (in another; BASE=http://127.0.0.1:8793)
 //
-// Checks: partners see each other's typing and caret; paste into a cell and into a sheet name is blocked; text
+// Checks: partners see each other's typing, caret and selected text; paste into a cell and into a sheet name is blocked; text
 // pasted before the round cannot come back with Redo; the server's record has the typed text, cell by cell, with
 // nothing flagged; the check page shows it. Exits non-zero on the first failure.
 import { createRequire } from 'node:module';
@@ -94,6 +94,10 @@ try {
   check('Bea sees Ann typing', await until(async () => (await values(B)).join('|').includes('Econ bad is real|No link')));
   await ann.keyboard.press('Home');
   check('Bea sees Ann’s caret in the cell', await until(async () => (await B.locator('.f2-peer-caret').count()) > 0));
+  await ann.keyboard.press('Shift+End');
+  check('Bea sees the text Ann selected', await until(async () => (await B.locator('.f2-peer-sel').count()) > 0));
+  await ann.keyboard.press('Home');
+  check('the selection band goes when Ann clicks away from it', await until(async () => (await B.locator('.f2-peer-sel').count()) === 0));
 
   // Paste into a cell and into a sheet name, in the round.
   await ann.evaluate(() => navigator.clipboard.writeText('PASTED IN ROUND'));

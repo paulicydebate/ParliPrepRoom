@@ -55,8 +55,8 @@ export function Flow2Editor({
   const undo = useUndo(ydoc, docId);
   const peers = usePeers(provider);
   // Tell partners which cell you are in (only the first window on this doc shares its cursor, so two windows never fight).
-  const shareCell = (cell: string | null, at?: number) => {
-    if (provider && carets) provider.awareness.setLocalStateField('flow2', cell ? { cell, at } : null);
+  const shareCell = (cell: string | null, at?: number, end?: number) => {
+    if (provider && carets) provider.awareness.setLocalStateField('flow2', cell ? { cell, at, ...(end !== undefined && end !== at ? { end } : {}) } : null);
   };
   useEffect(() => trackRoundDoc(docId, ydoc), [docId, ydoc]);
   useEffect(() => () => void (carets && provider?.awareness.setLocalStateField('flow2', null)), [provider, carets]);

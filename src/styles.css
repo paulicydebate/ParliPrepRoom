@@ -4986,3 +4986,11 @@ kbd {
 .round-info-res {
   white-space: pre-wrap;
 }
+/* Text a partner has selected in a cell. */
+.f2-peer-sel {
+  position: absolute;
+  z-index: 1;
+  opacity: 0.28;
+  border-radius: 2px;
+  pointer-events: none;
+}

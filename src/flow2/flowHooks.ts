@@ -100,7 +100,7 @@ export const setLastWorkspace = (el: HTMLElement | null) => (lastWorkspace = el)
 export const MARK_GLYPH: Record<FlowMark, string> = { extended: '→', dropped: '!', answered: '✓', key: '★' };
 export const MARK_LABEL: Record<FlowMark, string> = { extended: 'Extended', dropped: 'Dropped', answered: 'Answered', key: 'Key argument' };
 
-export type Peer = { name: string; color: string; at?: number };
+export type Peer = { name: string; color: string; at?: number; end?: number };
 
 /** Who else is in which cell right now (from the live connection's presence), by cell id. */
 export function usePeers(provider: WebsocketProvider | null): ReadonlyMap<string, Peer[]> {
@@ -112,13 +112,13 @@ export function usePeers(provider: WebsocketProvider | null): ReadonlyMap<string
       const out = new Map<string, Peer[]>();
       aw.getStates().forEach((state, client) => {
         if (client === aw.clientID) return;
-        const at = (state as { flow2?: { cell?: string; at?: number } | null }).flow2;
+        const at = (state as { flow2?: { cell?: string; at?: number; end?: number } | null }).flow2;
         const user = (state as { user?: { name?: string; color?: string } }).user;
         if (!at?.cell || !user) return;
-        out.set(at.cell, [...(out.get(at.cell) ?? []), { name: user.name || 'Someone', color: user.color || '#888', at: typeof at.at === 'number' ? at.at : undefined }]);
+        out.set(at.cell, [...(out.get(at.cell) ?? []), { name: user.name || 'Someone', color: user.color || '#888', at: typeof at.at === 'number' ? at.at : undefined, end: typeof at.end === 'number' ? at.end : undefined }]);
       });
       setPeers((prev) => {
-        const same = prev.size === out.size && [...out].every(([k, v]) => prev.get(k)?.map((p) => p.name + p.color + p.at).join() === v.map((p) => p.name + p.color + p.at).join());
+        const same = prev.size === out.size && [...out].every(([k, v]) => prev.get(k)?.map((p) => `${p.name}${p.color}${p.at}:${p.end}`).join() === v.map((p) => `${p.name}${p.color}${p.at}:${p.end}`).join());
         return same ? prev : out;
       });
     };

@@ -23,3 +23,21 @@ export function caretCoords(el: HTMLTextAreaElement, pos: number): { left: numbe
   document.body.removeChild(mirror);
   return out;
 }
+
+/**
+ * The boxes covering the text from `start` to `end` inside a textarea, line by line (same offsets as caretCoords):
+ * the first line from the start to the right edge, whole lines in between, the last line up to the end.
+ */
+export function selectionRects(el: HTMLTextAreaElement, start: number, end: number): { left: number; top: number; width: number; height: number }[] {
+  if (end <= start) return [];
+  const a = caretCoords(el, start);
+  const b = caretCoords(el, end);
+  const style = getComputedStyle(el);
+  const left = parseFloat(style.paddingLeft) || 0;
+  const right = el.clientWidth - (parseFloat(style.paddingRight) || 0);
+  if (Math.abs(a.top - b.top) < 1) return [{ left: a.left, top: a.top, width: Math.max(2, b.left - a.left), height: a.height }];
+  const out = [{ left: a.left, top: a.top, width: Math.max(2, right - a.left), height: a.height }];
+  for (let y = a.top + a.height; y < b.top - 1; y += a.height) out.push({ left, top: y, width: right - left, height: a.height });
+  out.push({ left, top: b.top, width: Math.max(2, b.left - left), height: b.height });
+  return out;
+}

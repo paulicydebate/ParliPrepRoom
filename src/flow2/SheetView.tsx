@@ -84,7 +84,7 @@ export interface Maximized {
   onRestore: () => void;
 }
 
-export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { space: string; onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null, at?: number) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
+export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, embedded, maximized, jump, onJump, docId, peers, onCellFocus, onDock }: { space: string; onDock?: (sheetId: string, dock: Dock | null) => void; docId: string; peers: ReadonlyMap<string, Peer[]>; onCellFocus: (cell: string | null, at?: number, end?: number) => void; doc: Y.Doc; sheets: FlowSheetData[]; sheet: FlowSheetData; undo: Y.UndoManager; onPick: (id: string) => void; embedded?: Embedded; maximized?: Maximized; jump?: Jump | null; onJump?: (sheetId: string, cellId: string) => void }) {
   const scroll = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
@@ -623,7 +623,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
                 setFocusTick((n) => n + 1);
                 onCellFocus(c.id, (document.activeElement as HTMLTextAreaElement | null)?.selectionStart ?? undefined);
               }}
-              onCaret={(at) => onCellFocus(c.id, at)}
+              onCaret={(at, end) => onCellFocus(c.id, at, end)}
               onBlur={() => setTimeout(() => !document.activeElement?.closest('.f2-cell') && onCellFocus(null), 60)}
               onKeyDown={onCellKey}
               onMouseDown={onCellMouseDown}
