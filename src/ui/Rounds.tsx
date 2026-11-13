@@ -12,7 +12,7 @@ import {
 } from '../store/account';
 import { createRoundDoc, type DocFormat } from '../store/docs';
 import { acquireDoc, releaseDoc } from '../store/registry';
-import { setRound } from '../store/roundDoc';
+import { setRound, setResolution as saveResolution } from '../store/roundDoc';
 import { writeLines, type Line } from '../store/seed';
 import { choose, format, formatMinutes, loadPresets, parseMinutes, prepMinutes, savePresets } from '../store/timer';
 import { IconClose } from './icons';
@@ -105,7 +105,9 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (made: { doc
         // Starting content, the round-doc switch and the prep timer live inside the doc.
         const { doc, ready } = acquireDoc(meta.id);
         await ready;
-        writeLines(doc, lines);
+        // A flow is cells, not blocks: it starts empty (the starting lines would sit unseen in its record and in search).
+        if (f !== 'flow') writeLines(doc, lines);
+        saveResolution(doc, res);
         setRound(doc, meta.id, true);
         if (startTimer && prepLen && f === timerFormat) doc.getMap('timer').set('state', choose('Prep', prepLen, true));
         releaseDoc(meta.id);

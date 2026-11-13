@@ -2,19 +2,24 @@ import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { KIND_INFO, asKind, isHeading } from '../model/blocks';
-import { blockWithChildren, searchEntries, type OutlineEntry, type SearchHit } from '../model/outline';
+import { blockWithChildren, searchEntries, type OutlineEntry } from '../model/outline';
 import type { DocMeta } from '../store/docs';
 import { useRoundMode } from '../store/roundMode';
 import { clearPins, followSheet, isPinned, movePin, selectGroup, setFollowFlow, setPinGroup, togglePin, useBoard, usePins, visiblePins } from '../store/pins';
-import { activeSheet, flowKey } from '../editor/flowView';
+import { searchFlow, type FlowEntry } from '../model/flowSearch';
+import { useOpenFlows } from '../store/flowPins';
 import { IconClose, IconPin } from './icons';
 
 export type JumpTo = (docId: string, blockId: string) => void;
+
+/** A search result: a block in a doc, or a cell on a flow. */
+type Result = { entry: OutlineEntry | null; target: OutlineEntry | null; score: number; doc: DocMeta; flow: FlowEntry | null };
 
 /** Ctrl/Cmd+K: search the prep and jump to (or pin) a block. Nothing is copied. */
 export function BlockFinder({
   docs,
   index,
+  flowIndex,
   space,
   roundMode,
   onJump,
@@ -24,6 +29,8 @@ export function BlockFinder({
 }: {
   docs: DocMeta[];
   index: Map<string, OutlineEntry[]>;
+  /** What is written on each flow's cells (found by the same search). */
+  flowIndex: Map<string, FlowEntry[]>;
   space: string;
   roundMode: boolean;
   onJump: JumpTo;
@@ -42,29 +49,30 @@ export function BlockFinder({
   }, []);
 
   const results = useMemo(() => {
-    const all: (SearchHit & { doc: DocMeta })[] = [];
+    const all: Result[] = [];
     for (const doc of docs) {
       const entries = index.get(doc.id);
-      if (!entries) continue;
-      for (const h of searchEntries(entries, query)) all.push({ ...h, doc });
+      if (entries) for (const h of searchEntries(entries, query)) all.push({ ...h, doc, flow: null });
+      const cells = flowIndex.get(doc.id);
+      if (cells) for (const h of searchFlow(cells, query)) all.push({ entry: null, target: null, score: h.score, doc, flow: h.entry });
     }
     // One row per jump target, best match first.
     const seen = new Set<string>();
     return all
       .sort((a, b) => b.score - a.score)
       .filter((h) => {
-        const k = `${h.doc.id}:${h.target.id}`;
+        const k = `${h.doc.id}:${h.flow ? h.flow.cellId : h.target!.id}`;
         if (seen.has(k)) return false;
         seen.add(k);
         return true;
       })
       .slice(0, 40);
-  }, [docs, index, query]);
+  }, [docs, index, flowIndex, query]);
 
   useEffect(() => setSel(0), [query]);
 
-  const jump = (h: (typeof results)[number]) => {
-    onJump(h.doc.id, h.target.id);
+  const jump = (h: Result) => {
+    onJump(h.doc.id, h.flow ? h.flow.cellId : h.target!.id);
     onClose();
   };
 
@@ -86,8 +94,9 @@ export function BlockFinder({
             setSel((s) => Math.max(0, s - 1));
           } else if (e.key === 'Enter' && results[sel]) {
             e.preventDefault();
-            if (e.altKey || e.metaKey || e.ctrlKey) togglePin(space, { docId: results[sel].doc.id, blockId: results[sel].target.id });
-            else jump(results[sel]);
+            if (e.altKey || e.metaKey || e.ctrlKey) {
+              if (!results[sel].flow) togglePin(space, { docId: results[sel].doc.id, blockId: results[sel].target!.id });
+            } else jump(results[sel]);
           }
         }}
       />
@@ -97,16 +106,31 @@ export function BlockFinder({
       <ul className="finder-results" role="listbox" aria-label="Results">
         {query && results.length === 0 && <li className="muted finder-empty">No matches{index.size < docs.length ? ' yet (still loading docs)' : ''}.</li>}
         {results.map((h, i) => {
-          const pinned = isPinned(space, { docId: h.doc.id, blockId: h.target.id });
+          if (h.flow) {
+            return (
+              <li key={`${h.doc.id}:${h.flow.cellId}`} role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onMouseEnter={() => setSel(i)}>
+                <button type="button" className="finder-hit" onClick={() => jump(h)}>
+                  <span className="finder-kind" data-kind="flow">
+                    {h.flow.speech || 'Flow'}
+                  </span>
+                  <span className="finder-text">{h.flow.text}</span>
+                  {h.flow.path.length > 0 && <span className="finder-match">answers: {h.flow.path[h.flow.path.length - 1].slice(0, 120)}</span>}
+                  <span className="finder-path muted small">{[h.doc.title, h.flow.sheetName || 'Sheet', h.flow.speech].filter(Boolean).join(' › ')}</span>
+                </button>
+              </li>
+            );
+          }
+          const t = h.target!;
+          const pinned = isPinned(space, { docId: h.doc.id, blockId: t.id });
           return (
-            <li key={`${h.doc.id}:${h.target.id}`} role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onMouseEnter={() => setSel(i)}>
+            <li key={`${h.doc.id}:${t.id}`} role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onMouseEnter={() => setSel(i)}>
               <button type="button" className="finder-hit" onClick={() => jump(h)}>
-                <span className="finder-kind" data-kind={h.target.kind}>
-                  {KIND_INFO[h.target.kind].label}
+                <span className="finder-kind" data-kind={t.kind}>
+                  {KIND_INFO[t.kind].label}
                 </span>
-                <span className="finder-text">{h.target.text || '(empty)'}</span>
-                {h.entry !== h.target && <span className="finder-match">…{h.entry.text.slice(0, 120)}</span>}
-                <span className="finder-path muted small">{[h.doc.title, ...h.target.path].join(' › ')}</span>
+                <span className="finder-text">{t.text || '(empty)'}</span>
+                {h.entry !== t && <span className="finder-match">…{h.entry!.text.slice(0, 120)}</span>}
+                <span className="finder-path muted small">{[h.doc.title, ...t.path].join(' › ')}</span>
               </button>
               {!roundMode && (
                 <button
@@ -114,7 +138,7 @@ export function BlockFinder({
                   className={'btn ghost small' + (insertBlocked ? ' is-blocked' : '')}
                   title={insertBlocked ?? 'Insert a copy below the caret in the doc you were in'}
                   onClick={() => {
-                    onInsert(h.doc.id, h.target.id);
+                    onInsert(h.doc.id, t.id);
                     if (!insertBlocked) onClose();
                   }}
                 >
@@ -125,7 +149,7 @@ export function BlockFinder({
                 type="button"
                 className={'btn ghost small finder-pin' + (pinned ? ' is-on' : '')}
                 aria-pressed={pinned}
-                onClick={() => togglePin(space, { docId: h.doc.id, blockId: h.target.id })}
+                onClick={() => togglePin(space, { docId: h.doc.id, blockId: t.id })}
               >
                 {pinned ? 'Pinned' : 'Pin'}
               </button>
@@ -142,8 +166,7 @@ export function PinBoard({
   space,
   docs,
   index,
-  followEditor,
-  allEditors,
+  followDocId,
   onJump,
   onInsert,
   insertBlocked,
@@ -152,10 +175,8 @@ export function PinBoard({
   space: string;
   docs: DocMeta[];
   index: Map<string, OutlineEntry[]>;
-  /** Editor of the focused pane: when it's a flow, the tabs follow its sheet. */
-  followEditor: Editor | null;
-  /** All open editors: sheet names come from the ones showing a flow. */
-  allEditors: Editor[];
+  /** The doc in the focused pane: when it's a flow, the tabs follow its sheet. */
+  followDocId: string | null;
   onJump: JumpTo;
   onInsert: JumpTo;
   /** Why inserting isn't allowed right now (null = allowed). */
@@ -165,7 +186,8 @@ export function PinBoard({
   const roundMode = useRoundMode();
   const board = useBoard(space);
   const pins = visiblePins(board);
-  const sheets = useFlowSheets(allEditors);
+  const openFlows = useOpenFlows();
+  const sheets = [...new Set([...openFlows.values()].flatMap((f) => f.sheets))];
   const lower = (x: string) => x.trim().toLowerCase();
   // Tabs: sheets that have pins, plus any other sheet names pins were given.
   const used = board.pins.map((p) => p.group).filter((g): g is string => !!g);
@@ -177,23 +199,10 @@ export function PinBoard({
   const count = (g: string) => board.pins.filter((p) => p.group?.toLowerCase() === g.toLowerCase()).length;
 
   // Follow the flow: switching to sheet "T" shows the "T" group.
+  const activeName = followDocId ? openFlows.get(followDocId)?.active ?? '' : '';
   useEffect(() => {
-    if (!followEditor) return;
-    let last = '';
-    const check = () => {
-      const st = flowKey.getState(followEditor.state);
-      const title = st ? activeSheet(st)?.title ?? '' : '';
-      if (title && title !== last) {
-        last = title;
-        followSheet(space, title);
-      }
-    };
-    check();
-    followEditor.on('transaction', check);
-    return () => {
-      followEditor.off('transaction', check);
-    };
-  }, [followEditor, space]);
+    if (activeName) followSheet(space, activeName);
+  }, [activeName, space]);
 
   return (
     <aside className="pinboard" aria-label="Pinned blocks">
@@ -344,26 +353,4 @@ export function PinButton({ editor, docId, space }: { editor: Editor; docId: str
       <IconPin /> {pinned ? `Pinned ${what}` : `Pin ${what}`}
     </button>
   );
-}
-
-/** Sheet names from every open flow (live as sheets are added or renamed). */
-function useFlowSheets(editors: Editor[]): string[] {
-  const [names, setNames] = useState<string[]>([]);
-  useEffect(() => {
-    const compute = () => {
-      const out: string[] = [];
-      for (const ed of editors) {
-        const st = flowKey.getState(ed.state);
-        if (!st) continue;
-        for (const sh of st.layout.sheets) if (sh.title.trim() && !out.includes(sh.title.trim())) out.push(sh.title.trim());
-      }
-      setNames((prev) => (prev.join('\u0000') === out.join('\u0000') ? prev : out));
-    };
-    compute();
-    for (const ed of editors) ed.on('transaction', compute);
-    return () => {
-      for (const ed of editors) ed.off('transaction', compute);
-    };
-  }, [editors]);
-  return names;
 }

@@ -1,0 +1,157 @@
+/* Adapted from Flowist (by Elli; used with permission): the sheet's look, taken from its stylesheets
+ * (apps/flowist/src/sheet/sheet.css, sheet-cells.css, cell-selection.css, columns/sheet-columns.css and
+ * response-links/response-connectors.css): its palette steps, cell fill, border and radius, 12px Inter text,
+ * editing outline and glow, affirmative cyan and negative red columns, and connector line color. The
+ * selectors are this app's own (.f2-cell, .f2-head, .f2-threads...). */
+
+.flow-wrap[data-flow-theme='night'] {
+  color-scheme: dark;
+}
+
+.flow-wrap.f2 {
+  /* From sheet.css */
+  --sheet-background: light-dark(var(--p0-base-00), var(--p0-base-975));
+  --sheet-border-color: light-dark(var(--p0-base-300), var(--p0-base-950));
+  --cell-radius: 3px; /* Flowist: var(--radius-2xs), 15px * 0.2 */
+  --cell-hover-border: light-dark(var(--p0-base-700), var(--p0-base-300));
+  --cell-edit-border: light-dark(var(--p0-green-800), var(--p0-green-100));
+  --cell-edit-background: light-dark(var(--p0-base-0), var(--p0-base-925));
+  --selection-color: light-dark(var(--p0-green-600), var(--p0-green-400));
+  --selection-glow-size: 6px;
+  --selection-glow-opacity: 35%;
+  --cell-set-fill: light-dark(color-mix(in srgb, var(--p0-base-600) 22%, transparent), color-mix(in srgb, var(--p0-base-300) 20%, transparent));
+  --link-color: light-dark(var(--p0-base-300), var(--p0-base-500));
+  --link-crossing-shadow-color: light-dark(var(--p0-base-700), var(--p0-base-1000));
+  /* From the sheet's metrics (workspace/layout/sheet-geometry.ts) */
+  --cell-font-size: 12px;
+  --cell-line-height: 1.4;
+  --cell-padding-block: 6.6px;
+  --cell-padding-inline: 4px;
+
+  font-family: 'InterVariable', Arial, sans-serif;
+  background: var(--sheet-background);
+  color: light-dark(var(--p0-base-950), var(--p0-base-50));
+  /* The app's own variables, so the rest of the flow chrome follows this palette. */
+  --surface: var(--sheet-background);
+  --text: light-dark(var(--p0-base-950), var(--p0-base-50));
+  --text-2: light-dark(var(--p0-base-600), var(--p0-base-400));
+  --border: var(--sheet-border-color);
+  --band-a: transparent;
+  --band-b: light-dark(color-mix(in srgb, var(--p0-base-900) 3%, transparent), color-mix(in srgb, #fff 2.5%, transparent));
+}
+
+/* Side colors (columns/sheet-columns.css: affirmative cyan, negative red). */
+.flow-wrap.f2 .fl-gov {
+  --column-text: light-dark(var(--p0-cyan-800), var(--p0-cyan-200));
+  --column-heading: light-dark(var(--p0-cyan-700), var(--p0-cyan-300));
+  --response-color: var(--p0-cyan-300);
+  --response-hover-color: light-dark(var(--p0-cyan-500), var(--p0-cyan-300));
+}
+.flow-wrap.f2 .fl-opp {
+  --column-text: light-dark(var(--p0-red-800), var(--p0-red-200));
+  --column-heading: light-dark(var(--p0-red-700), var(--p0-red-300));
+  --response-color: var(--p0-red-300);
+  --response-hover-color: light-dark(var(--p0-red-500), var(--p0-red-300));
+}
+
+/* Column headings: the side's heading color over a 2px line of the same color. */
+.flow-wrap.f2 .f2-head .flow-col-head,
+.flow-wrap.f2 .f2-head .flow-col-head.fl-opp {
+  color: var(--column-heading);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Cells (sheet-cells.css): filled box, 1px border, small radius, the side's text color. */
+.flow-wrap.f2 .f2-cell {
+  border-radius: var(--cell-radius);
+  border: 1px solid light-dark(var(--p0-base-400), var(--p0-base-700));
+  background: light-dark(var(--p0-base-00), var(--p0-base-925));
+  background-clip: padding-box;
+}
+.flow-wrap.f2 .f2-cell textarea,
+.flow-wrap.f2 .f2-cell.fl-opp textarea {
+  color: var(--column-text);
+  font-family: inherit;
+  font-size: var(--cell-font-size);
+  line-height: var(--cell-line-height);
+  font-weight: 400;
+  padding: var(--cell-padding-block) var(--cell-padding-inline);
+  caret-color: light-dark(var(--p0-base-950), var(--p0-base-50));
+}
+.flow-wrap.f2 .f2-cell:hover {
+  border-color: var(--cell-hover-border);
+}
+/* Editing: a 2px ring inside the border, in the edit color. */
+.flow-wrap.f2 .f2-cell:focus-within {
+  border-color: var(--cell-edit-border);
+  outline: 2px solid var(--cell-edit-border);
+  outline-offset: -2px;
+  background: var(--cell-edit-background);
+}
+/* Selection (cell-selection.css): a 2px ring in the selection color, with a soft glow. */
+.flow-wrap.f2 .f2-cell.is-picked,
+.flow-wrap.f2 .f2-cell.is-lit {
+  border-color: var(--selection-color);
+  outline: 2px solid var(--selection-color);
+  outline-offset: -2px;
+  box-shadow: 0 0 var(--selection-glow-size) color-mix(in srgb, var(--selection-color) var(--selection-glow-opacity), transparent);
+  background: var(--cell-set-fill), light-dark(var(--p0-base-00), var(--p0-base-925));
+}
+.flow-wrap.f2 .f2-cell.is-lit:not(.is-picked) {
+  background: light-dark(var(--p0-base-00), var(--p0-base-925));
+}
+
+/* Link lines (response-connectors.css): 1.5px, butt caps, round joins; a line of the argument you are in
+ * takes the selection color; where two cross, the one above casts a soft shadow on the one beneath. */
+.flow-wrap.f2 :is(.link-line, .link-crossing-mask) {
+  fill: none;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  stroke-width: 1.5px;
+}
+.flow-wrap.f2 .link-line[data-straight] {
+  shape-rendering: crispEdges;
+}
+.flow-wrap.f2 .link-line {
+  stroke: var(--link-color);
+}
+.flow-wrap.f2 .link-line[data-active] {
+  stroke: var(--selection-color);
+}
+.flow-wrap.f2 .link-crossing {
+  fill: none;
+  stroke: var(--link-crossing-shadow-color);
+  stroke-linejoin: round;
+}
+.flow-wrap.f2 .link-crossing-mask {
+  stroke: white;
+}
+
+/* The add-an-answer control takes the column's response colors. */
+.flow-wrap.f2 .f2-add,
+.flow-wrap.f2 .f2-add.fl-gov {
+  color: var(--response-color);
+}
+.flow-wrap.f2 .f2-add:hover {
+  color: var(--response-hover-color);
+}
+.flow-wrap.f2 .f2-add::after {
+  background: var(--sheet-background);
+}
+
+/* "My colors": the side colors come from the app's Gov and Opp colorway (Colors window) instead of Flowist's
+ * cyan and red. In the dark flow they are the colorway's dark-theme steps (styles.css). */
+.flow-wrap.f2[data-flow-colors='colorway'] .fl-gov {
+  --column-text: var(--gov);
+  --column-heading: var(--gov);
+  --response-color: var(--gov);
+  --response-hover-color: color-mix(in srgb, var(--gov) 70%, var(--text));
+}
+.flow-wrap.f2[data-flow-colors='colorway'] .fl-opp {
+  --column-text: var(--opp);
+  --column-heading: var(--opp);
+  --response-color: var(--opp);
+  --response-hover-color: color-mix(in srgb, var(--opp) 70%, var(--text));
+}

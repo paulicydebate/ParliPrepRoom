@@ -1,0 +1,250 @@
+/* ---------- Pane body / document ---------- */
+.pane-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.outline {
+  width: var(--outline-w, 220px);
+  flex: none;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 12px 8px;
+  background: var(--surface-2);
+}
+.outline-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  padding: 0 8px 6px;
+}
+.outline-empty {
+  font-size: 12.5px;
+  color: var(--text-3);
+  padding: 0 8px;
+}
+.outline ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.outline-item[data-level='1'] {
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 6px;
+}
+.outline-item[data-level='2'] {
+  padding-left: 18px;
+  font-weight: 600;
+}
+.outline-item[data-level='3'] {
+  padding-left: 30px;
+}
+.outline-item:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.outline-item.is-current {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pp-doc-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+.pp-doc {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 28px 40px 50vh 48px;
+  outline: none;
+  line-height: 1.5;
+  caret-color: var(--accent);
+}
+
+/* The named styles. Fonts/sizes come from Appearance settings. */
+.pp-block {
+  position: relative;
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.pp-block[data-kind='position'] {
+  font-family: var(--pp-position-font);
+  font-size: var(--pp-position-size);
+  font-weight: var(--pp-position-weight);
+  font-style: var(--pp-position-style);
+  text-decoration: var(--pp-position-decoration);
+  color: var(--pp-position-color, var(--position-color));
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  margin: 1.4em 0 0.35em;
+  padding-bottom: 0.25em;
+  border-bottom: 2px solid var(--border);
+}
+.pp-block[data-kind='section'] {
+  font-family: var(--pp-section-font);
+  font-size: var(--pp-section-size);
+  font-weight: var(--pp-section-weight);
+  font-style: var(--pp-section-style);
+  text-decoration: var(--pp-section-decoration);
+  color: var(--pp-section-color, var(--section-color));
+  line-height: 1.25;
+  margin: 1.1em 0 0.3em;
+}
+.pp-block[data-kind='claim'] {
+  font-family: var(--pp-claim-font);
+  font-size: var(--pp-claim-size);
+  font-weight: var(--pp-claim-weight);
+  font-style: var(--pp-claim-style);
+  text-decoration: var(--pp-claim-decoration);
+  color: var(--pp-claim-color, var(--claim-color));
+  margin: 0.8em 0 0.2em;
+}
+.pp-block[data-kind='warrant'] {
+  font-family: var(--pp-warrant-font);
+  font-size: var(--pp-warrant-size);
+  font-weight: var(--pp-warrant-weight);
+  font-style: var(--pp-warrant-style);
+  text-decoration: var(--pp-warrant-decoration);
+  color: var(--pp-warrant-color, var(--warrant-color));
+  padding-left: 22px;
+  margin: 0.15em 0;
+}
+.pp-block[data-kind='warrant']::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0.35em;
+  bottom: 0.35em;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.pp-block[data-kind='analytic'] {
+  font-family: var(--pp-analytic-font);
+  font-size: var(--pp-analytic-size);
+  font-weight: var(--pp-analytic-weight);
+  font-style: var(--pp-analytic-style);
+  text-decoration: var(--pp-analytic-decoration);
+  color: var(--pp-analytic-color, var(--analytic-color));
+  padding-left: 22px;
+  margin: 0.15em 0;
+}
+.pp-block[data-kind='analytic']::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0.35em;
+  bottom: 0.35em;
+  width: 2px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--analytic-color) 50%, transparent);
+}
+.pp-block[data-kind='note'] {
+  font-family: var(--pp-note-font);
+  font-size: var(--pp-note-size);
+  font-weight: var(--pp-note-weight);
+  font-style: var(--pp-note-style);
+  text-decoration: var(--pp-note-decoration);
+  color: var(--pp-note-color, var(--note-color));
+  margin: 0.4em 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.pp-doc > .pp-block:first-child {
+  margin-top: 0;
+}
+.pp-doc mark {
+  background: var(--mark);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Placeholder for the empty block you're on. */
+.pp-doc .is-empty::after,
+.pp-doc .is-editor-empty::after {
+  content: attr(data-placeholder);
+  color: var(--text-3);
+  pointer-events: none;
+  font-weight: inherit;
+}
+
+/* Collapse toggles sit in the left margin. */
+.pp-toggle {
+  position: absolute;
+  left: -26px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  padding: 0;
+  transition: opacity 0.12s;
+}
+.pp-toggle::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 7px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--text-3);
+  border-bottom: 2px solid var(--text-3);
+  transform: rotate(45deg);
+  transition: transform 0.12s;
+}
+.pp-toggle.is-collapsed::before {
+  transform: rotate(-45deg);
+  left: 5px;
+  top: 6px;
+}
+.pp-block:hover > .pp-toggle,
+.pp-toggle.is-collapsed {
+  opacity: 1;
+}
+@media (hover: none) {
+  .pp-toggle {
+    opacity: 0.6;
+  }
+}
+.pp-toggle:hover {
+  background: var(--surface-2);
+}
+.pp-hidden {
+  display: none;
+}
+.pp-collapsed::after {
+  content: ' · ' attr(data-hidden-count) ' hidden';
+  font-family: var(--ui-font);
+  font-size: 12px;
+  font-weight: 500;
+  font-style: normal;
+  letter-spacing: 0;
+  color: var(--text-3);
+}

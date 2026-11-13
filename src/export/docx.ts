@@ -1,8 +1,6 @@
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, TextRun, type ParagraphChild } from 'docx';
 import { asKind, type BlockKind } from '../model/blocks';
-import { computeFlow, readBlocks } from '../model/flow';
-import { SPEECH_INFO, baseSpeech } from '../model/speeches';
 import { getSettings } from '../settings/settings';
 import { runsOf } from './runs';
 
@@ -19,19 +17,8 @@ const WORD_FONT: Record<string, string> = { 'Source Serif': 'Source Serif 4' };
 
 export async function buildDocx(doc: PMNode, title: string): Promise<Blob> {
   const settings = getSettings();
-  const layout = computeFlow(readBlocks(doc as never));
-  const tags = new Map<number, { speech: string; side: string }>();
-  for (const sheet of layout.sheets) {
-    for (const p of sheet.placements) {
-      const node = doc.nodeAt(p.pos);
-      if (!node || !p.speech) continue;
-      const tagged = node.attrs.kind === 'claim' ? p.speech !== baseSpeech(sheet.side) || node.attrs.newRow : !!node.attrs.speech;
-      if (tagged) tags.set(p.pos, { speech: p.speech, side: SPEECH_INFO[p.speech].side });
-    }
-  }
-
   const paragraphs: Paragraph[] = [];
-  doc.forEach((node, pos) => {
+  doc.forEach((node) => {
     if (node.type.name !== 'block') return;
     const kind = asKind(node.attrs.kind);
     const st = settings.styles[kind];
@@ -55,10 +42,6 @@ export async function buildDocx(doc: PMNode, title: string): Promise<Blob> {
     );
     const markLabel = ({ extend: 'EXTEND', dropped: 'DROPPED', answered: 'ANSWERED', key: 'KEY' } as Record<string, string>)[String(node.attrs.mark)];
     if (markLabel) children.unshift(new TextRun({ text: `[${markLabel}] `, font: 'Calibri', size: 16, bold: true, color: node.attrs.mark === 'dropped' ? 'B42318' : '1F6F5C' }));
-    const tag = tags.get(pos);
-    if (tag) {
-      children.push(new TextRun({ text: `  ${tag.speech}`, font: 'Calibri', size: 16, bold: true, color: tag.side === 'gov' ? '2F6FD6' : 'C2410C' }));
-    }
     if (kind === 'position' && node.attrs.side) {
       children.push(new TextRun({ text: `  ${String(node.attrs.side).toUpperCase()}`, font: 'Calibri', size: 16, bold: true, color: node.attrs.side === 'opp' ? 'C2410C' : '2F6FD6' }));
     }

@@ -79,7 +79,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
   }
 
   // Flags.
-  const large = live.filter((u) => u.inserted > LARGE);
+  const large = live.filter((u) => u.inserted > LARGE && !u.restored);
   const blocked = record.events.filter((e) => e.kind === 'paste-blocked' || e.kind === 'drop-blocked');
   const roundOff = record.events.filter((e) => e.kind === 'round-off');
   let awayMs = 0;
@@ -142,7 +142,7 @@ export function renderCheckPage({ doc, team, owner, partners, record, withText, 
     const typed = u.text ?? '';
     const removed = u.deletedText ?? '';
     if (!typed && !removed) continue;
-    const big = u.via === 'live' && u.inserted > LARGE;
+    const big = u.via === 'live' && u.inserted > LARGE && !u.restored;
     let last = bursts[bursts.length - 1];
     if (!(last && !big && !last.large && last.name === u.name && last.via === u.via && u.at - last.end < 4000)) {
       last = { start: u.at, end: u.at, name: u.name, via: u.via, large: big, parts: [] };

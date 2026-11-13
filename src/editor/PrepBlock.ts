@@ -1,7 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { ySyncPluginKey } from '@tiptap/y-tiptap';
-import { isSpeech, type Speech } from '../model/speeches';
+import { isSpeech } from '../model/speeches';
 import { isFlowMark, type FlowMark } from '../model/marks';
 import { styleForKey } from './shortcuts';
 import { asKind, cycleKind, demote, newBlockId, promote, type BlockKind } from '../model/blocks';
@@ -13,8 +13,6 @@ declare module '@tiptap/core' {
       setBlockKind: (kind: BlockKind) => ReturnType;
       /** Mark every selected block (same mark again clears it). */
       toggleFlowMark: (mark: FlowMark) => ReturnType;
-      /** Tag every selected block with a speech (null = automatic). */
-      setBlockSpeech: (speech: Speech | null) => ReturnType;
       /** Tab / Shift-Tab: move every selected block one level down or up. */
       shiftBlockLevel: (direction: 'in' | 'out') => ReturnType;
       /** Shift+Enter: give every selected block the style after (or before) the first one's in the style list. */
@@ -169,19 +167,6 @@ export const PrepBlock = Node.create({
             for (const b of blocks) {
               const node = tr.doc.nodeAt(b.pos);
               if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, mark: allHave ? null : mark });
-            }
-          }
-          return true;
-        },
-      setBlockSpeech:
-        (speech) =>
-        ({ state, tr, dispatch }) => {
-          const blocks = selectedBlocks(state);
-          if (!blocks.length) return false;
-          if (dispatch) {
-            for (const b of blocks) {
-              const node = tr.doc.nodeAt(b.pos);
-              if (node) tr.setNodeMarkup(b.pos, undefined, { ...node.attrs, speech });
             }
           }
           return true;

@@ -1,8 +1,12 @@
 import type { JSONContent } from '@tiptap/core';
 import type { Editor } from '@tiptap/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from '../editor/roundGuard';
+import { ROUND_NO_RESTORE, toast } from '../editor/roundGuard';
 import { diffBlocks, flattenDoc, summarize } from '../history/diff';
+import { diffFlows, flattenFlow, summarizeFlow } from '../history/flowDiff';
+import { restoreFlow } from '../flow2/restore';
+import type * as Y from 'yjs';
+import { FlowDiffLines, FlowSnapshotView } from './FlowHistory';
 import { DocReplayer, decodeLog, sessionsOf, type DecodedUpdate, type EditSession } from '../history/timeline';
 import { docLog } from '../store/account';
 import { colorFor } from '../store/sync';
@@ -44,6 +48,8 @@ function useRecord(docId: string) {
 export function ServerHistory({
   mode,
   docId,
+  ydoc,
+  format,
   editor,
   round,
   tabs,
@@ -51,6 +57,8 @@ export function ServerHistory({
 }: {
   mode: 'history' | 'replay';
   docId: string;
+  ydoc: Y.Doc;
+  format: 'doc' | 'flow';
   editor: Editor | null;
   round: boolean;
   tabs: React.ReactNode;
@@ -74,8 +82,8 @@ export function ServerHistory({
         </div>
         {error && <p className="muted history-pad">{error}</p>}
         {!error && !updates && <p className="muted history-pad">Loading the record…</p>}
-        {updates && replayer && mode === 'history' && <Sessions updates={updates} replayer={replayer} editor={editor} round={round} docId={docId} onClose={onClose} />}
-        {updates && replayer && mode === 'replay' && <Replay updates={updates} replayer={replayer} />}
+        {updates && replayer && mode === 'history' && <Sessions updates={updates} replayer={replayer} editor={editor} ydoc={ydoc} format={format} round={round} docId={docId} onClose={onClose} />}
+        {updates && replayer && mode === 'replay' && <Replay updates={updates} replayer={replayer} format={format} />}
       </div>
     </div>
   );
@@ -85,6 +93,8 @@ function Sessions({
   updates,
   replayer,
   editor,
+  ydoc,
+  format,
   round,
   docId,
   onClose,
@@ -92,6 +102,8 @@ function Sessions({
   updates: DecodedUpdate[];
   replayer: DocReplayer;
   editor: Editor | null;
+  ydoc: Y.Doc;
+  format: 'doc' | 'flow';
   round: boolean;
   docId: string;
   onClose: () => void;
@@ -102,16 +114,34 @@ function Sessions({
   const [confirm, setConfirm] = useState(false);
   useEffect(() => setConfirm(false), [sel]);
 
-  const before = useMemo(() => (sel ? replayer.jsonAt(sel.from - 1) : null), [sel, replayer]);
-  const after = useMemo(() => (sel ? replayer.jsonAt(sel.to) : null), [sel, replayer]);
-  const now = useMemo(() => replayer.jsonAt(updates.length - 1), [replayer, updates.length]);
+  const flow = format === 'flow';
+  const before = useMemo(() => (sel && !flow ? replayer.jsonAt(sel.from - 1) : null), [sel, replayer, flow]);
+  const after = useMemo(() => (sel && !flow ? replayer.jsonAt(sel.to) : null), [sel, replayer, flow]);
+  const now = useMemo(() => (flow ? null : replayer.jsonAt(updates.length - 1)), [replayer, updates.length, flow]);
   const rows = useMemo(() => {
-    if (!before || !after) return [];
+    if (!before || !after || !now) return [];
     return view === 'since' ? diffBlocks(flattenDoc(after), flattenDoc(now)) : diffBlocks(flattenDoc(before), flattenDoc(after));
   }, [before, after, now, view]);
-  const stats = summarize(rows);
+  const flowBefore = useMemo(() => (sel && flow ? replayer.flowAt(sel.from - 1) : null), [sel, replayer, flow]);
+  const flowAfter = useMemo(() => (sel && flow ? replayer.flowAt(sel.to) : null), [sel, replayer, flow]);
+  const flowNow = useMemo(() => (flow ? replayer.flowAt(updates.length - 1) : null), [replayer, updates.length, flow]);
+  const flowRows = useMemo(() => {
+    if (!flowBefore || !flowAfter || !flowNow) return [];
+    return view === 'since' ? diffFlows(flattenFlow(flowAfter), flattenFlow(flowNow)) : diffFlows(flattenFlow(flowBefore), flattenFlow(flowAfter));
+  }, [flowBefore, flowAfter, flowNow, view]);
+  const stats = flow ? summarizeFlow(flowRows) : summarize(rows);
 
   const restore = () => {
+    if (round) return toast(ROUND_NO_RESTORE);
+    if (flow && sel) {
+      if (round) logEvent(docId, { k: 'restore', s: `${day(sel.end)} ${time(sel.end)} (after ${sel.name}'s edits)` });
+      const point = replayer.docAt(sel.to);
+      restoreFlow(ydoc, point);
+      point.destroy();
+      toast('Restored. Ctrl/⌘+Z in the flow undoes it.');
+      onClose();
+      return;
+    }
     if (!editor || !after || !sel) return;
     if (round) logEvent(docId, { k: 'restore', s: `${day(sel.end)} ${time(sel.end)} (after ${sel.name}'s edits)` });
     editor.commands.setContent(after as JSONContent);
@@ -157,7 +187,7 @@ function Sessions({
                   </button>
                 </span>
               ) : (
-                <button type="button" className="btn small" disabled={!editor} onClick={() => setConfirm(true)} title="Put the doc back the way it was right after these edits">
+                <button type="button" className="btn small" disabled={(!editor && !flow) || round} onClick={() => setConfirm(true)} title={round ? ROUND_NO_RESTORE : 'Put the doc back the way it was right after these edits'}>
                   Restore to this point
                 </button>
               )}
@@ -172,8 +202,10 @@ function Sessions({
               </p>
             )}
             <div className="pp-doc history-doc who-diff" style={{ ['--who' as string]: colorFor(sel.userId) }}>
-              {view === 'doc' && after && flattenDoc(after).map((b, i) => <Line key={i} block={b} />)}
-              {view !== 'doc' && <DiffLines rows={rows} changesOnly={view === 'changes'} />}
+              {!flow && view === 'doc' && after && flattenDoc(after).map((b, i) => <Line key={i} block={b} />)}
+              {!flow && view !== 'doc' && <DiffLines rows={rows} changesOnly={view === 'changes'} />}
+              {flow && view === 'doc' && flowAfter && <FlowSnapshotView sheets={flowAfter} />}
+              {flow && view !== 'doc' && <FlowDiffLines rows={flowRows} changesOnly={view === 'changes'} />}
             </div>
           </>
         )}
@@ -220,7 +252,7 @@ function Sessions({
 }
 
 /** Scrub or play through every edit. */
-function Replay({ updates, replayer }: { updates: DecodedUpdate[]; replayer: DocReplayer }) {
+function Replay({ updates, replayer, format }: { updates: DecodedUpdate[]; replayer: DocReplayer; format: 'doc' | 'flow' }) {
   const [i, setI] = useState(updates.length - 1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(8);
@@ -242,7 +274,9 @@ function Replay({ updates, replayer }: { updates: DecodedUpdate[]; replayer: Doc
     };
   }, [playing, speed, updates.length]);
 
-  const json = useMemo(() => replayer.jsonAt(i), [replayer, i]);
+  const flow = format === 'flow';
+  const json = useMemo(() => (flow ? null : replayer.jsonAt(i)), [replayer, i, flow]);
+  const sheets = useMemo(() => (flow ? replayer.flowAt(i) : null), [replayer, i, flow]);
   const u = updates[i];
   const people = useMemo(() => [...new Map(updates.map((x) => [x.userId, x.name])).entries()], [updates]);
 
@@ -302,7 +336,7 @@ function Replay({ updates, replayer }: { updates: DecodedUpdate[]; replayer: Doc
           </span>
         ))}
       </div>
-      <div className="pp-doc history-doc">{flattenDoc(json).map((b, k) => <Line key={k} block={b} />)}</div>
+      {flow ? <div className="history-doc">{sheets && <FlowSnapshotView sheets={sheets} />}</div> : <div className="pp-doc history-doc">{flattenDoc(json).map((b, k) => <Line key={k} block={b} />)}</div>}
     </div>
   );
 }

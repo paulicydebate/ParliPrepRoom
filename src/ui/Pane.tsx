@@ -7,7 +7,7 @@ import { formatOf, renameDoc, setDocRound, type DocFormat, type DocMeta } from '
 import { setRound, useRound } from '../store/roundDoc';
 import { useConnectionCheck, useSyncStatus, type SyncStatus } from '../store/sync';
 import { DocEditor, Outline, Toolbar } from './DocEditor';
-import { FlowEditor } from './FlowEditor';
+import { Flow2Editor } from '../flow2/Flow2Editor';
 import { CheckLinkButton, PartnersButton } from './RoundTools';
 import { PinButton } from './RoundModeUI';
 import { HistoryView } from './HistoryView';
@@ -23,18 +23,23 @@ export interface PaneState {
   focus?: { blockId: string; n: number };
 }
 
-/** Download the doc as Word, or its flow as Excel. */
-async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'xlsx') {
-  if (!editor) return;
+/** Download a doc as Word, or a flow as Excel or Word. */
+async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'xlsx', ydoc?: Y.Doc | null) {
   const { download, safeFilename } = await import('../export/runs');
   const name = safeFilename(title);
-  if (kind === 'docx') {
-    const { buildDocx } = await import('../export/docx');
-    download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  } else {
-    const { buildFlowXlsx } = await import('../export/xlsx');
-    download(new Uint8Array(buildFlowXlsx(editor.state.doc)), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  if (kind === 'docx' && ydoc) {
+    const [{ buildFlowDocx }, { readFlow }] = await Promise.all([import('../export/flowDocx'), import('../flow2/model')]);
+    download(await buildFlowDocx(readFlow(ydoc), title), `${name} flow.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    return;
   }
+  if (kind === 'xlsx' && ydoc) {
+    const [{ buildFlow2Xlsx }, { readFlow }] = await Promise.all([import('../export/flowXlsx'), import('../flow2/model')]);
+    download(new Uint8Array(buildFlow2Xlsx(readFlow(ydoc))), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    return;
+  }
+  if (!editor || kind !== 'docx') return;
+  const { buildDocx } = await import('../export/docx');
+  download(await buildDocx(editor.state.doc, title), `${name}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 }
 
 async function copyShareLink(docId: string) {
@@ -52,13 +57,13 @@ const closeMenu = (e: React.MouseEvent) => {
   if (d) d.open = false;
 };
 
-function ExportMenu({ editor, title, format }: { editor: Editor | null; title: string; format: DocFormat }) {
+function ExportMenu({ editor, title, format, ydoc }: { editor: Editor | null; title: string; format: DocFormat; ydoc: Y.Doc | null }) {
   const [busy, setBusy] = useState(false);
   const run = async (e: React.MouseEvent, kind: 'docx' | 'xlsx') => {
     closeMenu(e);
     setBusy(true);
     try {
-      await exportDoc(editor, title, kind);
+      await exportDoc(editor, title, kind, format === 'flow' ? ydoc : null);
     } finally {
       setBusy(false);
     }
@@ -74,9 +79,14 @@ function ExportMenu({ editor, title, format }: { editor: Editor | null; title: s
             Word document (.docx)
           </button>
         ) : (
-          <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
-            Excel flow (.xlsx)
-          </button>
+          <>
+            <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
+              Excel flow (.xlsx)
+            </button>
+            <button type="button" disabled={busy} onClick={(e) => void run(e, 'docx')}>
+              Word flow (.docx)
+            </button>
+          </>
         )}
       </div>
     </details>
@@ -307,6 +317,7 @@ export function Pane({
   onChange,
   onClose,
   onCreate,
+  onNewRound,
   focusMode,
   onFocusMode,
   showCarets,
@@ -326,6 +337,8 @@ export function Pane({
   onChange: (p: PaneState) => void;
   onClose: () => void;
   onCreate: (kind: DocMeta['kind'], format?: DocFormat) => void;
+  /** Open the New round dialog (shown on Home when signed in). */
+  onNewRound?: () => void;
   /** One window fills the screen. */
   focusMode: boolean;
   onFocusMode: () => void;
@@ -429,7 +442,7 @@ export function Pane({
                 </button>
               )}
               {provider && <ShareButton docId={meta.id} />}
-              <ExportMenu editor={editor} title={meta.title} format={view} />
+              <ExportMenu editor={editor} title={meta.title} format={view} ydoc={ydoc} />
               <button
                 type="button"
                 className={'icon-btn' + (history ? ' is-on' : '')}
@@ -484,9 +497,14 @@ export function Pane({
                     Download Word (.docx)
                   </button>
                 ) : (
-                  <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx'))}>
-                    Download Excel flow (.xlsx)
-                  </button>
+                  <>
+                    <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx', ydoc))}>
+                      Download Excel flow (.xlsx)
+                    </button>
+                    <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'docx', ydoc))}>
+                      Download Word flow (.docx)
+                    </button>
+                  </>
                 )}
               </div>
             </details>
@@ -511,37 +529,54 @@ export function Pane({
       )}
 
       {!meta && (
-        <div className="pane-picker">
-          <p>Pick a document for this pane.</p>
-          <div className="picker-cols">
-            {(['prep', 'reference'] as const).map((kind) => (
-              <div key={kind}>
-                <h3>{kind === 'prep' ? 'Prep' : 'Reference'}</h3>
+        <div className="home">
+          <h2>Home</h2>
+          <div className="home-actions">
+            {onNewRound && (
+              <button type="button" className="btn primary" onClick={onNewRound}>
+                New round
+              </button>
+            )}
+            <button type="button" className="btn" onClick={() => onCreate('prep', 'flow')}>
+              {roundMode ? 'New round flow' : 'New flow'}
+            </button>
+            <button type="button" className="btn" onClick={() => onCreate('prep')}>
+              {roundMode ? 'New round doc' : 'New prep doc'}
+            </button>
+            {!roundMode && (
+              <button type="button" className="btn ghost" onClick={() => onCreate('reference')}>
+                New reference doc
+              </button>
+            )}
+          </div>
+          {[
+            { title: 'Flows', list: docs.filter((d) => formatOf(d) === 'flow' && (!roundMode || d.round)) },
+            { title: 'Prep docs', list: docs.filter((d) => formatOf(d) !== 'flow' && d.kind === 'prep' && (!roundMode || d.round)) },
+            { title: 'Reference', list: roundMode ? [] : docs.filter((d) => d.kind === 'reference') },
+          ]
+            .filter((g) => g.list.length)
+            .map((g) => (
+              <section key={g.title} className="home-group">
+                <h3>{g.title}</h3>
                 <ul>
-                  {docs
-                    .filter((d) => d.kind === kind && (!roundMode || d.round))
+                  {[...g.list]
+                    .sort((a, b) => b.createdAt - a.createdAt)
                     .map((d) => (
                       <li key={d.id}>
                         <button type="button" onClick={() => onChange({ ...pane, docId: d.id })}>
-                          {d.title}
-                          {formatOf(d) === 'flow' ? ' (flow)' : ''}
+                          <span className="home-title">{d.title || 'Untitled'}</span>
+                          <span className="home-meta">
+                            {d.round ? 'Round' : ''}
+                            {d.round && (d.roundLabel || d.tournamentName) ? ' · ' : ''}
+                            {[d.tournamentName, d.roundLabel].filter(Boolean).join(' ')}
+                            <span className="home-date">{new Date(d.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                          </span>
                         </button>
                       </li>
                     ))}
                 </ul>
-                {(kind === 'prep' || !roundMode) && (
-                  <button type="button" className="btn ghost small" onClick={() => onCreate(kind)}>
-                    + New {kind === 'prep' ? (roundMode ? 'round doc' : 'prep doc') : 'reference doc'}
-                  </button>
-                )}
-                {kind === 'prep' && (
-                  <button type="button" className="btn ghost small" onClick={() => onCreate(kind, 'flow')}>
-                    + New {roundMode ? 'round flow' : 'flow'}
-                  </button>
-                )}
-              </div>
+              </section>
             ))}
-          </div>
         </div>
       )}
 
@@ -569,9 +604,9 @@ export function Pane({
                 <PanelHandle panel={outlineWidth} edge="right" label="Resize the outline" onCollapse={() => onChange({ ...pane, outline: false })} />
               </>
             )}
-            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <FlowEditor key="flow" ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} onEditor={onEditor} />}
+            {view === 'doc' ? <DocEditor key="doc" ydoc={ydoc} provider={provider} docId={meta.id} carets={showCarets} onEditor={onEditor} /> : <Flow2Editor key={`flow-${meta.id}`} ydoc={ydoc} provider={provider} docId={meta.id} space={space} carets={showCarets} focus={pane.focus} onEditor={onEditor as (e: null) => void} />}
           </div>
-          {history && <HistoryView docId={meta.id} ydoc={ydoc} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
+          {history && <HistoryView docId={meta.id} ydoc={ydoc} format={view} editor={editor} round={round} checkToken={meta.checkToken} server={!!provider} onClose={() => setHistory(false)} />}
         </>
       )}
     </section>

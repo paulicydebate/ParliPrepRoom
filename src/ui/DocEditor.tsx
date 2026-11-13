@@ -7,9 +7,6 @@ import { useEffect } from 'react';
 import type * as Y from 'yjs';
 import { Collapse } from '../editor/collapse';
 import { FLOW_MARKS, type FlowMark } from '../model/marks';
-import { SpeechTags } from '../editor/speechTags';
-import { computeFlow, readBlocks, sheetAt } from '../model/flow';
-import { SPEECHES, isSpeech, type Speech } from '../model/speeches';
 import { isMac, styleKeyLabel } from '../editor/shortcuts';
 import { useSettings } from '../settings/settings';
 import { BODY_FIELD, contentExtensions } from '../editor/extensions';
@@ -38,7 +35,6 @@ export function DocEditor({ ydoc, provider, docId, carets, onEditor }: { ydoc: Y
         RoundGuard.configure({ ydoc, docId }),
         ...(provider && carets ? [CollaborationCaret.configure({ provider, user: provider.awareness.getLocalState()?.user ?? { name: 'Unnamed', color: '#888' } })] : []),
         Collapse,
-        SpeechTags,
         Placeholder.configure({
           placeholder: ({ node }) => `${KIND_INFO[asKind(node.attrs.kind)].label}…`,
         }),
@@ -60,23 +56,11 @@ export const MOD = isMac ? '⌘' : 'Ctrl';
 
 const MARK_GLYPH: Record<FlowMark, string> = { extend: '→', dropped: '!', answered: '✓', key: '★' };
 
-/** The speech a line will show under on the flow, and whether it was chosen by hand. */
-function speechInfo(e: Editor) {
-  const { $from } = e.state.selection;
-  const node = $from.parent;
-  const explicit = isSpeech(node.attrs.speech) ? (node.attrs.speech as Speech) : null;
-  if ($from.depth < 1) return { explicit, effective: null as Speech | null, inSheet: false };
-  const layout = computeFlow(readBlocks(e.state.doc));
-  const pos = $from.before(1);
-  return { explicit, effective: layout.speechAt.get(pos) ?? null, inSheet: !!sheetAt(layout, pos) };
-}
-
 export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?: 'doc' | 'flow'; extra?: React.ReactNode }) {
   useSettings(); // re-render when the style keys change
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
-      ...speechInfo(e),
       kind: asKind(e.state.selection.$from.parent.attrs.kind),
       mark: (e.state.selection.$from.parent.attrs.mark as string | null) ?? null,
       bold: e.isActive('bold'),
@@ -118,23 +102,6 @@ export function Toolbar({ editor, view = 'doc', extra }: { editor: Editor; view?
           ))}
         </select>
       </label>
-      {s.kind !== 'position' && s.kind !== 'section' && (
-        <label className="speech-select" title="Which speech's column this line goes in on the flow">
-          <span className="sr-only">Speech</span>
-          <select
-            value={s.explicit ?? ''}
-            disabled={!s.inSheet}
-            onChange={(e) => editor.chain().focus().setBlockSpeech(e.target.value ? (e.target.value as Speech) : null).run()}
-          >
-            <option value="">{s.inSheet ? `Auto${s.effective && !s.explicit ? ` (${s.effective})` : ''}` : 'No sheet'}</option>
-            {SPEECHES.map((sp) => (
-              <option key={sp} value={sp}>
-                {sp}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
       <span className="tb-sep" />
       {btn(s.bold, 'B', `Bold (${MOD}+B)`, () => editor.chain().focus().toggleBold().run(), <b>B</b>)}
       {btn(s.italic, 'I', `Italic (${MOD}+I)`, () => editor.chain().focus().toggleItalic().run(), <i>I</i>)}

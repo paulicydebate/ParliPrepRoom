@@ -1,7 +1,7 @@
 import type { JSONContent } from '@tiptap/core';
 import { strFromU8, unzipSync } from 'fflate';
 import { newBlockId, type BlockKind } from '../model/blocks';
-import { SPEECHES, type Speech } from '../model/speeches';
+import { FLOW_PART, type FlowFile } from './flowFile';
 
 // Import a file into a new reference doc: Word (.docx, also how Google Docs
 // download), spreadsheets (.xlsx/.csv, also Google Sheets flows) and plain
@@ -83,7 +83,7 @@ export function parseDocx(bytes: Uint8Array): JSONContent {
 // ---------- Spreadsheets (flows) ----------
 
 /** Rows of one sheet as strings. */
-type Sheet = { name: string; rows: string[][] };
+export type Sheet = { name: string; rows: string[][] };
 
 const colIndex = (ref: string) => {
   const letters = ref.replace(/[0-9]/g, '');
@@ -91,6 +91,18 @@ const colIndex = (ref: string) => {
   for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
   return n - 1;
 };
+
+/** The exact flow a file made by this app carries (flowFile.ts), or null. */
+export function readFlowPart(bytes: Uint8Array): FlowFile | null {
+  try {
+    const part = unzipSync(bytes, { filter: (f) => f.name === FLOW_PART })[FLOW_PART];
+    if (!part) return null;
+    const data = JSON.parse(strFromU8(part)) as FlowFile;
+    return data && data.v === 1 && Array.isArray(data.sheets) ? data : null;
+  } catch {
+    return null;
+  }
+}
 
 export function parseXlsx(bytes: Uint8Array): Sheet[] {
   const files = unzipSync(bytes);
@@ -163,49 +175,6 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const speechOf = (header: string): Speech | null => {
-  const h = header.trim().toUpperCase().replace(/[^A-Z]/g, '');
-  return (SPEECHES as string[]).includes(h) ? (h as Speech) : null;
-};
-
-/**
- * A sheet becomes a flow sheet: a header row naming speeches (PMC, LOC…) maps
- * columns to speeches; each row's first filled cell starts a row, later cells
- * become answers in their speech. Without speech headers, rows become claims.
- */
-export function sheetsToDoc(sheets: Sheet[]): JSONContent {
-  const out: JSONContent[] = [];
-  for (const sh of sheets) {
-    const rows = sh.rows.filter((r) => r.some((c) => c?.trim()));
-    if (!rows.length) continue;
-    const headerIdx = rows.findIndex((r) => r.filter((c) => speechOf(c ?? '')).length >= 2);
-    const header = headerIdx >= 0 ? rows[headerIdx].map((c) => speechOf(c ?? '')) : null;
-    const firstSpeech = header?.find(Boolean) ?? null;
-    const side = firstSpeech === 'LOC' ? 'opp' : 'gov';
-    out.push(block('position', sh.name, { side }));
-    for (const r of header ? rows.slice(headerIdx + 1) : rows) {
-      let started = false;
-      r.forEach((cell, i) => {
-        const text = (cell ?? '').trim();
-        if (!text) return;
-        const sp = header?.[i] ?? null;
-        const isBase = !sp || sp === firstSpeech;
-        const lines = text.split(/\r?\n/).filter((l) => l.trim());
-        lines.forEach((line, k) => {
-          const kind: BlockKind = k === 0 ? 'claim' : 'warrant';
-          const attrs: Record<string, unknown> = {};
-          if (sp && !isBase) attrs.speech = sp;
-          // A row that starts in a later column still starts its own row.
-          if (k === 0 && !started && sp && !isBase) attrs.newRow = true;
-          out.push(block(kind, line.trim(), attrs));
-        });
-        started = true;
-      });
-    }
-  }
-  return doc(out);
-}
-
 // ---------- Text / Markdown ----------
 
 export function parseText(text: string): JSONContent {
@@ -224,9 +193,19 @@ export async function importFile(file: File): Promise<{ title: string; json: JSO
   const name = file.name.replace(/\.[^.]+$/, '');
   const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (ext === 'docx') return { title: name, json: parseDocx(new Uint8Array(await file.arrayBuffer())) };
-  if (ext === 'xlsx') return { title: name, json: sheetsToDoc(parseXlsx(new Uint8Array(await file.arrayBuffer()))) };
-  if (ext === 'csv') return { title: name, json: sheetsToDoc([{ name, rows: parseCsv(await file.text()) }]) };
   if (ext === 'txt' || ext === 'md' || ext === 'markdown') return { title: name, json: parseText(await file.text()) };
   if (ext === 'doc') throw new Error('Old .doc files aren’t supported. Open it in Word or Google Docs and save as .docx.');
   throw new Error('Pick a Word (.docx), Excel (.xlsx), CSV, text or Markdown file. From Google Docs or Sheets: File → Download.');
+}
+
+/** A spreadsheet's rows, to read into a flow (null for any other kind of file). */
+export async function importSheets(file: File): Promise<{ title: string; sheets: Sheet[]; exact?: FlowFile | null } | null> {
+  const name = file.name.replace(/\.[^.]+$/, '');
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'xlsx') {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return { title: name, sheets: parseXlsx(bytes), exact: readFlowPart(bytes) };
+  }
+  if (ext === 'csv') return { title: name, sheets: [{ name, rows: parseCsv(await file.text()) }] };
+  return null;
 }

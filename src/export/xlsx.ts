@@ -1,26 +1,23 @@
+import type { Run } from './runs';
 import { strToU8, zipSync } from 'fflate';
-import type { Node as PMNode } from '@tiptap/pm/model';
-import { computeFlow, readBlocks } from '../model/flow';
-import { SPEECH_INFO } from '../model/speeches';
-import { runsOf, type Run } from './runs';
 
 // A small hand-written .xlsx writer: one worksheet per flow sheet, one
 // spreadsheet row per flow row, one column per speech, gov/opp tinted like
 // a paper flow. Opens in Excel, Google Sheets and Numbers.
 
-const esc = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+export const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
 
-function colName(i: number) {
+export function colName(i: number) {
   let s = '';
   for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;
   return s;
 }
 
 // Style ids in styles.xml below.
-const S = { headGov: 1, headOpp: 2, bodyGov: 3, bodyOpp: 4, section: 5 };
+export const S = { headGov: 1, headOpp: 2, bodyGov: 3, bodyOpp: 4, section: 5 };
 
-const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+export const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="12"/><name val="Calibri"/></font></fonts>
 <fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
@@ -39,7 +36,7 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
 
-function richCell(ref: string, style: number, lines: { runs: Run[]; claim: boolean }[]) {
+export function richCell(ref: string, style: number, lines: { runs: Run[]; claim: boolean }[]) {
   if (!lines.length) return `<c r="${ref}" s="${style}"/>`;
   const parts: string[] = [];
   lines.forEach((line, i) => {
@@ -56,76 +53,20 @@ function richCell(ref: string, style: number, lines: { runs: Run[]; claim: boole
   return `<c r="${ref}" s="${style}" t="inlineStr"><is>${parts.join('')}</is></c>`;
 }
 
-function sheetName(title: string, used: Set<string>) {
-  let base = title.replace(/[\[\]:*?/\\]/g, ' ').trim().slice(0, 28) || 'Sheet';
+export function sheetName(title: string, used: Set<string>) {
+  // (Excel refuses these characters in a sheet name, and an apostrophe at either end.)
+  let base = title.replace(/[\[\]:*?/\\]/g, ' ').trim().replace(/^'+|'+$/g, '').trim().slice(0, 28) || 'Sheet';
   let name = base;
   for (let i = 2; used.has(name.toLowerCase()); i++) name = `${base.slice(0, 26)} ${i}`;
   used.add(name.toLowerCase());
   return name;
 }
 
-export function buildFlowXlsx(doc: PMNode): Uint8Array {
-  const layout = computeFlow(readBlocks(doc as never));
-  const files: Record<string, Uint8Array> = {};
-  const used = new Set<string>();
-  const sheets = layout.sheets.length ? layout.sheets : [];
-  const names: string[] = [];
-
-  sheets.forEach((sheet, si) => {
-    names.push(sheetName(sheet.title, used));
-    const rows: string[] = [];
-    const merges: string[] = [];
-    const lastCol = colName(sheet.columns.length - 1);
-    rows.push(
-      `<row r="1">${sheet.columns
-        .map((sp, i) => `<c r="${colName(i)}1" s="${SPEECH_INFO[sp].side === 'gov' ? S.headGov : S.headOpp}" t="inlineStr"><is><t>${sp}</t></is></c>`)
-        .join('')}</row>`,
-    );
-    let r = 2;
-    // Walk sections and groups in document order.
-    const items: ({ kind: 'section'; pos: number } | { kind: 'group'; index: number; pos: number })[] = [
-      ...sheet.placements.filter((p) => p.col === 0).map((p) => ({ kind: 'section' as const, pos: p.pos })),
-      ...sheet.groups.map((g) => ({ kind: 'group' as const, index: g.index, pos: g.from })),
-    ].sort((a, b) => a.pos - b.pos);
-    for (const item of items) {
-      if (item.kind === 'section') {
-        const node = doc.nodeAt(item.pos);
-        rows.push(`<row r="${r}">${richCell(`A${r}`, S.section, [{ runs: node ? runsOf(node.toJSON()) : [], claim: false }])}</row>`);
-        merges.push(`<mergeCell ref="A${r}:${lastCol}${r}"/>`);
-        r++;
-        continue;
-      }
-      const g = sheet.groups[item.index];
-      const cells = sheet.columns.map((sp, ci) => {
-        const list = g.cells.get(ci + 1) ?? [];
-        const lines = list.map((b) => {
-          const node = doc.nodeAt(b.pos)!;
-          const mark = ({ extend: '→ ', dropped: '[DROPPED] ', answered: '✓ ', key: '★ ' } as Record<string, string>)[String(node.attrs.mark)];
-          const runs = runsOf(node.toJSON());
-          return { runs: mark ? [{ text: mark, bold: true }, ...runs] : runs, claim: node.attrs.kind === 'claim' };
-        });
-        return richCell(`${colName(ci)}${r}`, SPEECH_INFO[sp].side === 'gov' ? S.bodyGov : S.bodyOpp, lines);
-      });
-      rows.push(`<row r="${r}">${cells.join('')}</row>`);
-      r++;
-    }
-    const cols = sheet.columns.map((_, i) => `<col min="${i + 1}" max="${i + 1}" width="38" customWidth="1"/>`).join('');
-    files[`xl/worksheets/sheet${si + 1}.xml`] = strToU8(
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${cols}</cols><sheetData>${rows.join('')}</sheetData>${merges.length ? `<mergeCells count="${merges.length}">${merges.join('')}</mergeCells>` : ''}</worksheet>`,
-    );
-  });
-
-  if (!sheets.length) {
-    names.push('Flow');
-    files['xl/worksheets/sheet1.xml'] = strToU8(
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>No sheets yet: add a Position title.</t></is></c></row></sheetData></worksheet>`,
-    );
-  }
-
+/** Wrap worksheet files (xl/worksheets/sheetN.xml) and their names into a finished .xlsx. */
+export function packWorkbook(names: string[], files: Record<string, Uint8Array>): Uint8Array {
   const n = names.length;
   files['[Content_Types].xml'] = strToU8(
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="json" ContentType="application/json"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names
       .map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
       .join('')}</Types>`,
   );

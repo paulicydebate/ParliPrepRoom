@@ -1,0 +1,50 @@
+/* ---------- Flow look: thin outlines, side-colored text, empty cells invisible (after the Flowist video) ---------- */
+:root {
+  --fl-gap: 44px; /* room for the threads between an argument and its answers */
+}
+.flow-wrap[data-flow-theme='night'] {
+  --surface: #161616;
+  --text: #e8e8e8;
+  --text-2: #a6a6a6;
+  --border: #3a3a3a;
+  --gov: var(--gov-d, #7aa7ff);
+  --opp: var(--opp-d, #ff7b72);
+  --band-a: transparent;
+  --band-b: color-mix(in srgb, #fff 3%, transparent);
+  background: var(--surface);
+  color: var(--text);
+}
+.flow-theme-opt {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+/* Column headings: colored text on a colored underline, no pill. */
+/* Cells: a plain outlined box, as tall as its text. Empty positions show nothing until hovered. */
+
+
+
+/* A cell you have just made and not typed in yet. */
+
+
+
+
+/* Text: the side's color, small and even. */
+
+
+
+
+/* Threads: soft grey curves, green when the argument or one of its answers is selected. */
+
+/* The + under linked answers. */
+
+
+
+/* Box-select */
+
+.build-stamp {
+  display: block;
+  padding: 6px 12px 2px;
+}

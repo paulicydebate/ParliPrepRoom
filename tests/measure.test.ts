@@ -47,3 +47,44 @@ describe('server record text', () => {
     expect(out.map((o) => o.deletedText).filter(Boolean)).toEqual(['wrote']);
   });
 });
+
+import { addSheet, createChild, createRoot, linkCells, moveSheet, renameSheet, setMark, unlinkCell, yCells, yText, sheetsMap, deleteCell } from '../src/flow2/model';
+
+describe('server record text for flows', () => {
+  it('puts each cell on its own line, counts sheet names, and ignores marks, moves and links', () => {
+    const doc = new Y.Doc();
+    const updates = recorder(doc);
+    const sheet = addSheet(doc, 'gov', 'Gov 1');
+    const a = createRoot(doc, sheet, 1)!;
+    const typeIn = (id: string, s: string) => yText(yCells(sheetsMap(doc).get(sheet)!).get(id)!).insert(0, s);
+    typeIn(a, 'claim one');
+    const b = createChild(doc, sheet, a)!;
+    typeIn(b, 'answer');
+    const chars = new Map<string, string>();
+    const before = updates.length;
+    const firstPart = updates.slice(0, before).map((u) => measureUpdate(u, chars));
+    expect(firstPart.map((m) => m.text).join('')).toBe('Gov 1\nclaim one\nanswer');
+
+    const mark = updates.length;
+    setMark(doc, sheet, [a], 'dropped');
+    setMark(doc, sheet, [a], 'key');
+    moveSheet(doc, sheet, 100, 200);
+    moveSheet(doc, sheet, 300, 400);
+    unlinkCell(doc, sheet, b);
+    linkCells(doc, sheet, [b], a);
+    const meta = updates.slice(mark).map((u) => measureUpdate(u, chars));
+    expect(meta.every((m) => m.text === '' && m.deleted === 0)).toBe(true);
+
+    const ren = updates.length;
+    renameSheet(doc, sheet, 'Topicality');
+    const r = updates.slice(ren).map((u) => measureUpdate(u, chars));
+    expect(r[0].text).toBe('Topicality');
+    expect(r[0].deleted).toBe(0);
+
+    const del = updates.length;
+    deleteCell(doc, sheet, b);
+    const d = updates.slice(del).map((u) => measureUpdate(u, chars));
+    expect(d[0].deletedText).toBe('answer');
+    expect(d[0].deleted).toBe(6);
+  });
+});

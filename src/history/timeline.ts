@@ -3,6 +3,7 @@ import { yXmlFragmentToProsemirrorJSON } from '@tiptap/y-tiptap';
 import * as Y from 'yjs';
 import { measureUpdate } from '../../worker/measure';
 import { BODY_FIELD } from '../editor/extensions';
+import { readFlow, type FlowSheetData } from '../flow2/model';
 import type { LogUpdate } from '../store/account';
 
 // Version history and replay built from the server's record: every saved edit,
@@ -85,13 +86,27 @@ export class DocReplayer {
     doc.destroy();
   }
 
-  /** The document (ProseMirror JSON) after update number `i` (-1 = empty). */
-  jsonAt(i: number): JSONContent {
+  /** The whole Yjs document after update number `i` (-1 = empty). The caller destroys it. */
+  docAt(i: number): Y.Doc {
     let snap = this.snaps[0];
     for (const s of this.snaps) if (s.at <= i) snap = s;
     const doc = new Y.Doc();
     Y.applyUpdate(doc, snap.state);
     for (let k = snap.at + 1; k <= i && k < this.updates.length; k++) Y.applyUpdate(doc, this.updates[k].bytes);
+    return doc;
+  }
+
+  /** A flow as it was after update number `i`. */
+  flowAt(i: number): FlowSheetData[] {
+    const doc = this.docAt(i);
+    const sheets = readFlow(doc);
+    doc.destroy();
+    return sheets;
+  }
+
+  /** The document (ProseMirror JSON) after update number `i` (-1 = empty). */
+  jsonAt(i: number): JSONContent {
+    const doc = this.docAt(i);
     const json = yXmlFragmentToProsemirrorJSON(doc.getXmlFragment(BODY_FIELD)) as JSONContent;
     doc.destroy();
     return json;

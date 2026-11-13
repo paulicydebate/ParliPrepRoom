@@ -1,0 +1,95 @@
+/* ---------- Settings ---------- */
+.settings {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 18px 20px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.25);
+}
+.settings::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.settings h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.settings h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin: 18px 0 8px;
+}
+.settings .muted {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+.row-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.settings select,
+.settings input[type='number'] {
+  height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 0 6px;
+}
+.settings input[type='number'] {
+  width: 64px;
+}
+.settings input[type='color'] {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: none;
+  cursor: pointer;
+}
+.style-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+}
+.style-row + .style-row {
+  border-top: 1px solid var(--border);
+}
+.style-preview {
+  flex: 1 1 180px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.settings-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}

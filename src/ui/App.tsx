@@ -1,29 +1,29 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '../editor/roundGuard';
-import { clearPins } from '../store/pins';
+import { clearPins, usePins } from '../store/pins';
 import { nextDelay, wasIdle } from '../store/poll';
 import { setRound } from '../store/roundDoc';
 import { startTour } from '../store/tour';
 import { InviteBanner } from './Invites';
 import { HelpMenu, Tour } from './Tour';
-import { PERSONAL, getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
+import { getAccount, joinTeam, loadAccount, postDocEvents, setSpace, syncing, useAccount } from '../store/account';
 import { addSharedDoc, createDoc, deleteDoc, formatOf, listDocs, onServer, setDocRound, spaceOf, syncDocList, uploadLocalDocs, type DocFormat, type DocKind, type DocMeta } from '../store/docs';
 import { setLogUploader } from '../store/typingLog';
 import { AccountBar } from './Account';
+import { RoundInfoPanel } from './RoundInfo';
 import { BlockFinder, PinBoard } from './RoundModeUI';
 import { NewRoundDialog } from './Rounds';
 import { Timer } from './Timer';
 import { useYDoc } from './useYDoc';
 import { useLibrary } from './useLibrary';
+import { setLibraryView, usePinColumnsOpen } from '../store/flowPins';
 import type { Editor } from '@tiptap/react';
-import { activeSheet, flowKey } from '../editor/flowView';
-import { baseSpeech } from '../model/speeches';
 import { setRoundMode, useRoundMode } from '../store/roundMode';
 import { acquireDoc, destroyDocData, flushAutoVersions, releaseDoc } from '../store/registry';
-import { SAMPLE_FLOW, SAMPLE_PREP, SAMPLE_REFERENCE, STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
+import { STARTER_FLOW_LINES, STARTER_LINES, writeJSON, writeLines, type Line } from '../store/seed';
 import { deleteAllVersions } from '../store/versions';
 import { useDocs } from './hooks';
-import { IconMenu, IconPin, IconSearch, IconSettings, IconSplit } from './icons';
+import { IconMenu, IconPin, IconSearch, IconSettings } from './icons';
 import { PanelHandle, usePanelWidth } from './PanelResize';
 import { Pane, type PaneState } from './Pane';
 import { NameDialog } from './NameDialog';
@@ -64,43 +64,12 @@ async function makeDoc(title: string, kind: DocKind, lines: Line[], space?: stri
   const meta = await createDoc({ title, kind, space, format });
   const { doc, ready } = acquireDoc(meta.id);
   await ready;
-  writeLines(doc, lines);
+  // A flow is cells, not blocks: it starts empty and the editor adds its first sheet.
+  if (format !== 'flow') writeLines(doc, lines);
   if (round) setRound(doc, meta.id, true);
   releaseDoc(meta.id);
   if (round) await setDocRound(meta.id, true);
   return meta;
-}
-
-/** First visit: add one sample reference doc and one sample prep doc, side by side. */
-async function seedFirstRun(): Promise<Layout | null> {
-  try {
-    if (localStorage.getItem('pp-seeded')) {
-      // Browsers that saw the first preview get the flow sample once.
-      if (!localStorage.getItem('pp-seeded-flow')) {
-        localStorage.setItem('pp-seeded-flow', '1');
-        const flow = await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_FLOW, PERSONAL, false, 'flow');
-        return { panes: [{ key: paneKey(), docId: flow.id, outline: false }], weights: [1], focused: 0, sidebar: true };
-      }
-      return null;
-    }
-    localStorage.setItem('pp-seeded', '1');
-    localStorage.setItem('pp-seeded-flow', '1');
-  } catch {
-    return null;
-  }
-  if ((await listDocs()).length) return null;
-  const ref = await makeDoc('Sample brief: facial recognition', 'reference', SAMPLE_REFERENCE, PERSONAL);
-  const prep = await makeDoc('Sample prep: facial recognition', 'prep', SAMPLE_PREP, PERSONAL);
-  await makeDoc('Sample flow: facial recognition', 'prep', SAMPLE_FLOW, PERSONAL, false, 'flow');
-  return {
-    panes: [
-      { key: paneKey(), docId: ref.id, outline: false },
-      { key: paneKey(), docId: prep.id, outline: true },
-    ],
-    weights: [1, 1.25],
-    focused: 1,
-    sidebar: true,
-  };
 }
 
 function useMedia(query: string) {
@@ -206,12 +175,56 @@ export function App() {
         else toggleSidebarRef.current();
       }
     };
+    const toggleFocus = () => setFocusMode((f) => !f);
     window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
+    window.addEventListener('pp-toggle-focus', toggleFocus);
+    return () => {
+      window.removeEventListener('keydown', on);
+      window.removeEventListener('pp-toggle-focus', toggleFocus);
+    };
   }, []);
 
+  // A flow gets most of the width when it opens beside other windows (it can be dragged back).
+  const flowsSeen = useRef(new Set<string>());
+  const [docsOpen, setDocsOpen] = useState(true);
+  const [roundInfoOpen, setRoundInfoOpen] = useState(false);
+  const isFlowPane = (p: { docId: string | null }) => {
+    const d = allDocs?.find((x) => x.id === p.docId);
+    return !!d && formatOf(d) === 'flow';
+  };
+  const hasFlow = layout.panes.some(isFlowPane);
+  const infoMeta = (docs ?? allDocs ?? []).find((d) => d.id === (layout.panes.find(isFlowPane)?.docId ?? null)) ?? null;
+  useEffect(() => {
+    if (!allDocs) return;
+    const fresh = layout.panes.filter((p) => {
+      const d = allDocs.find((x) => x.id === p.docId);
+      return d && formatOf(d) === 'flow' && !flowsSeen.current.has(p.key);
+    });
+    if (!fresh.length) return;
+    for (const p of fresh) flowsSeen.current.add(p.key);
+    const keys = new Set(fresh.map((p) => p.key));
+    setLayout((l) => {
+      const weights = [...l.weights];
+      let changed = false;
+      l.panes.forEach((p, i) => {
+        if (!keys.has(p.key)) return;
+        const others = Math.max(0, ...weights.filter((_, j) => j !== i));
+        if (others > 0 && weights[i] < others * 3.5) {
+          weights[i] = others * 3.5;
+          changed = true;
+        }
+      });
+      if (!changed) return l;
+      // The flow comes first, with the docs in a panel on its right (as in Flowist's workspace).
+      const order = l.panes.map((p, i) => ({ p, w: weights[i], focusedKey: i === l.focused ? p.key : null, flow: keys.has(p.key) }));
+      order.sort((a, b) => Number(b.flow) - Number(a.flow));
+      const focusedKey = l.panes[l.focused]?.key;
+      // The doc list steps aside the first time (Ctrl/Cmd+\\ or the menu button brings it back).
+      return { ...l, panes: order.map((o) => o.p), weights: order.map((o) => o.w), focused: Math.max(0, order.findIndex((o) => o.p.key === focusedKey)), sidebar: false };
+    });
+  }, [layout.panes, allDocs]);
+
   // Links: #invite=<code> joins a team, #doc=<id> opens a doc (needs access).
-  // Otherwise, on a first visit, add the sample docs.
   useEffect(() => {
     const handleHash = async (): Promise<boolean> => {
       const invite = /^#invite=([A-Za-z0-9_-]{6,40})$/.exec(location.hash);
@@ -247,17 +260,7 @@ export function App() {
       await loadAccount();
       // First sign-in on this device: put its docs on the server (under My own docs).
       if (getAccount().user) void uploadLocalDocs();
-      if (await handleHash()) {
-        try {
-          localStorage.setItem('pp-seeded', '1');
-          localStorage.setItem('pp-seeded-flow', '1');
-        } catch {
-          // ignore
-        }
-        return;
-      }
-      const l = await seedFirstRun();
-      if (l) setLayout(l);
+      await handleHash();
     })();
     const onHash = () => void handleHash();
     window.addEventListener('hashchange', onHash);
@@ -386,17 +389,24 @@ export function App() {
   // Import a file into a new reference doc (never into a round doc).
   const importReference = async (file: File) => {
     try {
-      const { importFile } = await import('../import/importFile');
-      const { title, json } = await importFile(file);
+      const { importFile, importSheets } = await import('../import/importFile');
       // A spreadsheet is a flow and stays a flow; Word, text and Markdown are docs.
-      const format: DocFormat = /\.(xlsx|csv)$/i.test(file.name) ? 'flow' : 'doc';
+      const grid = await importSheets(file);
+      const { title, json } = grid ? { title: grid.title, json: null } : await importFile(file);
+      const format: DocFormat = grid ? 'flow' : 'doc';
       const meta = await createDoc({ title, kind: 'reference', format });
       const { doc, ready } = acquireDoc(meta.id);
       await ready;
-      writeJSON(doc, json);
+      let note = `Imported “${title}” as a reference ${grid ? 'flow' : 'doc'}.`;
+      if (grid) {
+        const { importSheetsToFlow } = await import('../import/flowImport');
+        const report = importSheetsToFlow(doc, grid.sheets, grid.exact);
+        if (!report.cells) note = 'That spreadsheet had nothing to put on a flow.';
+        else if (report.skipped.length) note = `Imported “${title}”, but: ${report.skipped.join('; ')}.`;
+      } else writeJSON(doc, json!);
       releaseDoc(meta.id);
       openInFocused(meta.id);
-      toast(`Imported “${title}” as a reference ${format === 'flow' ? 'flow' : 'doc'}.`);
+      toast(note);
     } catch (e) {
       toast((e as Error).message);
     }
@@ -486,14 +496,26 @@ export function App() {
   // In Round Mode only round docs are listed (and searchable).
   const visibleDocs = spaceDocs ? (roundMode ? spaceDocs.filter((d) => d.round) : spaceDocs) : null;
   const spaceName = signedIn ? (acct.teams.find((t) => t.id === acct.space)?.name ?? 'My own docs') : null;
-  const searchable = visibleDocs ?? [];
+  // (Kept as the same array while its contents are the same, so what reads it does not redo its work every render.)
+  const searchKey = (visibleDocs ?? []).map((d) => `${d.id}:${d.title}`).join('|');
+  const searchable = useMemo(() => visibleDocs ?? [], [searchKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Docs in this list that are mine to delete (not ones teammates shared with me). */
   const myDocs = (spaceDocs ?? []).filter((d) => !d.ownerId || d.ownerId === acct.user?.id);
 
-  const { index: library, blockContent } = useLibrary(
-    searchable.map((d) => d.id),
-    findOpen || pinsOpen,
+  const pinColumnsOpen = usePinColumnsOpen();
+  const pins = usePins(acct.space);
+  // Search and the pin board need every doc open; a pins column in a flow needs only the docs that have pins, so a
+  // flow left open with its pins column showing does not keep 40 docs syncing.
+  const pinnedKey = [...new Set(pins.map((p) => p.docId))].sort().join(',');
+  const libraryIds = useMemo(
+    () => (findOpen || pinsOpen ? searchable.map((d) => d.id) : searchable.filter((d) => pinnedKey.split(',').includes(d.id)).map((d) => d.id)),
+    [findOpen, pinsOpen, searchable, pinnedKey],
   );
+  const { index: library, flowIndex, blockContent } = useLibrary(libraryIds, findOpen || pinsOpen || (pinColumnsOpen && libraryIds.length > 0));
+  // The pins column inside a flow reads the same index.
+  useEffect(() => {
+    setLibraryView({ docs: searchable, index: library });
+  }, [searchable, library]);
   /** Open a doc at a block. keepFocused: don't replace the pane you're in (e.g. the flow); use another pane or open one. */
   const jumpTo = (docId: string, blockId: string, keepFocused = false) => {
     setLayout((l) => {
@@ -504,7 +526,7 @@ export function App() {
       if (existing < 0 && keepFocused) {
         const other = l.panes.findIndex((_, j) => j !== l.focused);
         if (other >= 0) i = other;
-        else if (l.panes.length < MAX_PANES) {
+        else if (l.panes.length < maxPanes) {
           return {
             ...l,
             panes: [...l.panes, { key: paneKey(), docId, outline: false, focus }],
@@ -515,18 +537,16 @@ export function App() {
       }
       return { ...l, focused: i, panes: l.panes.map((x, j) => (j === i ? { ...x, docId, focus } : x)) };
     });
+    // A doc opened from the flow (a pin, a search hit) must be seen: show the docs beside the flow if they were hidden.
+    if (docs?.find((d) => d.id === docId)?.format !== 'flow') setDocsOpen(true);
     setSidebarOverlay(false);
   };
   // Inserting a prepped block: a copy, so it's only allowed outside Round
   // Mode and never into a round doc (that would be pasting into prep).
   const editors = useRef(new Map<string, Editor>());
-  // Re-render when a pane's editor appears, so the pin board can follow it.
-  const [editorTick, setEditorTick] = useState(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const allEditors = useMemo(() => [...editors.current.values()], [editorTick]);
+  const [, setEditorTick] = useState(0);
   const focusedPane = layout.panes[Math.min(layout.focused, layout.panes.length - 1)];
   const focusedMeta = docs?.find((d) => d.id === focusedPane?.docId) ?? null;
-  const focusedEditor = focusedPane ? editors.current.get(focusedPane.key) ?? null : null;
   const insertBlocked: string | null = roundMode
     ? 'Turn off Round Mode to insert blocks.'
     : !focusedMeta
@@ -545,16 +565,8 @@ export function App() {
       toast(editor ? 'That block is still loading. Try again in a moment.' : 'Click into the doc you want to insert into first.');
       return;
     }
-    // In a flow, the copy goes in the column the caret is in.
-    let speech: string | null = null;
-    const flow = flowKey.getState(editor.state);
-    const sheet = flow ? activeSheet(flow) : null;
     const { $from } = editor.state.selection;
-    if (sheet && $from.depth >= 1) {
-      const p = sheet.placements.find((x) => x.pos === $from.before(1));
-      if (p && p.speech && p.speech !== baseSpeech(sheet.side)) speech = p.speech;
-    }
-    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, answers: null, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech } }));
+    const copies = nodes.map((n) => ({ ...n, attrs: { ...(n.attrs ?? {}), id: null, newRow: false, gap: 0, answers: null, side: n.attrs?.kind === 'position' ? n.attrs?.side ?? null : null, speech: null } }));
     const at = $from.depth >= 1 ? $from.after(1) : editor.state.doc.content.size;
     editor.chain().focus().insertContentAt(at, copies).run();
     toast(`Inserted into “${focusedMeta!.title}”.`);
@@ -604,24 +616,33 @@ export function App() {
           <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={22} height={22} />
           <span>ParliPrepRoom</span>
         </div>
-        {narrow && layout.panes.length > 1 && (
-          <div className="seg pane-tabs" role="tablist" aria-label="Panes">
-            {layout.panes.map((p, i) => (
-              <button key={p.key} type="button" role="tab" aria-selected={i === layout.focused} className={i === layout.focused ? 'is-on' : ''} onClick={() => setLayout((l) => ({ ...l, focused: i }))}>
-                {docs?.find((d) => d.id === p.docId)?.title ?? 'Empty'}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="tab-strip" role="tablist" aria-label="Open documents and Home">
+          {layout.panes.map((p, i) => {
+            const d = docs?.find((x) => x.id === p.docId);
+            return (
+              <div key={p.key} role="tab" aria-selected={i === layout.focused} tabIndex={0} className={'tab' + (i === layout.focused ? ' is-on' : '')} onClick={() => setLayout((l) => ({ ...l, focused: i }))} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setLayout((l) => ({ ...l, focused: i }))}>
+                <span className="tab-kind" aria-hidden="true">
+                  {d ? (formatOf(d) === 'flow' ? 'Flow' : d.kind === 'reference' ? 'Ref' : 'Doc') : 'Home'}
+                </span>
+                <span className="tab-title">{d?.title || (d ? 'Untitled' : 'Home')}</span>
+                {layout.panes.length > 1 && (
+                  <button type="button" className="tab-x" aria-label={`Close ${d?.title ?? 'Home'}`} onClick={(e) => (e.stopPropagation(), closePane(i))}>
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <button type="button" className="tab-add" data-tour="split" onClick={addPane} disabled={layout.panes.length >= maxPanes} aria-label="Open Home beside this" title="Open another window beside this one (Home: your flows and docs)">
+            +
+          </button>
+        </div>
         <span className="tb-spacer" />
         {focusMode && (
           <button type="button" className="btn small focus-exit" onClick={() => setFocusMode(false)} title="Show the doc list and all windows again (Ctrl/⌘+Shift+\)">
             Show all windows
           </button>
         )}
-        <button type="button" className="btn ghost" data-tour="split" onClick={addPane} disabled={layout.panes.length >= maxPanes} title="Add a pane to show another document side by side">
-          <IconSplit /> <span className="hide-narrow">Split view</span>
-        </button>
         <TimerHost docId={timerDocId} />
         {acct.user && (
           <button type="button" className="btn ghost new-round-btn" onClick={() => setNewRoundOpen(true)} title="Start a round: round doc for you and your partner, prep timer, tournament">
@@ -635,6 +656,7 @@ export function App() {
         <button type="button" className={'icon-btn' + (pinsOpen ? ' is-on' : '')} aria-label="Pinned blocks" data-tour="pins" aria-pressed={pinsOpen} title="Pinned blocks for your speech" onClick={() => setPinsOpen((o) => !o)}>
           <IconPin />
         </button>
+        {(!acct.user || !acct.server || roundMode) && (
         <button
           type="button"
           className={'round-mode-btn' + (roundMode ? ' is-on' : '')}
@@ -645,7 +667,10 @@ export function App() {
         >
           <span className="switch" /> <span className="hide-narrow">Round Mode</span>
         </button>
+        )}
         <AccountBar
+          roundMode={roundMode}
+          onToggleRoundMode={toggleRoundMode}
           onOpenDoc={(id) =>
             void addSharedDoc(id).then((m) => {
               if (m) openInFocused(m.id);
@@ -679,10 +704,10 @@ export function App() {
           {docs &&
             layout.panes.map((p, i) => (
               <Fragment key={p.key}>
-                {i > 0 && !narrow && !focusing && (
+                {i > 0 && !narrow && !focusing && (docsOpen || !hasFlow) && (
                   <div className="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panes" onPointerDown={(e) => startResize(i - 1, e)} />
                 )}
-                <div className="pane-slot" style={{ flexGrow: layout.weights[i] ?? 1 }} hidden={(narrow || focusing) && i !== layout.focused}>
+                <div className="pane-slot" style={{ flexGrow: layout.weights[i] ?? 1 }} hidden={((narrow || focusing) && i !== layout.focused) || (hasFlow && !docsOpen && !isFlowPane(p))}>
                   <Pane
                     pane={p}
                     docs={docs}
@@ -700,6 +725,7 @@ export function App() {
                     onChange={(np) => setPane(i, np)}
                     onClose={() => closePane(i)}
                     onCreate={(k, f) => void create(k, i, f)}
+                    onNewRound={acct.user ? () => setNewRoundOpen(true) : undefined}
                     showCarets={layout.panes.findIndex((x) => x.docId === p.docId) === i}
                     focusMode={focusMode}
                     onFocusMode={() => {
@@ -710,6 +736,19 @@ export function App() {
                 </div>
               </Fragment>
             ))}
+          {hasFlow && roundInfoOpen && infoMeta && !focusing && <RoundInfoPanel meta={infoMeta} hasServer={acct.server} onClose={() => setRoundInfoOpen(false)} />}
+          {hasFlow && !focusing && (
+            <div className="docs-rail">
+              {layout.panes.some((p) => !isFlowPane(p)) && (
+                <button type="button" className={'docs-rail-btn' + (docsOpen ? ' is-on' : '')} aria-pressed={docsOpen} title={docsOpen ? 'Hide your docs beside the flow' : 'Show your docs beside the flow'} onClick={() => setDocsOpen((o) => !o)}>
+                  <span>Docs</span>
+                </button>
+              )}
+              <button type="button" className={'docs-rail-btn' + (roundInfoOpen ? ' is-on' : '')} aria-pressed={roundInfoOpen} title="This round's details: name, tournament, partners, check link" onClick={() => setRoundInfoOpen((o) => !o)}>
+                <span>Round info</span>
+              </button>
+            </div>
+          )}
         </div>
         {pinsOpen && !compact && <PanelHandle panel={pinsWidth} edge="left" label="Resize pinned blocks" onCollapse={() => setPinsOpen(false)} />}
         {pinsOpen && (
@@ -717,8 +756,7 @@ export function App() {
             space={acct.space}
             docs={searchable}
             index={library}
-            followEditor={focusedEditor}
-            allEditors={allEditors}
+            followDocId={focusedPane?.docId ?? null}
             onJump={jumpTo}
             onInsert={insertBlock}
             insertBlocked={insertBlocked}
@@ -728,7 +766,7 @@ export function App() {
       </div>
       {newRoundOpen && <NewRoundDialog onCreated={openNewRound} onClose={() => setNewRoundOpen(false)} />}
       {findOpen && (
-        <BlockFinder docs={searchable} index={library} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
+        <BlockFinder docs={searchable} index={library} flowIndex={flowIndex} space={acct.space} roundMode={roundMode} onJump={jumpTo} onInsert={insertBlock} insertBlocked={insertBlocked} onClose={() => setFindOpen(false)} />
       )}
       {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       <Tour />

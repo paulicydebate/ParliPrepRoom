@@ -8,7 +8,7 @@ import { guidePage } from './guidePage';
 import { privacyPage } from './legal';
 import { renderTabroomPage } from './tabroomPage';
 import { DEFAULT_PAUSE_NOTICE, type DocRecord, type Role } from './directory';
-import { FILES } from './static.gen';
+import { BUILD, FILES } from './static.gen';
 
 export { DocRoom } from './docRoom';
 export { Directory } from './directory';
@@ -33,12 +33,25 @@ const isAdmin = (env: Env, email: string | undefined) =>
 const DOC_ID = /^[A-Za-z0-9-]{8,64}$/;
 const COOKIE = 'pp_session';
 
+const decodedFiles = new Map<string, Uint8Array>();
+function decoded(path: string, b64: string): Uint8Array {
+  let bytes = decodedFiles.get(path);
+  if (!bytes) {
+    // A plain loop: several times faster than Uint8Array.from with a callback, which matters on a cold start.
+    const bin = atob(b64);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    decodedFiles.set(path, bytes);
+  }
+  return bytes;
+}
+
 function serveFile(path: string): Response | null {
   const f = FILES[path];
   if (!f) return null;
   // Hashed build files never change; everything else is re-checked.
-  const cache = path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache';
-  return new Response(f.body, { headers: { 'content-type': f.type, 'cache-control': cache } });
+  const cache = path.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store';
+  return new Response(f.b64 ? decoded(path, f.b64) : f.body, { headers: { 'content-type': f.type, 'cache-control': cache } });
 }
 
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'cache-control': 'no-store' } });
@@ -121,7 +134,7 @@ export default {
 
     if (path === '/api/health') {
       const pause = env.PAUSED === '1' ? { paused: true, notice: DEFAULT_PAUSE_NOTICE } : await dir.pauseState();
-      return json({ ok: true, app: 'parlipreproom', sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString(), ...(pause.paused ? { notice: pause.notice } : {}) });
+      return json({ ok: true, app: 'parlipreproom', build: BUILD, sync: true, auth: { google: googleOn, dev: devOn }, time: new Date().toISOString(), ...(pause.paused ? { notice: pause.notice } : {}) });
     }
 
     // Changes must come from this site's own pages (no cross-site form posts).

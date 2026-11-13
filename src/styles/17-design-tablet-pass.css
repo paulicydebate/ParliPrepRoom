@@ -1,0 +1,235 @@
+/* ---------- Design & tablet pass ---------- */
+/* Each window adapts to its own width (2–3 side by side, or an iPad). */
+.pane {
+  container-type: inline-size;
+  container-name: pane;
+}
+.pane-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pane-more {
+  display: none;
+  position: relative;
+}
+.pane-more summary {
+  list-style: none;
+}
+.pane-more summary::-webkit-details-marker {
+  display: none;
+}
+.pane-more .menu {
+  min-width: 220px;
+  z-index: 30;
+}
+.pane-head {
+  gap: 4px;
+}
+.title-input {
+  flex: 1 1 120px;
+  min-width: 80px;
+}
+@container pane (max-width: 760px) {
+  .pane-tools {
+    display: none;
+  }
+  .pane-more {
+    display: block;
+  }
+  .pane-head .badge:not(.round),
+  .linked-chip {
+    display: none;
+  }
+}
+@container pane (max-width: 560px) {
+  /* Keep a short label so the switch still says what it does. */
+  .round-toggle-label {
+    font-size: 0;
+  }
+  .round-toggle-label::after {
+    content: 'Round';
+    font-size: 12.5px;
+  }
+  .round-toggle {
+    padding: 0 8px 0 5px;
+  }
+  .pane-head .badge.round {
+    font-size: 0;
+    gap: 0;
+    padding: 4px 6px;
+  }
+  .view-toggle button {
+    padding: 3px 8px;
+  }
+  /* Narrow windows: tighter margins and smaller headings so words don't break. */
+  .pp-doc {
+    padding: 18px 16px 50vh 30px;
+  }
+  .pp-doc > .pp-block[data-kind='position'] {
+    font-size: calc(var(--pp-position-size) * 0.78);
+  }
+  .pp-doc > .pp-block[data-kind='section'] {
+    font-size: calc(var(--pp-section-size) * 0.85);
+  }
+  .pane-body > .outline {
+    display: none;
+  }
+}
+@container pane (max-width: 700px) {
+  .toolbar .tb-hint {
+    display: none;
+  }
+  .toolbar .style-select select {
+    min-width: 0;
+    max-width: 150px;
+  }
+}
+
+/* Tablets and small laptops: the doc list and pin panel slide over the windows. */
+.is-compact .sidebar {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(300px, 85vw);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.18);
+}
+.is-compact .pinboard {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  width: min(340px, 90vw);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 0.18);
+}
+.is-compact .panes {
+  padding: 8px;
+}
+
+/* Touch screens: bigger targets. */
+@media (pointer: coarse) {
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .icon-btn.small {
+    width: 34px;
+    height: 34px;
+  }
+  .tb-btn {
+    min-width: 38px;
+    height: 38px;
+  }
+  .btn {
+    height: 38px;
+  }
+  .btn.small {
+    height: 34px;
+  }
+  .doc-link {
+    padding: 10px 8px;
+  }
+  .seg button {
+    padding: 7px 12px;
+  }
+  
+  .menu button {
+    padding: 10px 12px;
+  }
+  .pp-toggle {
+    opacity: 0.6;
+    width: 26px;
+    height: 26px;
+    left: -30px;
+  }
+}
+
+/* Sidebar drag handle (works with a finger or a mouse). */
+.drag-handle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 30px;
+  margin-left: 2px;
+  border-radius: 6px;
+  color: var(--text-3);
+  cursor: grab;
+  touch-action: none;
+  opacity: 0;
+}
+.doc-row:hover .drag-handle,
+.doc-row.is-dragging .drag-handle {
+  opacity: 1;
+}
+@media (hover: none) {
+  .drag-handle {
+    opacity: 0.7;
+    width: 30px;
+  }
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.pp-doc > .pp-block {
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+.round-toggle svg {
+  flex: none;
+  margin-left: -2px;
+}
+@container pane (max-width: 470px) {
+  .round-toggle-label {
+    display: none;
+  }
+  .round-toggle {
+    gap: 4px;
+    padding: 0 7px 0 5px;
+  }
+  .title-input {
+    min-width: 48px;
+  }
+  .pane-head {
+    padding-left: 8px;
+  }
+  .view-toggle button {
+    padding: 3px 6px;
+  }
+}
+
+.menu-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.menu-select select {
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  max-width: 260px;
+}
+@container pane (max-width: 380px) {
+  .doc-switch {
+    display: none;
+  }
+  .view-toggle button {
+    padding: 2px 5px;
+    font-size: 12.5px;
+  }
+  .pane-head .icon-btn {
+    width: 30px;
+  }
+}

@@ -21,7 +21,7 @@ import { TournamentsDialog } from './Rounds';
 import { IconClose } from './icons';
 
 /** Top bar: sign in, or switch team and open team settings. */
-export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
+export function AccountBar({ onOpenDoc, roundMode, onToggleRoundMode }: { onOpenDoc: (id: string) => void; roundMode: boolean; onToggleRoundMode: () => void }) {
   const acct = useAccount();
   const [teamOpen, setTeamOpen] = useState(false);
   const [newTeamOpen, setNewTeamOpen] = useState(false);
@@ -29,6 +29,10 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [tournamentsOpen, setTournamentsOpen] = useState(false);
   const [devName, setDevName] = useState('');
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const close = () => {
+    if (menuRef.current) menuRef.current.open = false;
+  };
 
   if (!acct.loaded || !acct.server) return null;
 
@@ -66,54 +70,52 @@ export function AccountBar({ onOpenDoc }: { onOpenDoc: (id: string) => void }) {
   const team = acct.teams.find((t) => t.id === acct.space) ?? null;
   return (
     <div className="account-bar">
-      <label className="space-select" title="Which team's docs to show">
-        <span className="sr-only">Team</span>
-        <select
-          value={acct.space}
-          onChange={(e) => {
-            if (e.target.value === '__new') setNewTeamOpen(true);
-            else setSpace(e.target.value);
-          }}
-        >
-          {acct.teams.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-              {t.role === 'coach' ? ' (coach)' : ''}
-            </option>
-          ))}
-          <option value={PERSONAL}>My own docs</option>
-          <option value="__new">+ New team…</option>
-        </select>
-      </label>
-      {team?.role === 'coach' && (
-        <button type="button" className="btn ghost small" onClick={() => setCoachOpen(true)} title="Every round doc on the team and anything flagged">
-          Coach view
-        </button>
-      )}
-      {team && (
-        <button type="button" className="btn ghost small" onClick={() => setTeamOpen(true)}>
-          Team
-        </button>
-      )}
-      <details className="account-menu">
-        <summary className="avatar" title={`${acct.user.name} (${acct.user.email})`} aria-label="Account">
+      <details className="account-menu" ref={menuRef}>
+        <summary className="avatar" title={`${acct.user.name} (${acct.user.email}): teams, Round Mode, account`} aria-label="Menu: teams, Round Mode and account">
           {acct.user.picture ? <img src={acct.user.picture} alt="" referrerPolicy="no-referrer" /> : initials(acct.user.name)}
+          {roundMode && <span className="avatar-dot" aria-hidden="true" />}
         </summary>
-        <div className="menu">
+        <div className="menu workspace-menu">
           <div className="menu-head">
             <strong>{acct.user.name}</strong>
             <span className="muted">{acct.user.email}</span>
           </div>
-          <button type="button" onClick={() => setNewTeamOpen(true)}>
+          <div className="menu-section">Team</div>
+          {acct.teams.map((t) => (
+            <button key={t.id} type="button" className={acct.space === t.id ? 'is-on' : ''} onClick={() => (close(), setSpace(t.id))}>
+              {acct.space === t.id ? '✓ ' : ''}
+              {t.name}
+              {t.role === 'coach' ? ' (coach)' : ''}
+            </button>
+          ))}
+          <button type="button" className={acct.space === PERSONAL ? 'is-on' : ''} onClick={() => (close(), setSpace(PERSONAL))}>
+            {acct.space === PERSONAL ? '✓ ' : ''}My own docs
+          </button>
+          {team && (
+            <button type="button" onClick={() => (close(), setTeamOpen(true))}>
+              Team: members and invite links…
+            </button>
+          )}
+          {team?.role === 'coach' && (
+            <button type="button" onClick={() => (close(), setCoachOpen(true))}>
+              Coach view: every round doc and anything flagged…
+            </button>
+          )}
+          <button type="button" onClick={() => (close(), setNewTeamOpen(true))}>
             New team…
           </button>
-          <button type="button" onClick={() => setTournamentsOpen(true)}>
+          <div className="menu-sep" />
+          <button type="button" className={roundMode ? 'is-on' : ''} onClick={() => (close(), onToggleRoundMode())}>
+            {roundMode ? 'Leave Round Mode' : 'Start Round Mode'}
+          </button>
+          <div className="menu-sep" />
+          <button type="button" onClick={() => (close(), setTournamentsOpen(true))}>
             Tournaments (tab room)…
           </button>
           <button type="button" onClick={() => void signOut()}>
             Sign out
           </button>
-          <button type="button" className="danger" onClick={() => setDeleteOpen(true)}>
+          <button type="button" className="danger" onClick={() => (close(), setDeleteOpen(true))}>
             Delete my account…
           </button>
         </div>

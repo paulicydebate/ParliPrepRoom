@@ -3,7 +3,7 @@ import * as decoding from 'lib0/decoding';
 import * as encoding from 'lib0/encoding';
 import * as syncProtocol from 'y-protocols/sync';
 import * as Y from 'yjs';
-import { measureUpdate } from './measure';
+import { isRestore, measureUpdate } from './measure';
 import { LARGE_EDIT, isStarting, summarizeRecord, type RecordSummary } from './summary';
 
 export { measureUpdate };
@@ -65,6 +65,8 @@ export interface RecordUpdate {
   text?: string;
   /** Text this update deleted (same access rule). */
   deletedText?: string;
+  /** A large insert that only puts back text deleted earlier in this doc (Undo, restoring a version): not flagged. */
+  restored?: boolean;
 }
 
 /** Events reported by the app (blocked pastes, round doc on/off, time away...). */
@@ -481,6 +483,8 @@ export class DocRoom extends DurableObject {
     let prev = GENESIS;
     let intact = true;
     const chars = new Map<string, string>();
+    let gone = '';
+    const since = this.roundSince();
     for (const row of this.ctx.storage.sql.exec('SELECT * FROM updates ORDER BY seq')) {
       const data = new Uint8Array(row.data as ArrayBuffer);
       const head = new TextEncoder().encode(`${row.prev}|${row.at}|${row.user_id}|${row.user}|${row.via}|`);
@@ -490,6 +494,8 @@ export class DocRoom extends DurableObject {
       if (row.prev !== prev || hex(await crypto.subtle.digest('SHA-256', buf)) !== row.hash) intact = false;
       prev = String(row.hash);
       const m = measureUpdate(data, chars);
+      if (Number(row.at) >= since) gone += m.deletedText + '\n';
+      const restored = m.text.length > LARGE_EDIT && isRestore(m.text, gone);
       updates.push({
         seq: Number(row.seq),
         at: Number(row.at),
@@ -498,6 +504,7 @@ export class DocRoom extends DurableObject {
         via: String(row.via),
         inserted: m.text.length,
         deleted: m.deletedText.length || m.deleted,
+        ...(restored ? { restored } : {}),
         ...(withText ? { text: m.text.slice(0, 2000), deletedText: m.deletedText.slice(0, 2000) } : {}),
       });
     }
@@ -539,6 +546,28 @@ export class DocRoom extends DurableObject {
     };
   }
 
+  /**
+   * Text deleted before the doc became a round doc does not count as "put back": otherwise prep pasted into a team doc,
+   * deleted, then restored from History after Round doc was switched on would pass as a restore. 0 = always a round doc.
+   */
+  private roundSince(): number {
+    const row = this.ctx.storage.sql.exec("SELECT MAX(at) AS at FROM events WHERE kind = 'round-on'").toArray()[0];
+    return row && row.at !== null ? Number(row.at) : 0;
+  }
+
+  /** Whether the update at `seq` only put back deleted text (rare: only asked for large edits, so a full pass is fine). */
+  private restoredAt(seq: number): boolean {
+    const chars = new Map<string, string>();
+    let gone = '';
+    const since = this.roundSince();
+    for (const row of this.ctx.storage.sql.exec('SELECT seq, at, data FROM updates WHERE seq <= ? ORDER BY seq', seq)) {
+      const m = measureUpdate(new Uint8Array(row.data as ArrayBuffer), chars);
+      if (Number(row.at) >= since) gone += m.deletedText + '\n';
+      if (Number(row.seq) === seq) return isRestore(m.text, gone);
+    }
+    return false;
+  }
+
   private async catchUpStats(): Promise<RoomStats> {
     const sql = this.ctx.storage.sql;
     const saved = sql.exec('SELECT json FROM stats WHERE id = 1').toArray()[0];
@@ -570,7 +599,7 @@ export class DocRoom extends DurableObject {
       person.typed += inserted;
       if (row.via === 'live') {
         st.typedLive += inserted;
-        if (inserted > LARGE_EDIT) st.large++;
+        if (inserted > LARGE_EDIT && !this.restoredAt(Number(row.seq))) st.large++;
       } else if (!isStarting({ via: String(row.via), at } as never, st.firstAt)) st.catchup += inserted;
       st.lastSeq = Number(row.seq);
     }

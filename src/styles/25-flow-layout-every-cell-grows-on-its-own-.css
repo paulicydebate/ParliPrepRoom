@@ -1,0 +1,26 @@
+/* ---------- Flow layout: every cell grows on its own (adapted from Flowist's idea) ---------- */
+/* The sheet is a grid only for its column widths (unused speeches stay narrow, see columnTracks in
+   src/model/flowLayout.ts). Blocks and backgrounds sit inside their column (--c) at a top set by
+   the layout (src/model/flowLayout.ts),
+.pp-flow {
+  grid-template-columns: var(--fl-template, repeat(var(--fl-cols, 6), minmax(var(--fl-min), 1fr)));
+  min-width: var(--fl-minw, 0px);
+}
+.pp-flow {
+  display: grid;
+  position: relative;
+  grid-template-rows: none;
+}
+
+
+
+/* A section title: its text stays about one column wide, its line runs across the sheet. */
+
+
+
+
+
+/* An unused speech column stays narrow; its heading shrinks to fit. */
+.flow-col-head.is-narrow {
+  opacity: 0.7;
+}

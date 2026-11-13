@@ -24,14 +24,11 @@ See [PLAN.md](PLAN.md) for the full plan and phases.
 **Phase 2 (flow view): done.**
 
 - **A document is a doc or a flow, fixed when it is made** (the + next to Prep, or New round). There is no Doc/Flow switch: a doc is never shown as a flow and a flow never as a doc, so whatever is typed exists in only one place (the "no copy and paste" rule). Put a prep doc and a flow side by side with Split view.
-- Each Position title is a **sheet** (tab), marked Gov or Opp. Gov sheets have PMC, LOC, MG, MO, LOR, PMR columns; Opp sheets start at the LOC.
-- A claim starts a row. Lines tagged with a later speech (toolbar speech menu, or by typing in that column) are answers and sit beside it. Warrants follow their claim. Section titles are label rows: the text stays in the first column (long ones wrap there) and a divider line runs across every column. Long sheet names are shortened with “…” in the tabs (hover for the full name).
-- Every sheet shows 150 rows. Click any empty cell in any row to type there; the rows above stay blank (stored as a blank-row count on the line, so the doc view has no empty lines).
-- Dragging a selection down across cells selects and copies only the column you started in.
-- In the flow: **Enter drops down to the cell below** in the same column (the cell in the next row, or a new row after the last one), so a cell doesn't grow by accident; **Alt/Option+Enter** adds another line inside the same cell; Tab / Shift+Tab move to the next/previous speech in the row; Cmd/Ctrl+Enter starts a new row right below this one; + Gov / + Opp add a sheet; double-click a tab to rename it; Delete sheet removes the one in view (Undo brings it back).
-- The doc view labels answers with their speech (LOC, MG, ...).
-- **Flow marks:** mark any argument Extend (→), Dropped (!), Answered (✓, crossed out) or Key (★) from the toolbar or Ctrl/Cmd+Shift+E / D / A / K.
-- Export: Word (.docx, using your fonts, with real headings) and an Excel flow (.xlsx, one worksheet per sheet, colored gov/opp columns).
+- A flow is made of **sheets** (Gov or Opp), listed on the left and shown as windows on a canvas you can pan and zoom. Gov sheets have PMC, LOC, MG, MO, LOR, PMR columns; Opp sheets start at the LOC. Each cell is its own text box and grows on its own; answers line up beside the argument they answer, with a line between them. (Rebuilt in November 2026 on ideas and some code from Flowist; flows made before that are not carried over.)
+- Keys: Enter = next cell down, Tab = answer in the next speech, Shift+Tab = back, Cmd/Ctrl+Enter = new argument, Alt/Option+Enter = new line in the cell, arrows move between cells.
+- The toolbar along the bottom: marks (extended, dropped, answered, key), link and unlink, extend and cross-apply, group, undo and redo. Unused speeches stay narrow; any column can be folded to a strip; the Pins column shows your pinned blocks for the sheet.
+- Partners in the same flow see each other's cell, cursor and selection.
+- Export: Word (.docx) for docs and flows, and an Excel flow (.xlsx, one worksheet per sheet). Importing a spreadsheet makes a flow; one exported from here comes back exactly.
 
 **Round docs (Phase 4): live.**
 
@@ -108,3 +105,7 @@ The app runs on Cloudflare Workers (`wrangler.jsonc`, server code in `worker/`).
 | `src/settings/` | Fonts, themes, per-style appearance. |
 | `src/ui/` | React components. |
 | `tests/` | Unit tests. |
+
+## Credits
+
+- **Flowist** (by Elli), used with the author's permission. The new flow (`src/flow2/`) is built on ideas and code from it: its color palette and Inter and Paper Mono fonts (`src/flow2/flowist/`, fonts under the SIL Open Font License), its cell, selection and link-line look, its link-line routing and crossing shadows (`connectors.ts`, `connectorCrossings.ts`), its canvas camera and wheel maths (`canvasGeometry.ts`, `canvasWheel.ts`), its arrow-key target rule (`directionalTarget.ts`), and its design ideas: independent cells, answers lined up beside what they answer, narrow unused columns, box-select and linking, grouped cells, cross-application and extensions, answer slots, trackpad smoothing and column slides. Files adapted from it say so in their headers.

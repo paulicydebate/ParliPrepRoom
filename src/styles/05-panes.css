@@ -1,0 +1,102 @@
+/* ---------- Panes ---------- */
+.panes {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 10px;
+  gap: 0;
+}
+.pane-slot {
+  flex-basis: 0;
+  min-width: 0;
+  display: flex;
+}
+.resizer {
+  flex: none;
+  width: 10px;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+.resizer::after {
+  content: '';
+  position: absolute;
+  top: 40%;
+  bottom: 40%;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.resizer:hover::after {
+  background: var(--accent);
+  top: 0;
+  bottom: 0;
+}
+.pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.pane.is-focused {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  min-height: 46px;
+}
+.badge {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 7px;
+  border-radius: 6px;
+}
+.badge.prep {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge.reference {
+  background: color-mix(in srgb, var(--analytic-color) 14%, transparent);
+  color: var(--analytic-color);
+}
+.title-input {
+  min-width: 0;
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.title-input:hover {
+  border-color: var(--border);
+}
+.title-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.pane-empty-title {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.pane-loading {
+  padding: 24px;
+  color: var(--text-3);
+}

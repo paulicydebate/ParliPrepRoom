@@ -34,3 +34,21 @@ export function useRound(doc: Y.Doc | null): boolean {
   }, [doc]);
   return round;
 }
+
+/** The resolution typed in New round, kept in the document so partners see it (a flow has no note line to hold it). */
+export function setResolution(doc: Y.Doc, text: string) {
+  if (text) settings(doc).set('resolution', text.slice(0, 500));
+}
+
+export function useResolution(doc: Y.Doc | null): string {
+  const [res, setRes] = useState(() => (doc ? String(settings(doc).get('resolution') ?? '') : ''));
+  useEffect(() => {
+    if (!doc) return setRes('');
+    const map = settings(doc);
+    const update = () => setRes(String(map.get('resolution') ?? ''));
+    update();
+    map.observe(update);
+    return () => map.unobserve(update);
+  }, [doc]);
+  return res;
+}

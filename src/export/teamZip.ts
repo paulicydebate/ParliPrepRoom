@@ -4,7 +4,8 @@ import * as Y from 'yjs';
 import { BODY_FIELD, schema } from '../editor/extensions';
 import { docState, listServerDocs } from '../store/account';
 import { buildDocx } from './docx';
-import { buildFlowXlsx } from './xlsx';
+import { buildFlow2Xlsx } from './flowXlsx';
+import { readFlow } from '../flow2/model';
 import { safeFilename } from './runs';
 
 /**
@@ -20,9 +21,6 @@ export async function buildTeamZip(space: string, teamName: string, onProgress?:
   for (const d of docs) {
     const ydoc = new Y.Doc();
     Y.applyUpdate(ydoc, await docState(d.id));
-    const json = yXmlFragmentToProsemirrorJSON(ydoc.getXmlFragment(BODY_FIELD));
-    ydoc.destroy();
-    const node = schema.nodeFromJSON(json.content?.length ? json : { type: 'doc', content: [{ type: 'block', attrs: { kind: 'warrant' } }] });
     const flow = d.format === 'flow';
     const folder = d.kind === 'reference' ? 'Reference' : d.round ? 'Round docs' : 'Prep';
     const ext = flow ? 'xlsx' : 'docx';
@@ -30,7 +28,14 @@ export async function buildTeamZip(space: string, teamName: string, onProgress?:
     let name = `${folder}/${safeFilename(d.title)}${suffix}.${ext}`;
     for (let i = 2; used.has(name.toLowerCase()); i++) name = `${folder}/${safeFilename(d.title)}${suffix} (${i}).${ext}`;
     used.add(name.toLowerCase());
-    const bytes = flow ? new Uint8Array(buildFlowXlsx(node)) : new Uint8Array(await (await buildDocx(node, d.title)).arrayBuffer());
+    let bytes: Uint8Array;
+    if (flow) bytes = new Uint8Array(buildFlow2Xlsx(readFlow(ydoc)));
+    else {
+      const json = yXmlFragmentToProsemirrorJSON(ydoc.getXmlFragment(BODY_FIELD));
+      const node = schema.nodeFromJSON(json.content?.length ? json : { type: 'doc', content: [{ type: 'block', attrs: { kind: 'warrant' } }] });
+      bytes = new Uint8Array(await (await buildDocx(node, d.title)).arrayBuffer());
+    }
+    ydoc.destroy();
     files[name] = bytes;
     onProgress?.(++done, docs.length);
   }
