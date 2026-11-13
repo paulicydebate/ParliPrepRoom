@@ -77,6 +77,8 @@ export function Flow2Sidebar({
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       try {
         localStorage.setItem('pp-flow2-side-w', String(Math.round(last)));
       } catch {
@@ -84,7 +86,8 @@ export function Flow2Sidebar({
       }
     };
     window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up, { once: true });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   const group = (side: 'gov' | 'opp', label: string) => {

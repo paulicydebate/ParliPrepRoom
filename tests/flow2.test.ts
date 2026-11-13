@@ -595,3 +595,50 @@ describe('typing with an input method while a partner edits', () => {
     el.remove();
   });
 });
+
+describe('row order and groups (review 2026-11-13)', () => {
+  it('fits any number of cells between two neighbours, in order', () => {
+    const { doc, sheetId, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const z = createRoot(doc, sheetId, 1, a)!;
+    let after = a;
+    const made: string[] = [];
+    for (let i = 0; i < 80; i++) {
+      after = createRoot(doc, sheetId, 1, after)!;
+      made.push(after);
+    }
+    const order = rootsOf(cells()).map((c) => c.id);
+    expect(order).toEqual([a, ...made, z]);
+    expect(new Set(cells().map((c) => c.order)).size).toBe(cells().length);
+  });
+
+  it('a new row goes right after its neighbour even when another column has a root in between in order', () => {
+    const { doc, sheetId, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const x = createRoot(doc, sheetId, 2, a)!; // a root in the second column, right after a
+    const s = createSibling(doc, sheetId, a)!;
+    expect(rootsOf(cells()).map((c) => c.id)).toEqual([a, s, x]);
+  });
+
+  it('deleting a root keeps its blank rows', () => {
+    const { doc, sheetId, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const b = createRoot(doc, sheetId, 1, a, 3)!;
+    const c = createRoot(doc, sheetId, 1, b)!;
+    deleteCell(doc, sheetId, b);
+    expect(cells().find((k) => k.id === c)!.gap).toBe(3);
+  });
+
+  it('a group frame splits when a cell ends up between its members', () => {
+    const { doc, sheetId, type } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const b = createRoot(doc, sheetId, 1, a)!;
+    type(a, 'a');
+    type(b, 'b');
+    expect(groupCells(doc, sheetId, [a, b])).toMatchObject({ ok: true });
+    const heights = new Map([[a, 30], [b, 30]]);
+    expect(layoutFlow(readFlow(doc)[0].cells, heights, M).groups).toHaveLength(1);
+    createRoot(doc, sheetId, 1, a); // a new row lands between the two
+    expect(layoutFlow(readFlow(doc)[0].cells, heights, M).groups).toHaveLength(0);
+  });
+});

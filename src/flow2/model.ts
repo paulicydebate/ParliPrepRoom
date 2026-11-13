@@ -196,14 +196,37 @@ function cellsOf(doc: Y.Doc, sheetId: string): Y.Map<Y.Map<unknown>> | null {
   return s ? yCells(s) : null;
 }
 
+/** Order then id, the same tie-break `rootsOf` and `childrenOf` use. */
+const byKey = (a: { id: string; order: number }, b: { id: string; order: number }) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/** Below this, two neighbours are too close to fit another cell between them: number them afresh first. */
+const TOO_CLOSE = 1e-6;
+
 /** A sort key just after `after` (or at the end / start). */
 export function orderAfter(siblings: { id: string; order: number }[], afterId: string | null): number {
-  const sorted = [...siblings].sort((a, b) => a.order - b.order);
+  const sorted = [...siblings].sort(byKey);
   if (afterId === null) return (sorted.at(-1)?.order ?? 0) + 1;
   const i = sorted.findIndex((s) => s.id === afterId);
   if (i < 0) return (sorted.at(-1)?.order ?? 0) + 1;
   const next = sorted[i + 1];
   return next ? (sorted[i].order + next.order) / 2 : sorted[i].order + 1;
+}
+
+/**
+ * Like `orderAfter`, but when the neighbours are too close (many cells put in one place, or two people giving two
+ * cells the same place) the siblings are first numbered 1, 2, 3... in their current order. Call inside `local`.
+ */
+function placeAfter(cells: Y.Map<Y.Map<unknown>>, siblings: FlowCell[], afterId: string | null): number {
+  const sorted = [...siblings].sort(byKey);
+  const i = afterId === null ? -1 : sorted.findIndex((c) => c.id === afterId);
+  const next = i >= 0 ? sorted[i + 1] : undefined;
+  if (next && next.order - sorted[i].order < TOO_CLOSE) {
+    sorted.forEach((c, k) => {
+      c.order = k + 1;
+      cells.get(c.id)?.set('order', k + 1);
+    });
+  }
+  return orderAfter(sorted, afterId);
 }
 
 function make(cells: Y.Map<Y.Map<unknown>>, props: { col: number; parent: string | null; order: number; gap?: number; text?: string }): string {
@@ -230,7 +253,7 @@ export function createRoot(doc: Y.Doc, sheetId: string, col: number, afterRootId
   if (!cells) return null;
   return local(doc, () => {
     const roots = snapshot(cells).filter((c) => c.parent === null);
-    return make(cells, { col, parent: null, order: orderAfter(roots, afterRootId), gap, text });
+    return make(cells, { col, parent: null, order: placeAfter(cells, roots, afterRootId), gap, text });
   });
 }
 
@@ -243,7 +266,7 @@ export function createChild(doc: Y.Doc, sheetId: string, parentId: string, after
   if (col > columnCount) return null;
   return local(doc, () => {
     const sibs = snapshot(cells).filter((c) => c.parent === parentId);
-    return make(cells, { col, parent: parentId, order: orderAfter(sibs, afterId), text });
+    return make(cells, { col, parent: parentId, order: placeAfter(cells, sibs, afterId), text });
   });
 }
 
@@ -255,8 +278,9 @@ export function createSibling(doc: Y.Doc, sheetId: string, cellId: string): stri
   const parent = typeof cell.get('parent') === 'string' ? (cell.get('parent') as string) : null;
   const col = Math.floor(Number(cell.get('col')) || 1);
   return local(doc, () => {
-    const sibs = snapshot(cells).filter((c) => c.parent === parent && (parent !== null || c.col === col));
-    return make(cells, { col, parent, order: orderAfter(sibs, cellId) });
+    // Roots of every column share one order, so a new root goes right after this one whatever column the next is in.
+    const sibs = snapshot(cells).filter((c) => c.parent === parent);
+    return make(cells, { col, parent, order: placeAfter(cells, sibs, cellId) });
   });
 }
 
@@ -275,13 +299,20 @@ export function deleteCell(doc: Y.Doc, sheetId: string, cellId: string) {
     for (let c: FlowCell | undefined = gone; c?.parent; c = byId.get(c.parent)) anchor = byId.get(c.parent) ?? anchor;
     let at = anchor.order;
     const roots = all.filter((c) => c.parent === null && c.id !== cellId);
-    for (const o of all.filter((c) => c.parent === cellId).sort((a, b) => a.order - b.order)) {
+    const kids = all.filter((c) => c.parent === cellId).sort(byKey);
+    kids.forEach((o, k) => {
       at = orderAfterValue(roots, at);
       const m = cells.get(o.id)!;
       m.set('parent', null);
       m.set('order', at);
-      m.delete('gap');
+      // A deleted root's blank rows stay above what takes its place, so nothing below jumps up.
+      if (k === 0 && gone.parent === null && gone.gap > 0) m.set('gap', gone.gap);
+      else m.delete('gap');
       roots.push({ ...o, parent: null, order: at });
+    });
+    if (!kids.length && gone.parent === null && gone.gap > 0) {
+      const next = roots.filter((r) => byKey(r, gone) > 0).sort(byKey)[0];
+      if (next) cells.get(next.id)!.set('gap', next.gap + gone.gap);
     }
     cells.delete(cellId);
   });
@@ -290,6 +321,8 @@ export function deleteCell(doc: Y.Doc, sheetId: string, cellId: string) {
 /** A sort key just after `value` among `items`. */
 function orderAfterValue(items: { order: number }[], value: number): number {
   const later = items.filter((r) => r.order > value).sort((a, b) => a.order - b.order)[0];
+  // (Too close to fit between: go just past the later one's neighbour instead of making two equal keys.)
+  if (later && later.order - value < TOO_CLOSE) return value + TOO_CLOSE / 2;
   return later ? (value + later.order) / 2 : value + 1;
 }
 
@@ -384,7 +417,8 @@ export function groupCells(doc: Y.Doc, sheetId: string, ids: string[]): GroupRes
   const group = newBlockId();
   local(doc, () => {
     const sorted = [...picked].sort((a, b) => a.order - b.order);
-    const others = all.filter((c) => c.parent === first.parent && (first.parent !== null || c.col === first.col) && !ids.includes(c.id));
+    // Roots of every column share one order: the group must sit together in it, not just among its own column.
+    const others = all.filter((c) => c.parent === first.parent && !ids.includes(c.id));
     let at = sorted[0].order;
     const sibs = [...others];
     sorted.forEach((c, i) => {

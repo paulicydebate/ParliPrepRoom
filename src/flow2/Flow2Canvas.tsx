@@ -219,16 +219,20 @@ export function Flow2Canvas({
         moved = true;
         setDrag({ id, x: r.x + (ev.clientX - x0) / z, y: r.y + (ev.clientY - y0) / z });
       };
-      const up = (ev: PointerEvent) => {
+      // A cancelled pointer (a system gesture, a pen leaving) ends the drag where it was, without moving the sheet.
+      const end = (ev: PointerEvent) => {
         window.removeEventListener('pointermove', move);
-        if (moved) {
+        window.removeEventListener('pointerup', end);
+        window.removeEventListener('pointercancel', end);
+        if (moved && ev.type === 'pointerup') {
           const z = cameraRef.current.zoom;
           moveSheet(doc, id, r.x + (ev.clientX - x0) / z, r.y + (ev.clientY - y0) / z);
         }
         setDrag(null);
       };
       window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up, { once: true });
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
       return;
     }
     if (target.closest('.f2-window')) return;
@@ -239,8 +243,14 @@ export function Flow2Canvas({
     const y0 = e.clientY;
     const c0 = cameraRef.current;
     const move = (ev: PointerEvent) => setCamera({ ...c0, x: c0.x + ev.clientX - x0, y: c0.y + ev.clientY - y0 });
+    const end = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
     window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', () => window.removeEventListener('pointermove', move), { once: true });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   };
 
   const reportSize = useCallback((id: string, size: Size) => {
@@ -260,7 +270,13 @@ export function Flow2Canvas({
     const bottom = Math.max(...all.map((r) => r.y + r.height));
     animateTo(cameraFor({ x, y, width: right - x, height: bottom - y }));
   };
-  useEffect(() => () => stopPath(), []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => () => {
+      stopPath();
+      cancelAnimationFrame(anim.current);
+    },
+    [],
+  ); // eslint-disable-line react-hooks/exhaustive-deps
   const zoomBy = (dir: 'in' | 'out') => animateTo(zoomAt(cameraRef.current, { x: view.width / 2, y: view.height / 2 }, stepZoom(cameraRef.current.zoom, dir)), 160);
 
   return (

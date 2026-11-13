@@ -110,9 +110,25 @@ export function layoutFlow(cells: FlowCell[], measured: ReadonlyMap<string, numb
   for (const c of cells) if (c.group && tops.has(c.id)) byGroup.set(c.group, [...(byGroup.get(c.group) ?? []), c]);
   for (const [id, members] of byGroup) {
     if (members.length < 2) continue;
-    const top = Math.min(...members.map((c) => tops.get(c.id)!));
-    const bottom = Math.max(...members.map((c) => tops.get(c.id)! + (heights.get(c.id) ?? 0)));
-    groups.push({ id, col: members[0].col, top, height: bottom - top });
+    // Only members that are still next to each other are framed together: a cell put between them (or a member
+    // moved away) splits the frame instead of being drawn inside it.
+    const ids = new Set(members.map((c) => c.id));
+    const first = members[0];
+    const siblings = (first.parent === null ? roots : childrenOf(cells, first.parent)).filter((c) => tops.has(c.id));
+    let run: FlowCell[] = [];
+    const flush = () => {
+      if (run.length >= 2) {
+        const top = Math.min(...run.map((c) => tops.get(c.id)!));
+        const bottom = Math.max(...run.map((c) => tops.get(c.id)! + (heights.get(c.id) ?? 0)));
+        groups.push({ id: groups.some((g) => g.id === id) ? `${id}:${run[0].id}` : id, col: first.col, top, height: bottom - top });
+      }
+      run = [];
+    };
+    for (const c of siblings) {
+      if (ids.has(c.id) && c.col === first.col) run.push(c);
+      else flush();
+    }
+    flush();
   }
   return { tops, heights, bands, blanks, groups, ghostTop: y, total: y + m.ghostRows * m.rowHeight };
 }
