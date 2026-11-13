@@ -1,3 +1,4 @@
+import { ROUND_NO_RESTORE, toast } from '../editor/roundGuard';
 import type { JSONContent } from '@tiptap/core';
 import type { Editor } from '@tiptap/react';
 import { yXmlFragmentToProsemirrorJSON } from '@tiptap/y-tiptap';
@@ -210,6 +211,7 @@ function VersionsView({
   };
 
   const restore = async () => {
+    if (round) return toast(ROUND_NO_RESTORE);
     if (!selectedMeta || (flow ? !versionSheets : !editor || !versionJson)) return;
     const when = `${formatDay(selectedMeta.at)} ${formatTime(selectedMeta.at)}`;
     await saveVersion(docId, ydoc, { auto: false, name: `Before restoring ${when}` });
@@ -250,6 +252,7 @@ function VersionsView({
             </label>
           )}
           <span className="tb-spacer" />
+          {round && <span className="muted small">Restoring is off in a round doc.</span>}
           {confirmRestore ? (
             <span className="confirm">
               <span className="confirm-text">Current text is saved as a version first.</span>
@@ -261,7 +264,7 @@ function VersionsView({
               </button>
             </span>
           ) : (
-            <button type="button" className="btn primary" disabled={!haveVersion} onClick={() => setConfirmRestore(true)}>
+            <button type="button" className="btn primary" disabled={!haveVersion || round} title={round ? ROUND_NO_RESTORE : undefined} onClick={() => setConfirmRestore(true)}>
               Restore this version
             </button>
           )}

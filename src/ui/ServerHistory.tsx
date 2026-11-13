@@ -1,7 +1,7 @@
 import type { JSONContent } from '@tiptap/core';
 import type { Editor } from '@tiptap/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from '../editor/roundGuard';
+import { ROUND_NO_RESTORE, toast } from '../editor/roundGuard';
 import { diffBlocks, flattenDoc, summarize } from '../history/diff';
 import { diffFlows, flattenFlow, summarizeFlow } from '../history/flowDiff';
 import { restoreFlow } from '../flow2/restore';
@@ -132,6 +132,7 @@ function Sessions({
   const stats = flow ? summarizeFlow(flowRows) : summarize(rows);
 
   const restore = () => {
+    if (round) return toast(ROUND_NO_RESTORE);
     if (flow && sel) {
       if (round) logEvent(docId, { k: 'restore', s: `${day(sel.end)} ${time(sel.end)} (after ${sel.name}'s edits)` });
       const point = replayer.docAt(sel.to);
@@ -186,7 +187,7 @@ function Sessions({
                   </button>
                 </span>
               ) : (
-                <button type="button" className="btn small" disabled={!editor && !flow} onClick={() => setConfirm(true)} title="Put the doc back the way it was right after these edits">
+                <button type="button" className="btn small" disabled={(!editor && !flow) || round} onClick={() => setConfirm(true)} title={round ? ROUND_NO_RESTORE : 'Put the doc back the way it was right after these edits'}>
                   Restore to this point
                 </button>
               )}

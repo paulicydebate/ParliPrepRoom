@@ -721,3 +721,26 @@ describe('Excel round trip (review 2026-11-13)', () => {
     expect(grid[0].rows[1][0].length).toBe(32767);
   });
 });
+
+import { buildFlowDocx } from '../src/export/flowDocx';
+import { unzipSync, strFromU8 } from 'fflate';
+
+describe('Word export of a flow', () => {
+  it('writes a table per sheet with the speeches as columns and each argument beside its answers', async () => {
+    const { doc, sheetId, type } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, 'Econ bad <is> real');
+    const b = createChild(doc, sheetId, a)!;
+    type(b, 'No link');
+    setMark(doc, sheetId, [b], 'dropped');
+    const blob = await buildFlowDocx(readFlow(doc), 'Round 1');
+    const xml = strFromU8(unzipSync(new Uint8Array(await blob.arrayBuffer()))['word/document.xml']);
+    expect(xml).toContain('<w:tbl>');
+    expect(xml).toContain('>PMC<');
+    expect(xml).toContain('Econ bad &lt;is&gt; real');
+    expect(xml).toContain('[DROPPED] No link');
+    // the answer is in the same table row as the argument
+    const row = xml.split('<w:tr>').find((r) => r.includes('Econ bad'))!;
+    expect(row).toContain('No link');
+  });
+});

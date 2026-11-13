@@ -22,11 +22,11 @@ Each document is a **doc** (styled outline blocks, TipTap, `src/editor/`, `src/u
 |---|---|
 | App shell | `src/ui/App.tsx` (layout, tabs, panes, Round Mode, search, pins, import), `src/ui/Pane.tsx` (one window, Home), `src/ui/Account.tsx`, `src/ui/Rounds.tsx` (New round) |
 | Flow | `src/flow2/`: `model.ts` (Yjs data and every operation), `layout.ts`, `columns.ts`, `Flow2Editor.tsx` (workspace), `SheetView.tsx` (one sheet, keys, link mode), `Cell.tsx`, `WindowBar.tsx`, `RefPicker.tsx`, `flowHooks.ts`, `Flow2Canvas.tsx`, `Flow2Sidebar.tsx`, `FlowDock.tsx` (toolbar), `PinColumn.tsx`, `textBinding.ts` (text box to shared text), `caret.ts`, `flowist/` (Flowist's palette, fonts and look) |
-| Docs | `src/editor/`, `src/ui/DocEditor.tsx`, `src/model/blocks.ts`, `src/model/outline.ts` |
+| Docs | `src/editor/`, `src/ui/DocEditor.tsx`, `src/model/blocks.ts`, `src/model/outline.ts` (docs no longer have speech tags) |
 | Round record (client) | `src/editor/roundGuard.ts` (paste blocking, edit log), `src/store/typingLog.ts`, `src/store/roundDoc.ts` (Round doc switch, resolution) |
 | Server | `worker/index.ts` (routes), `worker/docRoom.ts` (one Durable Object per doc: sync, hash-chained record), `worker/directory.ts` (accounts, teams, access), `worker/measure.ts` (what text an update typed or deleted), `worker/summary.ts`, `worker/checkPage.ts` |
 | History | `src/history/` (replay, flow diff), `src/ui/HistoryView.tsx`, `src/ui/ServerHistory.tsx`, `src/ui/FlowHistory.tsx` |
-| Import / export | `src/import/` (Word, Excel, CSV, text; `flowImport.ts`, `flowFile.ts`), `src/export/` (`docx.ts`, `flowXlsx.ts`, `teamZip.ts`) |
+| Import / export | `src/import/` (Word, Excel, CSV, text; `flowImport.ts`, `flowFile.ts`), `src/export/` (`docx.ts`, `flowXlsx.ts`, `flowDocx.ts`, `teamZip.ts`) |
 | Styles | `src/styles.css` imports `src/styles/NN-area.css` in order (order matters) |
 
 ## How to work on it
@@ -34,7 +34,7 @@ Each document is a **doc** (styled outline blocks, TipTap, `src/editor/`, `src/u
 ```sh
 npm install
 npm run dev                  # local-only app (no accounts) at http://localhost:5173
-npm test                     # Vitest, 233 tests
+npm test                     # Vitest, 219 tests
 npm run typecheck            # and: npx tsc --noEmit -p worker
 npm run build
 npx wrangler dev --port 8793 --var DEV_LOGIN:1   # app + server; /api/auth/dev?name=Ann signs a test user in
@@ -49,4 +49,5 @@ Before committing: `npm test` and `npm run build`. Before any deploy: also `npm 
 - Flow data: `flow2.order` (sheet ids) and `flow2.sheets` (id to sheet map: name, side, x, y, `cells` map). A cell: col, parent (the cell it answers), order, gap (blank rows above a root), group, mark, refs (`x:` cross-apply, `e:` extend) and text (Y.Text). Two people editing at once can leave odd data; `readSheet` normalizes it and every view relies on that.
 - Undo in a flow: each structural change is its own step; switching Round doc clears the history; undo and redo in a round are logged.
 - Server record of a flow: a new cell starts a new line, sheet names count as typed, marks, moves and links count as nothing. An insert that only puts back text deleted earlier in the round is marked `restored` and not flagged.
+- History cannot restore a round doc (owner's decision); turning Round doc off first is recorded.
 - Search covers docs and flows (`src/model/flowSearch.ts`, Flowist's typo-tolerant matcher in `src/model/fuzzy.ts`). Pins point at doc blocks; a flow shows the pins for its sheet in a Pins column.

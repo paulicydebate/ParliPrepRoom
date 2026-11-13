@@ -4,7 +4,7 @@
 //   npm run e2e                                                        (in another; BASE=http://127.0.0.1:8793)
 //
 // Checks: partners see each other's typing, caret and selected text; paste into a cell and into a sheet name is blocked; text
-// pasted before the round cannot come back with Redo; the server's record has the typed text, cell by cell, with
+// pasted before the round cannot come back with Redo; History cannot restore it; it downloads as Word and Excel; the server's record has the typed text, cell by cell, with
 // nothing flagged; the check page shows it. Exits non-zero on the first failure.
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
@@ -133,6 +133,20 @@ try {
   const token = (await api(ann, `/api/docs?team=${team}`)).docs.find((d) => d.id === doc)?.checkToken;
   const html = token ? await ann.evaluate(async (t) => (await fetch(`/check/${t}`)).text(), token) : '';
   check('check page shows the typed text', html.includes('Econ bad is real'));
+
+  // Downloads: the flow as Word and as Excel.
+  for (const kind of ['Word flow', 'Excel flow']) {
+    await A.locator('.export-menu summary').click();
+    const [dl] = await Promise.all([ann.waitForEvent('download'), A.getByRole('button', { name: new RegExp(kind) }).click()]);
+    const size = (await dl.createReadStream().then((st) => new Promise((res) => { let n = 0; st.on('data', (c) => (n += c.length)); st.on('end', () => res(n)); }))) ?? 0;
+    check(`${kind} downloads`, size > 1000, `${dl.suggestedFilename()}, ${size} bytes`);
+  }
+
+  // History cannot restore a round doc.
+  await A.getByLabel('Version history').click();
+  const restoreBtn = A.getByRole('button', { name: /Restore this version|Restore to this point/ }).first();
+  await restoreBtn.waitFor();
+  check('History cannot restore a round doc', await restoreBtn.isDisabled());
 } catch (e) {
   fails.push(String(e?.message ?? e).split('\n')[0]);
   console.log('FAIL', fails.at(-1));

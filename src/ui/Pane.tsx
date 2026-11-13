@@ -23,10 +23,15 @@ export interface PaneState {
   focus?: { blockId: string; n: number };
 }
 
-/** Download the doc as Word, or its flow as Excel. */
+/** Download a doc as Word, or a flow as Excel or Word. */
 async function exportDoc(editor: Editor | null, title: string, kind: 'docx' | 'xlsx', ydoc?: Y.Doc | null) {
   const { download, safeFilename } = await import('../export/runs');
   const name = safeFilename(title);
+  if (kind === 'docx' && ydoc) {
+    const [{ buildFlowDocx }, { readFlow }] = await Promise.all([import('../export/flowDocx'), import('../flow2/model')]);
+    download(await buildFlowDocx(readFlow(ydoc), title), `${name} flow.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    return;
+  }
   if (kind === 'xlsx' && ydoc) {
     const [{ buildFlow2Xlsx }, { readFlow }] = await Promise.all([import('../export/flowXlsx'), import('../flow2/model')]);
     download(new Uint8Array(buildFlow2Xlsx(readFlow(ydoc))), `${name} flow.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -74,9 +79,14 @@ function ExportMenu({ editor, title, format, ydoc }: { editor: Editor | null; ti
             Word document (.docx)
           </button>
         ) : (
-          <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
-            Excel flow (.xlsx)
-          </button>
+          <>
+            <button type="button" disabled={busy} onClick={(e) => void run(e, 'xlsx')}>
+              Excel flow (.xlsx)
+            </button>
+            <button type="button" disabled={busy} onClick={(e) => void run(e, 'docx')}>
+              Word flow (.docx)
+            </button>
+          </>
         )}
       </div>
     </details>
@@ -487,9 +497,14 @@ export function Pane({
                     Download Word (.docx)
                   </button>
                 ) : (
-                  <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx', ydoc))}>
-                    Download Excel flow (.xlsx)
-                  </button>
+                  <>
+                    <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'xlsx', ydoc))}>
+                      Download Excel flow (.xlsx)
+                    </button>
+                    <button type="button" onClick={(e) => (closeMenu(e), void exportDoc(editor, meta.title, 'docx', ydoc))}>
+                      Download Word flow (.docx)
+                    </button>
+                  </>
                 )}
               </div>
             </details>

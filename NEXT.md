@@ -9,13 +9,12 @@ The open work, in order, and the rules that come with it. Updated 2026-11-13. Th
 3. **Credit Flowist** in the header of any file adapted from it and in README Credits. Elli asked agents to re-read Flowist's `AGENTS.md` and `docs/COLLAB.md`; on 2026-11-12 `COLLAB.md` was not in `paulicydebate/flowist-reference`. **Check again before more Flowist code is adapted, and follow it.**
 4. **The owner is a coach, not a programmer:** plain-language updates, outcome first. Update HANDOFF.md and this file in the same commit as any change.
 
-## Questions for the owner
+## Owner's decisions (2026-11-13)
 
-These need a decision before the work can be done.
-
-1. **Speech tags in docs.** The doc toolbar still has a speech menu ("No sheet") and `src/model/flow.ts` places doc lines in speeches. That only mattered when a doc could be shown as a flow, which it no longer can. Remove it (simpler toolbar, about 350 fewer lines) or keep it for some use in docs?
-2. **Word export of a flow** (a table per sheet). Wanted? Excel export exists; the old app had no Word export of flows either.
-3. **Restoring a version inside a round flow.** It is allowed and logged, and since 2026-11-13 it is not flagged when it only puts back text typed in the round. Should a student be able to restore at all once Round doc is on?
+1. **Speech tags in docs: removed.** The doc toolbar's speech menu, the speech labels in docs and in their Word export, and `src/model/flow.ts` are gone. Old docs keep their `speech`, `answers` and `newRow` attributes in the schema so they still open; nothing uses them.
+2. **Word export of a flow: added** (`src/export/flowDocx.ts`, download menu on a flow: a landscape table per sheet, same rows as Excel).
+3. **No restoring a round doc from History:** both Restore buttons are off while Round doc is on (`ROUND_NO_RESTORE` in `src/editor/roundGuard.ts`). Turning Round doc off first is still possible and is recorded and flagged.
+4. **Deployed** to the live site.
 
 ## Open work
 
@@ -40,4 +39,4 @@ The review, its findings and the fixes are in CHANGELOG.md (section "Review and 
 - **Two people at once:** orphaned cells, cells in a missing column, duplicate sheets after two restores.
 - **Excel:** files made here come back exactly; other files keep blank rows, say which columns they skipped, and are not fooled by a line saying "MG | MO"; 12,000 cells import in about a second; Excel's limits respected.
 - **Code:** `Flow2Editor.tsx` split into `SheetView`, `Cell`, `WindowBar`, `RefPicker` and `flowHooks`; `styles.css` split into ordered files with identical output; dead styles removed; HANDOFF.md moved to CHANGELOG.md and rewritten; the build stamp says `-dirty` for uncommitted builds; a pins column keeps open only the docs that have pins; cell labels, the sheet menu and the sheet-list resize handle work for keyboard and screen-reader users.
-- **Tests:** 233 unit tests and a two-browser round test (`npm run e2e`).
+- **Tests:** 219 unit tests and a two-browser round test (`npm run e2e`, 20 checks).

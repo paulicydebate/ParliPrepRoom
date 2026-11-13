@@ -1,24 +1,4 @@
-/* ---------- Speech tags in the doc view ---------- */
-.pp-doc .pp-block[data-flow-speech]::after {
-  content: attr(data-flow-speech);
-  display: inline-block;
-  margin-left: 8px;
-  padding: 0 6px;
-  border-radius: 5px;
-  font-family: var(--ui-font);
-  font-size: 11px;
-  font-weight: 700;
-  font-style: normal;
-  letter-spacing: 0.04em;
-  line-height: 18px;
-  vertical-align: 2px;
-  color: var(--gov);
-  background: color-mix(in srgb, var(--gov) 12%, transparent);
-}
-.pp-doc .pp-block[data-flow-side='opp']::after {
-  color: var(--opp);
-  background: color-mix(in srgb, var(--opp) 12%, transparent);
-}
+/* ---------- Side tag on position titles in the doc view ---------- */
 .pp-doc .pp-block[data-kind='position'][data-side]::after {
   content: attr(data-side);
   display: inline-block;
@@ -39,15 +19,6 @@
 .pp-doc .pp-block[data-kind='position'][data-side='opp']::after {
   color: var(--opp);
   background: color-mix(in srgb, var(--opp) 12%, transparent);
-}
-.speech-select select {
-  height: 30px;
-  margin-left: 4px;
-  border-radius: 7px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  padding: 0 6px;
-  cursor: pointer;
 }
 .tb-hint {
   font-size: 12px;

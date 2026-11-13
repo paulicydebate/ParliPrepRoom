@@ -84,9 +84,6 @@
     min-width: 0;
     max-width: 150px;
   }
-  .toolbar .speech-select select {
-    max-width: 120px;
-  }
 }
 
 /* Tablets and small laptops: the doc list and pin panel slide over the windows. */

@@ -12,6 +12,9 @@ import { logEvent } from '../store/typingLog';
 /** One edit beyond this many inserted characters is flagged for review. */
 export const LARGE_INSERT = 40;
 
+/** Why History cannot restore a round doc (owner's decision, 2026-11-13). */
+export const ROUND_NO_RESTORE = 'Restoring is off while this is a round doc: a round doc only holds what was typed in it. Turn Round doc off first if you must (that is recorded).';
+
 export function toast(message: string) {
   window.dispatchEvent(new CustomEvent('pp-toast', { detail: message }));
 }
