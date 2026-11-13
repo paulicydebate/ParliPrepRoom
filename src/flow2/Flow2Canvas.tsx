@@ -84,10 +84,10 @@ export function Flow2Canvas({
     const placed: WorldRect[] = [];
     for (const s of sheets) {
       const size = sizes.get(s.id) ?? DEFAULT_SIZE;
-      const at = drag?.id === s.id ? { x: drag.x, y: drag.y } : s.x !== null && s.y !== null ? { x: s.x, y: s.y } : nextSheetPosition(placed);
-      const r = { ...at, ...size };
-      out.set(s.id, r);
-      placed.push(r);
+      // Sheets that were never moved line up after the ones before them, by where those rest, not where one is being dragged.
+      const rest = { ...(s.x !== null && s.y !== null ? { x: s.x, y: s.y } : nextSheetPosition(placed)), ...size };
+      out.set(s.id, drag?.id === s.id ? { x: drag.x, y: drag.y, ...size } : rest);
+      placed.push(rest);
     }
     return out;
   }, [sheets, sizes, drag]);
@@ -157,6 +157,9 @@ export function Flow2Canvas({
     const el = viewport.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // A list inside the canvas (the pins column, the cross-apply picker) scrolls itself when it has more to show.
+      const list = (e.target as HTMLElement | null)?.closest?.('.f2-pins-wrap, .f2-picker ul, .f2-picker') as HTMLElement | null;
+      if (list && !e.ctrlKey && !e.metaKey && list.scrollHeight > list.clientHeight + 1) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const intent = readWheelIntent(e, rect.height);

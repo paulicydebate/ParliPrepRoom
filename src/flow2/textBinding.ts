@@ -16,6 +16,14 @@ export function diffText(a: string, b: string): { at: number; del: number; ins: 
     endA--;
     endB--;
   }
+  // Never cut an emoji (or any character stored as a pair) in half: Yjs would save the halves as broken characters.
+  const high = (s: string, i: number) => (s.charCodeAt(i) & 0xfc00) === 0xd800;
+  const low = (s: string, i: number) => (s.charCodeAt(i) & 0xfc00) === 0xdc00;
+  if (start > 0 && high(a, start - 1)) start--;
+  if (endA < a.length && low(a, endA)) {
+    endA++;
+    endB++;
+  }
   return { at: start, del: endA - start, ins: b.slice(start, endB) };
 }
 

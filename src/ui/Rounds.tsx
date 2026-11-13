@@ -105,7 +105,8 @@ export function NewRoundDialog({ onCreated, onClose }: { onCreated: (made: { doc
         // Starting content, the round-doc switch and the prep timer live inside the doc.
         const { doc, ready } = acquireDoc(meta.id);
         await ready;
-        writeLines(doc, lines);
+        // A flow is cells, not blocks: it starts empty (the starting lines would sit unseen in its record and in search).
+        if (f !== 'flow') writeLines(doc, lines);
         setRound(doc, meta.id, true);
         if (startTimer && prepLen && f === timerFormat) doc.getMap('timer').set('state', choose('Prep', prepLen, true));
         releaseDoc(meta.id);

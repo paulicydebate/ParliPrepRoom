@@ -1,6 +1,6 @@
 # Notes for AI assistants and developers
 
-Read [HANDOFF.md](HANDOFF.md) first (current state, branch to use, next steps), then [PLAN.md](PLAN.md) and [README.md](README.md).
+Read [NEXT.md](NEXT.md) first (the open work, in order, and the rules), then [HANDOFF.md](HANDOFF.md) (current state and history), [PLAN.md](PLAN.md) and [README.md](README.md).
 
 - **After every change, update HANDOFF.md in the same commit** (what changed, current state, next steps). Several different AI assistants work on this repo.
 

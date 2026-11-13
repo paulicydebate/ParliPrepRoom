@@ -28,6 +28,7 @@ export function Flow2Sidebar({
   onGo,
   onAdd,
   onRename,
+  blockPaste,
   onDelete,
   onToggleCollapse,
   onToggleMaximize,
@@ -40,6 +41,8 @@ export function Flow2Sidebar({
   onGo: (id: string) => void;
   onAdd: (side: 'gov' | 'opp') => void;
   onRename: (id: string, name: string) => void;
+  /** True while pasting a name is not allowed (a round doc). */
+  blockPaste?: () => boolean;
   onDelete: (id: string) => void;
   onToggleCollapse: (id: string) => void;
   onToggleMaximize: (id: string) => void;
@@ -100,6 +103,9 @@ export function Flow2Sidebar({
                   autoFocus
                   defaultValue={s.name}
                   aria-label="Sheet name"
+                  maxLength={80}
+                  onPaste={(e) => blockPaste?.() && e.preventDefault()}
+                  onDrop={(e) => blockPaste?.() && e.preventDefault()}
                   onBlur={(e) => {
                     onRename(s.id, e.target.value.trim());
                     setRenaming(null);

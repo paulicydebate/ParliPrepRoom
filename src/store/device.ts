@@ -16,9 +16,9 @@ const OWNER_KEY = 'pp-data-owner';
 
 /** Private things kept in localStorage (everything else with a pp- prefix is a preference). */
 const PRIVATE_KEYS = ['pp-layout-v1', 'pp-space-v1', 'pp-round-mode', 'pp-timer-v1', 'pp-last-tournament', 'pp-seeded', 'pp-seeded-flow', OWNER_KEY];
-const PRIVATE_PREFIXES = ['pp-pins-'];
+const PRIVATE_PREFIXES = ['pp-pins-', 'pp-flow2-'];
 /** A preference that happens to start with a private prefix. */
-const KEEP = new Set(['pp-pins-open']);
+const KEEP = new Set(['pp-pins-open', 'pp-flow2-side-w']);
 
 export const getDeviceOwner = (): string | null => {
   try {

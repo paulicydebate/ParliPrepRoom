@@ -516,7 +516,7 @@ export function App() {
       if (existing < 0 && keepFocused) {
         const other = l.panes.findIndex((_, j) => j !== l.focused);
         if (other >= 0) i = other;
-        else if (l.panes.length < MAX_PANES) {
+        else if (l.panes.length < maxPanes) {
           return {
             ...l,
             panes: [...l.panes, { key: paneKey(), docId, outline: false, focus }],
@@ -527,6 +527,8 @@ export function App() {
       }
       return { ...l, focused: i, panes: l.panes.map((x, j) => (j === i ? { ...x, docId, focus } : x)) };
     });
+    // A doc opened from the flow (a pin, a search hit) must be seen: show the docs beside the flow if they were hidden.
+    if (docs?.find((d) => d.id === docId)?.format !== 'flow') setDocsOpen(true);
     setSidebarOverlay(false);
   };
   // Inserting a prepped block: a copy, so it's only allowed outside Round

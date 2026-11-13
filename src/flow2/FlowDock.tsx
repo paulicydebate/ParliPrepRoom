@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type * as Y from 'yjs';
 import { IconGroup, IconRedo, IconThread, IconUndo, IconUnlink } from '../ui/icons';
 import { FLOW_MARKS, type FlowMark } from './model';
@@ -30,7 +31,9 @@ export function FlowDock({ dock, undo }: { dock: Dock | null; undo: Y.UndoManage
       {btn('Undo', `Undo (${mod}+Z)`, undefined, true, () => undo.undo(), <IconUndo />)}
       {btn('Redo', `Redo (${mod}+Shift+Z)`, undefined, true, () => undo.redo(), <IconRedo />)}
       <span className="f2-dock-sep" />
-      {FLOW_MARKS.map((m) => btn(MARK_TITLE[m].split(':')[0], MARK_TITLE[m] + ' (click again to clear)', f?.mark === m, !!f?.canMark, () => a?.mark(m), <span className="f2-dock-glyph">{MARK_GLYPH[m]}</span>, ` mark-${m}`))}
+      {FLOW_MARKS.map((m) => (
+        <Fragment key={m}>{btn(MARK_TITLE[m].split(':')[0], MARK_TITLE[m] + ' (click again to clear)', f?.mark === m, !!f?.canMark, () => a?.mark(m), <span className="f2-dock-glyph">{MARK_GLYPH[m]}</span>, ` mark-${m}`)}</Fragment>
+      ))}
       <span className="f2-dock-sep" />
       {btn(f?.linking ? 'Cancel link' : 'Link', `Link the selected cells to the argument they answer (${mod}+Shift+L)`, !!f?.linking, !!f?.canLink || !!f?.linking, () => a?.link(), <IconThread />)}
       {btn('Unlink', 'Unlink this cell from the argument it answers', undefined, !!f?.canUnlink && !f?.linking, () => a?.unlink(), <IconUnlink />)}

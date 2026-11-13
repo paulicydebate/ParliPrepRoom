@@ -102,6 +102,14 @@ export function readSheet(id: string, sheet: Y.Map<unknown>): FlowSheetData {
   const side = asSide(sheet.get('side'));
   const cells: FlowCell[] = [];
   yCells(sheet).forEach((m, cid) => cells.push(readCell(cid, m)));
+  // Two people editing at once can leave odd data behind: an answer whose argument the other person deleted, or a
+  // cell in a column this sheet does not have. Read them as something every view can show, so nothing goes missing.
+  const columns = columnsFor(side);
+  const ids = new Set(cells.map((c) => c.id));
+  for (const c of cells) {
+    if (c.col > columns.length) c.col = columns.length;
+    if (c.parent !== null && !ids.has(c.parent)) c.parent = null;
+  }
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   return { id, name: String(sheet.get('name') ?? ''), side, columns: columnsFor(side), cells, x: num(sheet.get('x')), y: num(sheet.get('y')) };
 }
@@ -109,9 +117,12 @@ export function readSheet(id: string, sheet: Y.Map<unknown>): FlowSheetData {
 export function readFlow(doc: Y.Doc): FlowSheetData[] {
   const sheets = sheetsMap(doc);
   const out: FlowSheetData[] = [];
+  const seen = new Set<string>();
   for (const id of sheetOrder(doc).toArray()) {
     const s = sheets.get(id);
-    if (s) out.push(readSheet(id, s));
+    // Two restores at once can list a sheet twice.
+    if (s && !seen.has(id)) out.push(readSheet(id, s));
+    seen.add(id);
   }
   return out;
 }
@@ -156,7 +167,7 @@ export function moveSheet(doc: Y.Doc, id: string, x: number, y: number) {
 }
 
 export function renameSheet(doc: Y.Doc, id: string, name: string) {
-  local(doc, () => sheetsMap(doc).get(id)?.set('name', name));
+  local(doc, () => sheetsMap(doc).get(id)?.set('name', name.slice(0, 80)));
 }
 
 /** Changing sides changes the columns, so it is only offered for a sheet with nothing on it. */
@@ -342,13 +353,16 @@ export function unlinkCell(doc: Y.Doc, sheetId: string, cellId: string) {
 
 // ---------- Reading helpers for the views ----------
 
+/** Two people can give two cells the same place at the same moment; the id breaks the tie the same way for everyone. */
+const byOrder = (a: FlowCell, b: FlowCell) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
 /** Roots in sheet order. */
 export function rootsOf(cells: FlowCell[]): FlowCell[] {
-  return cells.filter((c) => c.parent === null).sort((a, b) => a.order - b.order);
+  return cells.filter((c) => c.parent === null).sort(byOrder);
 }
 
 export function childrenOf(cells: FlowCell[], id: string): FlowCell[] {
-  return cells.filter((c) => c.parent === id).sort((a, b) => a.order - b.order);
+  return cells.filter((c) => c.parent === id).sort(byOrder);
 }
 
 // ---------- Groups ----------

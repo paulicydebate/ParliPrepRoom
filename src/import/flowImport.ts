@@ -22,6 +22,11 @@ function splitMark(text: string): { text: string; mark: FlowMark | null } {
 
 /** Adds one flow sheet per worksheet. Returns how many cells were made. */
 export function importSheetsToFlow(doc: Y.Doc, sheets: Sheet[]): number {
+  // One change for the whole file, not one per cell.
+  return doc.transact(() => importAll(doc, sheets));
+}
+
+function importAll(doc: Y.Doc, sheets: Sheet[]): number {
   let made = 0;
   for (const sh of sheets) {
     const rows = sh.rows.filter((r) => r.some((c) => c?.trim()));

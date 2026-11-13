@@ -519,3 +519,56 @@ describe('flow Excel export and import', () => {
     expect(text(byText('Second point').id)).toBe('Second point');
   });
 });
+
+import { renameSheet } from '../src/flow2/model';
+
+describe('flow2 hardening (review 2026-11-13)', () => {
+  it('never splits an emoji when diffing text', () => {
+    // 😀 and 😁 share their first half; a naive diff would insert half a character.
+    for (const [a, b] of [['😀', '😁😀'], ['😀', '😁'], ['a😀b', 'a😁b'], ['😀😀', '😀']] as const) {
+      const d = diffText(a, b);
+      const text = new Y.Doc().getText('t');
+      text.insert(0, a);
+      if (d.del) text.delete(d.at, d.del);
+      if (d.ins) text.insert(d.at, d.ins);
+      expect(text.toString()).toBe(b);
+      expect(text.toString()).not.toContain('�');
+    }
+  });
+
+  it('shows an answer whose argument another person deleted, and a cell in a column the sheet lacks', () => {
+    const { doc, sheetId, type, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    type(a, 'arg');
+    const b = createChild(doc, sheetId, a)!;
+    type(b, 'answer');
+    const ymap = yCells(sheetsMap(doc).get(sheetId)!);
+    ymap.delete(a); // as a concurrent delete would leave it
+    ymap.get(b)!.set('col', 99);
+    const read = cells();
+    expect(read).toHaveLength(1);
+    expect(read[0].parent).toBeNull();
+    expect(read[0].col).toBe(readFlow(doc)[0].columns.length);
+    expect(rootsOf(read).map((c) => c.id)).toEqual([b]);
+    expect(() => buildFlow2Xlsx(readFlow(doc))).not.toThrow();
+    expect(flowRows(read).at.has(b)).toBe(true);
+  });
+
+  it('orders cells with the same place the same way for everyone, and lists a sheet once', () => {
+    const { doc, sheetId, cells } = setup();
+    const a = createRoot(doc, sheetId, 1)!;
+    const b = createRoot(doc, sheetId, 1, a)!;
+    const ymap = yCells(sheetsMap(doc).get(sheetId)!);
+    ymap.get(a)!.set('order', 5);
+    ymap.get(b)!.set('order', 5);
+    expect(rootsOf(cells()).map((c) => c.id)).toEqual([a, b].sort());
+    sheetOrder(doc).push([sheetId]);
+    expect(readFlow(doc)).toHaveLength(1);
+  });
+
+  it('caps a sheet name', () => {
+    const { doc, sheetId } = setup();
+    renameSheet(doc, sheetId, 'x'.repeat(500));
+    expect(readFlow(doc)[0].name).toHaveLength(80);
+  });
+});

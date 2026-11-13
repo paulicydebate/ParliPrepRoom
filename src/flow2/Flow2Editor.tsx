@@ -80,8 +80,8 @@ function useFlow(doc: Y.Doc): FlowSheetData[] {
   return useSyncExternalStore(subscribe, get);
 }
 
-function useUndo(doc: Y.Doc) {
-  return useMemo(
+function useUndo(doc: Y.Doc, docId: string) {
+  const undo = useMemo(
     () =>
       new Y.UndoManager([sheetOrder(doc), sheetsMap(doc)], {
         trackedOrigins: new Set<unknown>([ORIGIN_LOCAL, HTMLTextAreaElement]),
@@ -89,7 +89,47 @@ function useUndo(doc: Y.Doc) {
       }),
     [doc],
   );
+  // Each change to the flow's shape (a new cell, a delete, a link, a mark...) starts its own undo step. Without this,
+  // steady typing with Tab and Enter never pauses long enough to split, and one Undo would take back a whole speech.
+  useEffect(() => {
+    const split = (tr: Y.Transaction) => {
+      if (tr.origin === ORIGIN_LOCAL) undo.stopCapturing();
+    };
+    doc.on('beforeTransaction', split);
+    // Round docs: what Undo and Redo put back or take out goes in the typing log like any other edit, and switching
+    // "Round doc" on or off forgets the undo history, so text removed before the round cannot be brought back unlogged.
+    const logUndo = (events: Y.YEvent<Y.AbstractType<unknown>>[], tr: Y.Transaction) => {
+      if (tr.origin !== undo || !isRound(doc)) return;
+      for (const ev of events) {
+        if (!(ev.target instanceof Y.Text)) continue;
+        let ins = '';
+        let del = 0;
+        for (const d of ev.delta) {
+          if (typeof d.insert === 'string') ins += d.insert;
+          if (d.delete) del += d.delete;
+        }
+        if (del) logEvent(docId, { k: 'delete', n: del, s: '(undo or redo)' });
+        if (ins) recordEdit(docId, ins, '');
+      }
+    };
+    sheetsMap(doc).observeDeep(logUndo);
+    const settings = doc.getMap('settings');
+    const onSettings = (ev: Y.YMapEvent<unknown>) => {
+      if (ev.keysChanged.has('round')) undo.clear();
+    };
+    settings.observe(onSettings);
+    return () => {
+      doc.off('beforeTransaction', split);
+      sheetsMap(doc).unobserveDeep(logUndo);
+      settings.unobserve(onSettings);
+    };
+  }, [doc, undo, docId]);
+  return undo;
 }
+
+/** The flow that was last clicked or typed in: Undo and Redo go to it when no cell has the caret. */
+let lastWorkspace: HTMLElement | null = null;
+const jumpsTaken = new WeakSet<object>();
 
 export const MARK_GLYPH: Record<FlowMark, string> = { extended: '→', dropped: '!', answered: '✓', key: '★' };
 export const MARK_LABEL: Record<FlowMark, string> = { extended: 'Extended', dropped: 'Dropped', answered: 'Answered', key: 'Key argument' };
@@ -144,14 +184,14 @@ export function Flow2Editor({
   const theme = useFlowTheme();
   const colors = useFlowColors();
   const sheets = useFlow(ydoc);
-  const undo = useUndo(ydoc);
+  const undo = useUndo(ydoc, docId);
   const peers = usePeers(provider);
   // Tell partners which cell you are in (only the first window on this doc shares its cursor, so two windows never fight).
   const shareCell = (cell: string | null, at?: number) => {
     if (provider && carets) provider.awareness.setLocalStateField('flow2', cell ? { cell, at } : null);
   };
   useEffect(() => trackRoundDoc(docId, ydoc), [docId, ydoc]);
-  useEffect(() => () => provider?.awareness.setLocalStateField('flow2', null), [provider]);
+  useEffect(() => () => void (carets && provider?.awareness.setLocalStateField('flow2', null)), [provider, carets]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const sheet = sheets.find((s) => s.id === activeId) ?? sheets[0] ?? null;
   const [fly, setFly] = useState<{ id: string; n: number } | null>(null);
@@ -226,14 +266,39 @@ export function Flow2Editor({
   }, [ydoc, provider]);
 
   // Search and the pin board open a cell by id: find its sheet and go there.
+  const focusTaken = useRef(0);
   useEffect(() => {
-    if (!focus) return;
+    if (!focus || focusTaken.current === focus.n) return;
     const hit = sheets.find((s) => s.cells.some((c) => c.id === focus.blockId));
     if (hit) {
+      focusTaken.current = focus.n;
       if (collapsed.has(hit.id)) toggleCollapse(hit.id);
       onJump(hit.id, focus.blockId);
     }
-  }, [focus?.n]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [focus?.n, sheets.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Undo and Redo also work when no cell has the caret (after an undo removed the cell you were in, the keys would go nowhere).
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (!(e.metaKey || e.ctrlKey) || (key !== 'z' && key !== 'y') || e.defaultPrevented) return;
+      const active = document.activeElement as HTMLElement | null;
+      const typing = !!active && (active.tagName === 'TEXTAREA' || active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.isContentEditable);
+      const here = wrapRef.current;
+      if (typing || !here || document.querySelector('dialog[open]')) return;
+      const inside = !!active && here.contains(active);
+      if (!inside && !(active === document.body && lastWorkspace === here)) return;
+      e.preventDefault();
+      if (key === 'y' || e.shiftKey) undo.redo();
+      else undo.undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (lastWorkspace === wrapRef.current) lastWorkspace = null;
+    };
+  }, [undo]);
 
   if (!sheet) return <div className="flow-wrap" data-flow-theme={theme} />;
   const maxSheet = maximizedId ? sheets.find((s) => s.id === maximizedId) ?? null : null;
@@ -263,7 +328,7 @@ export function Flow2Editor({
   };
 
   return (
-    <div className="flow-wrap f2 f2-workspace" data-flow-theme={theme} data-flow-colors={colors}>
+    <div className="flow-wrap f2 f2-workspace" data-flow-theme={theme} data-flow-colors={colors} ref={wrapRef} onPointerDownCapture={() => (lastWorkspace = wrapRef.current)} onFocusCapture={() => (lastWorkspace = wrapRef.current)}>
       {sideOpen && (
         <Flow2Sidebar
           sheets={sheets}
@@ -272,7 +337,13 @@ export function Flow2Editor({
           collapsed={collapsed}
           onGo={goTo}
           onAdd={add}
-          onRename={(id, name) => renameSheet(ydoc, id, name)}
+          onRename={(id, name) => {
+            const old = sheets.find((x) => x.id === id)?.name ?? '';
+            if (old === name) return;
+            renameSheet(ydoc, id, name);
+            if (isRound(ydoc)) recordEdit(docId, name, old);
+          }}
+          blockPaste={() => isRound(ydoc)}
           onDelete={del}
           onToggleCollapse={toggleCollapse}
           onToggleMaximize={toggleMax}
@@ -376,10 +447,13 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
   const [width, setWidth] = useState(1000);
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
   const [focusId, setFocusId] = useState<string | null>(null);
+  // Counts every time a cell here takes the caret, so the toolbar follows you back to a sheet you were on before.
+  const [focusTick, setFocusTick] = useState(0);
   const [picked, setPicked] = useState<string[]>([]);
   const [linking, setLinking] = useState<{ ids: string[]; col: number } | null>(null);
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const want = useRef<Focus | null>(null);
+  const heldBackspace = useRef(false);
   const hops = useRef<{ from: string; to: string; key: string }[]>([]);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ cellId: string; kind: 'x' | 'e' } | null>(null);
@@ -478,7 +552,11 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
   };
 
   useEffect(() => {
-    if (jump && jump.sheetId === sheet.id && byId.has(jump.cellId)) focusCell(jump.cellId, 'end');
+    // Each jump is taken once: a sheet that is drawn again later (panned back into view, expanded) must not grab the caret.
+    if (jump && !jumpsTaken.has(jump) && jump.sheetId === sheet.id && byId.has(jump.cellId)) {
+      jumpsTaken.add(jump);
+      focusCell(jump.cellId, 'end');
+    }
   }, [jump?.n]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While columns slide, the link lines step aside and come back once they land (as in Flowist).
@@ -501,6 +579,12 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
 
   // ---------- Keys inside a cell ----------
   const onCellKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, c: FlowCell) => {
+    // While an input method is composing (Japanese, Chinese, Korean, accents), Enter, Tab and the arrows belong to it.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Backspace' && e.repeat && heldBackspace.current) {
+      e.preventDefault();
+      return;
+    }
     const el = e.currentTarget;
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key;
@@ -568,6 +652,10 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
     }
     if (key === 'Backspace' && el.value === '' && childrenOf(cells, c.id).length === 0) {
       e.preventDefault();
+      // A held key stops at the empty cell: it must not delete cell after cell, or run on into the text of the cell above.
+      if (e.repeat) return;
+      heldBackspace.current = true;
+      window.addEventListener('keyup', () => (heldBackspace.current = false), { once: true });
       const prev = colList(c.col).filter((k) => top(k) < top(c) - 0.5).at(-1);
       const fallback = prev?.id ?? c.parent ?? colList(c.col).find((k) => k.id !== c.id)?.id ?? null;
       deleteCell(doc, sheet.id, c.id);
@@ -654,7 +742,10 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
   // ---------- Empty space: click to add, drag to box-select ----------
   const colAt = (px: number) => {
     for (let i = 0; i < colX.length; i++) if (px >= colX[i] - GAP_PX / 2 && px < colX[i] + colW[i] + GAP_PX / 2) return i + 1;
-    return colX.length;
+    // Between columns (beside the pins column) or past the end: the nearest one.
+    let best = 0;
+    for (let i = 1; i < colX.length; i++) if (Math.abs(px - (colX[i] + colW[i] / 2)) < Math.abs(px - (colX[best] + colW[best] / 2))) best = i;
+    return best + 1;
   };
   const onBackground = (e: React.MouseEvent) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest('.f2-cell, .f2-add')) return;
@@ -673,6 +764,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
       setPicked(
         cells
           .filter((c) => {
+            if (mini[c.col - 1]) return false;
             const cx = colX[c.col - 1];
             const cy = top(c);
             return cx + colW[c.col - 1] >= box.x && cx <= box.x + box.w && cy + (layout.heights.get(c.id) ?? 0) >= box.y && cy <= box.y + box.h;
@@ -768,7 +860,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
   const flagsKey = JSON.stringify(flags);
   useEffect(() => {
     if (focusId) onDock?.(sheet.id, { sheetId: sheet.id, api, flags });
-  }, [flagsKey, focusId, sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flagsKey, focusId, focusTick, sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onDock?.(sheet.id, null), [sheet.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const body = (
       <div className="f2-inner" style={{ width: inner }}>
@@ -868,6 +960,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
               peers={peers.get(c.id) ?? []}
               onFocus={() => {
                 setFocusId(c.id);
+                setFocusTick((n) => n + 1);
                 onCellFocus(c.id, (document.activeElement as HTMLTextAreaElement | null)?.selectionStart ?? undefined);
               }}
               onCaret={(at) => onCellFocus(c.id, at)}
@@ -938,6 +1031,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
   );
   const bar = (
     <WindowBar
+      docId={docId}
       doc={doc}
       sheet={sheet}
       onSnap={embedded?.onSnap}
@@ -965,7 +1059,7 @@ export function SheetView({ space, doc, sheets, sheet, undo, onPick: _onPick, em
 }
 
 /** A sheet's title bar: drag it to move the sheet; name, side, Link and the minimize and maximize buttons live here. */
-function WindowBar({ doc, sheet, onSnap, onCollapse, onMaximize, onRestore }: { doc: Y.Doc; sheet: FlowSheetData; onSnap?: () => void; onCollapse?: () => void; onMaximize?: () => void; onRestore?: () => void }) {
+function WindowBar({ doc, docId, sheet, onSnap, onCollapse, onMaximize, onRestore }: { doc: Y.Doc; docId?: string; sheet: FlowSheetData; onSnap?: () => void; onCollapse?: () => void; onMaximize?: () => void; onRestore?: () => void }) {
   const [renaming, setRenaming] = useState(false);
   return (
     <div className={`f2-window-bar fl-${sheet.side}`} data-window-handle onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.f2-window-bar') === e.currentTarget && !(e.target as HTMLElement).closest('button, input, select, .f2-window-name')) (onRestore ?? onMaximize)?.(); }}>
@@ -976,8 +1070,16 @@ function WindowBar({ doc, sheet, onSnap, onCollapse, onMaximize, onRestore }: { 
           autoFocus
           defaultValue={sheet.name}
           aria-label="Sheet name"
+          maxLength={80}
+          onPaste={(e) => isRound(doc) && (e.preventDefault(), toast('Paste is off in round docs. Type it in.'))}
+          onDrop={(e) => isRound(doc) && e.preventDefault()}
           onBlur={(e) => {
-            renameSheet(doc, sheet.id, e.target.value.trim());
+            const name = e.target.value.trim();
+            if (name !== sheet.name) {
+              renameSheet(doc, sheet.id, name);
+              // Sheet names are typed text too: in a round doc they go in the typing log.
+              if (docId && isRound(doc)) recordEdit(docId, name, sheet.name);
+            }
             setRenaming(false);
           }}
           onKeyDown={(e) => {
